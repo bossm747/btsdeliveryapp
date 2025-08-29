@@ -111,5 +111,51 @@ export async function generatePlatformImages() {
   return true;
 }
 
+export async function generateDishImages() {
+  const dishImages = [
+    {
+      name: "chickenjoy",
+      prompt: "Filipino Jollibee Chickenjoy fried chicken, golden crispy coating, served on white plate with rice and gravy, professional food photography, appetizing presentation",
+      filename: "chickenjoy.jpg"
+    },
+    {
+      name: "hawaiian-pizza",
+      prompt: "Hawaiian pizza with ham and pineapple toppings, melted cheese, crispy crust, served on wooden board, appetizing food photography",
+      filename: "hawaiian-pizza.jpg"
+    },
+    {
+      name: "pm2-inasal",
+      prompt: "Filipino chicken inasal grilled chicken with rice, banana leaf presentation, authentic Filipino barbecue, golden brown grilled chicken, traditional Mang Inasal style",
+      filename: "pm2-inasal.jpg"
+    },
+    {
+      name: "sisig-bowl",
+      prompt: "Filipino sisig in bowl, sizzling pork sisig with onions and egg, traditional Filipino dish, served in clay bowl, appetizing food photography",
+      filename: "sisig-bowl.jpg"
+    }
+  ];
+
+  console.log("Starting dish image generation...");
+  
+  for (const image of dishImages) {
+    try {
+      console.log(`Generating ${image.name}...`);
+      const imagePath = path.join(assetsDir, image.filename);
+      
+      await generateImage(image.prompt, imagePath);
+      console.log(`✅ Generated: ${image.filename}`);
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      console.error(`❌ Failed to generate ${image.name}:`, error);
+    }
+  }
+  
+  console.log("Dish image generation complete!");
+  return true;
+}
+
 // Export for use in routes
 export { generateImage };

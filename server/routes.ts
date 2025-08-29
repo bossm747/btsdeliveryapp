@@ -23,7 +23,7 @@ import * as geminiAI from "./services/gemini";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
-import { generatePlatformImages } from "./generateImages";
+import { generatePlatformImages, generateDishImages } from "./generateImages";
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -987,6 +987,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating images:", error);
       res.status(500).json({ message: "Failed to generate images" });
+    }
+  });
+
+  // Generate dish images endpoint
+  app.post("/api/admin/generate-dish-images", async (req, res) => {
+    try {
+      console.log("Starting dish image generation...");
+      await generateDishImages();
+      res.json({ success: true, message: "Dish images generated successfully" });
+    } catch (error) {
+      console.error("Error generating dish images:", error);
+      res.status(500).json({ message: "Failed to generate dish images" });
     }
   });
 

@@ -18,6 +18,12 @@ import pabayadServiceImg from "@/assets/generated/pabayad-service.jpg";
 import parcelDeliveryImg from "@/assets/generated/parcel-delivery.jpg";
 import deliveryHeroImg from "@/assets/generated/delivery-hero.jpg";
 
+// Import dish images
+import chickenjoyImg from "@/assets/generated/chickenjoy.jpg";
+import hawaiianPizzaImg from "@/assets/generated/hawaiian-pizza.jpg";
+import pm2InasalImg from "@/assets/generated/pm2-inasal.jpg";
+import sisigBowlImg from "@/assets/generated/sisig-bowl.jpg";
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const { data: restaurants, isLoading } = useQuery<Restaurant[]>({
@@ -335,14 +341,18 @@ export default function Home() {
           
           <div className="grid grid-cols-2 gap-3">
             {[
-              { name: "Chickenjoy", restaurant: "Jollibee", price: "₱89", emoji: "🍗" },
-              { name: "Hawaiian Pizza", restaurant: "Greenwich", price: "₱299", emoji: "🍕" },
-              { name: "PM2 Inasal", restaurant: "Mang Inasal", price: "₱139", emoji: "🍖" },
-              { name: "Sisig Bowl", restaurant: "Max's", price: "₱175", emoji: "🥘" }
+              { name: "Chickenjoy", restaurant: "Jollibee", price: "₱89", image: chickenjoyImg },
+              { name: "Hawaiian Pizza", restaurant: "Greenwich", price: "₱299", image: hawaiianPizzaImg },
+              { name: "PM2 Inasal", restaurant: "Mang Inasal", price: "₱139", image: pm2InasalImg },
+              { name: "Sisig Bowl", restaurant: "Max's", price: "₱175", image: sisigBowlImg }
             ].map((dish, index) => (
-              <Card key={index} className="p-3">
-                <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
-                  <span className="text-3xl">{dish.emoji}</span>
+              <Card key={index} className="p-3 hover:shadow-lg transition-shadow bts-hover-lift">
+                <div className="w-full h-24 bg-gray-100 rounded-lg overflow-hidden mb-2">
+                  <img 
+                    src={dish.image} 
+                    alt={dish.name}
+                    className="w-full h-full object-cover rounded-lg"
+                  />
                 </div>
                 <h4 className="font-medium text-sm">{dish.name}</h4>
                 <p className="text-xs text-gray-500">{dish.restaurant}</p>
