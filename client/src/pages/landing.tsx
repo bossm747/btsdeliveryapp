@@ -19,6 +19,7 @@ import {
   Instagram,
   Twitter
 } from "lucide-react";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function Landing() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
@@ -72,9 +73,7 @@ export default function Landing() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-xl flex items-center justify-center">
-                <Truck className="w-6 h-6 text-white" />
-              </div>
+              <img src={btsLogo} alt="BTS Delivery" className="w-10 h-10" />
               <div>
                 <h1 className="text-xl font-bold text-[#004225]">BTS Delivery</h1>
                 <p className="text-xs text-gray-600">Batangas Province</p>
@@ -240,9 +239,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-lg flex items-center justify-center">
-                  <Truck className="w-5 h-5 text-white" />
-                </div>
+                <img src={btsLogo} alt="BTS Delivery" className="w-8 h-8" />
                 <span className="font-bold text-lg">BTS Delivery</span>
               </div>
               <p className="text-sm opacity-75 mb-4">

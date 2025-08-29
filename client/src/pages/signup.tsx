@@ -28,6 +28,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 const signupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -177,9 +178,7 @@ export default function Signup() {
           <div className="flex items-center justify-between">
             <Link href="/">
               <div className="flex items-center space-x-3 cursor-pointer">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-xl flex items-center justify-center">
-                  <Truck className="w-6 h-6 text-white" />
-                </div>
+                <img src={btsLogo} alt="BTS Delivery" className="w-10 h-10" />
                 <div>
                   <h1 className="text-xl font-bold text-[#004225]">BTS Delivery</h1>
                   <p className="text-xs text-gray-600">Batangas Province</p>
@@ -202,8 +201,8 @@ export default function Signup() {
         <div className="w-full max-w-md">
           <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm">
             <CardHeader className="text-center pb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <UserCheck className="w-8 h-8 text-white" />
+              <div className="flex justify-center mb-4">
+                <img src={btsLogo} alt="BTS Delivery" className="w-16 h-16" />
               </div>
               <CardTitle className="text-2xl font-bold text-[#004225]">Join BTS Delivery</CardTitle>
               <CardDescription className="text-gray-600">
