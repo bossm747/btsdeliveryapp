@@ -203,11 +203,11 @@ export default function RiderDashboard() {
 
       <Tabs defaultValue="map" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="map">Live Tracking</TabsTrigger>
-          <TabsTrigger value="active">Active Deliveries</TabsTrigger>
-          <TabsTrigger value="available">Available Orders</TabsTrigger>
-          <TabsTrigger value="history">Delivery History</TabsTrigger>
-          <TabsTrigger value="earnings">Earnings & Payout</TabsTrigger>
+          <TabsTrigger value="map" className="text-[10px] sm:text-xs px-1">Live Tracking</TabsTrigger>
+          <TabsTrigger value="active" className="text-[10px] sm:text-xs px-1">Active Deliveries</TabsTrigger>
+          <TabsTrigger value="available" className="text-[10px] sm:text-xs px-1">Available Orders</TabsTrigger>
+          <TabsTrigger value="history" className="text-[10px] sm:text-xs px-1">Delivery History</TabsTrigger>
+          <TabsTrigger value="earnings" className="text-[10px] sm:text-xs px-1">Earnings & Payout</TabsTrigger>
         </TabsList>
 
         <TabsContent value="map" className="space-y-4">
