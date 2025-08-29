@@ -507,8 +507,115 @@ export default function RiderDashboard() {
 
       case "earnings":
         return (
-          <div data-testid="earnings-payout-content">
-            <RiderPayout riderId={(riderData as any)?.id || "rider-1"} currentBalance={earnings} />
+          <div data-testid="earnings-content">
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] p-6 rounded-xl text-white">
+                <div className="text-center">
+                  <p className="text-sm opacity-90">Total Balance</p>
+                  <p className="text-3xl font-bold">₱{parseFloat(earnings || "0").toFixed(2)}</p>
+                  <p className="text-xs opacity-75">Available for withdrawal</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                  <p className="text-sm text-green-600 dark:text-green-400">Today's Earnings</p>
+                  <p className="text-xl font-bold text-green-700 dark:text-green-300">₱480.00</p>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                  <p className="text-sm text-blue-600 dark:text-blue-400">This Week</p>
+                  <p className="text-xl font-bold text-blue-700 dark:text-blue-300">₱1,890.00</p>
+                </div>
+              </div>
+
+              <Button className="w-full bg-[#004225] hover:bg-[#004225]/90 text-white">
+                Withdraw Earnings
+              </Button>
+            </div>
+          </div>
+        );
+
+      case "profile":
+        return (
+          <div data-testid="profile-content">
+            <div className="space-y-6">
+              {/* Profile Header */}
+              <Card className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-full flex items-center justify-center">
+                      <User className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-[#004225]">{riderData?.name || "Juan Cruz"}</h3>
+                      <p className="text-sm text-gray-600">Rider ID: {riderData?.id || "R-001"}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Star className="w-4 h-4 text-yellow-500" />
+                        <span className="text-sm font-medium">{rating || "4.8"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Status & Settings */}
+              <Card className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl">
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[#004225]">Online Status</Label>
+                    <div className="flex items-center space-x-2">
+                      <Switch 
+                        checked={isOnline} 
+                        onCheckedChange={(checked) => {
+                          setIsOnline(checked);
+                          updateStatusMutation.mutate(checked);
+                        }}
+                      />
+                      <Label className={isOnline ? "text-green-600" : "text-gray-500"}>
+                        {isOnline ? "Online - Tumatanggap ng deliveries" : "Offline"}
+                      </Label>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 space-y-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setShowNotificationModal(true)}
+                    >
+                      <Bell className="w-4 h-4 mr-2" />
+                      Notifications
+                      <Badge className="ml-auto bg-red-500 text-white">3</Badge>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setShowSettingsModal(true)}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Settings
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Performance Stats */}
+              <Card className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl">
+                <CardHeader>
+                  <CardTitle className="text-[#004225]">Performance Overview</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                    <p className="text-sm text-blue-600 dark:text-blue-400">Total Deliveries</p>
+                    <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{totalDeliveries || "0"}</p>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                    <p className="text-sm text-green-600 dark:text-green-400">Success Rate</p>
+                    <p className="text-xl font-bold text-green-700 dark:text-green-300">98%</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         );
 
@@ -546,7 +653,8 @@ export default function RiderDashboard() {
                  activeTab === "active" ? "Active Deliveries" :
                  activeTab === "available" ? "Available Orders" :
                  activeTab === "history" ? "Delivery History" :
-                 activeTab === "earnings" ? "Earnings & Payout" : "Dashboard"}
+                 activeTab === "earnings" ? "Earnings & Wallet" :
+                 activeTab === "profile" ? "Rider Profile" : "Dashboard"}
               </h1>
               <p className="text-muted-foreground text-sm hidden lg:block">
                 {activeTab === "notifications" ? "Order assignments and pending requests" :
@@ -554,7 +662,8 @@ export default function RiderDashboard() {
                  activeTab === "active" ? "Your current delivery assignments" :
                  activeTab === "available" ? "New delivery opportunities" :
                  activeTab === "history" ? "Your completed deliveries" :
-                 activeTab === "earnings" ? "Financial overview and payouts" : "Real-time delivery management powered by AI"}
+                 activeTab === "earnings" ? "Financial overview and payouts" :
+                 activeTab === "profile" ? "Personal information and settings" : "Real-time delivery management powered by AI"}
               </p>
             </div>
             
@@ -592,87 +701,21 @@ export default function RiderDashboard() {
         </div>
 
         {/* Content Area - Native Mobile Style */}
-        <div className="p-4 lg:p-6 pb-32 lg:pb-6 overflow-y-auto">
+        <div className="p-4 lg:p-6 pb-20 lg:pb-6 overflow-y-auto">
           {renderMainContent()}
-        </div>
-
-        {/* Card Navigation Area - Between map and footer */}
-        <div className="lg:hidden fixed bottom-16 left-0 right-0 px-4 pb-2">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-4">
-            <div className="grid grid-cols-4 gap-3">
-              {/* Profile Card */}
-              <Card 
-                className="border-0 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
-                onClick={() => setShowProfileModal(true)}
-                data-testid="card-profile"
-              >
-                <CardContent className="p-3 text-center">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <User className="w-4 h-4 text-white" />
-                  </div>
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Profile</p>
-                </CardContent>
-              </Card>
-
-              {/* Notifications Card */}
-              <Card 
-                className="border-0 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
-                onClick={() => setShowNotificationModal(true)}
-                data-testid="card-notifications"
-              >
-                <CardContent className="p-3 text-center relative">
-                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Bell className="w-4 h-4 text-white" />
-                  </div>
-                  <p className="text-xs font-medium text-orange-700 dark:text-orange-300">Alerts</p>
-                  {/* Notification badge */}
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                    <span className="text-[10px] text-white font-bold">3</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Earnings Card */}
-              <Card 
-                className="border-0 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
-                onClick={() => setShowEarningsModal(true)}
-                data-testid="card-earnings"
-              >
-                <CardContent className="p-3 text-center">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Wallet className="w-4 h-4 text-white" />
-                  </div>
-                  <p className="text-xs font-medium text-green-700 dark:text-green-300">Wallet</p>
-                </CardContent>
-              </Card>
-
-              {/* Settings Card */}
-              <Card 
-                className="border-0 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
-                onClick={() => setShowSettingsModal(true)}
-                data-testid="card-settings"
-              >
-                <CardContent className="p-3 text-center">
-                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Settings className="w-4 h-4 text-white" />
-                  </div>
-                  <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Settings</p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
         </div>
       </div>
 
       {/* Mobile Bottom Navigation - Native App Style */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
-        <div className="grid grid-cols-5 py-2">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
+        <div className="grid grid-cols-6 py-2">
           {[
             { id: 'map', icon: MapPin, label: 'Live', color: 'text-blue-500' },
             { id: 'active', icon: Package, label: 'Active', color: 'text-orange-500', badge: (activeDeliveries as any[]).length },
             { id: 'available', icon: Clock, label: 'Orders', color: 'text-green-500' },
             { id: 'history', icon: BarChart3, label: 'History', color: 'text-purple-500' },
-            { id: 'earnings', icon: DollarSign, label: 'Earnings', color: 'text-yellow-500' }
+            { id: 'earnings', icon: DollarSign, label: 'Wallet', color: 'text-yellow-500' },
+            { id: 'profile', icon: User, label: 'Profile', color: 'text-gray-500' }
           ].map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
