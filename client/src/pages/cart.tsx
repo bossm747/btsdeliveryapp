@@ -18,6 +18,7 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
 import { PAYMENT_METHODS } from "@/lib/types";
+import btsLogo from "@assets/btslogo.png";
 
 const deliveryAddressSchema = z.object({
   street: z.string().min(1, "Street address is required"),
@@ -134,6 +135,11 @@ export default function Cart() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Card>
             <CardContent className="p-12 text-center">
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-20 h-20 object-contain mx-auto mb-4 opacity-50"
+              />
               <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
                 <span className="text-4xl">🛒</span>
               </div>

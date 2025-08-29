@@ -18,6 +18,7 @@ import {
   Plus,
   Edit
 } from "lucide-react";
+import btsLogo from "@assets/btslogo.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Order, Restaurant, MenuItem } from "@shared/schema";
@@ -153,13 +154,20 @@ export default function VendorDashboard() {
     <div className="min-h-screen bg-background py-8" data-testid="vendor-dashboard-page">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="dashboard-title">
-            Vendor Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Welcome back, {restaurant?.name || "Restaurant Owner"}
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="dashboard-title">
+              Vendor Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Welcome back, {restaurant?.name || "Restaurant Owner"}
+            </p>
+          </div>
+          <img 
+            src={btsLogo} 
+            alt="BTS Delivery Logo" 
+            className="w-16 h-16 object-contain"
+          />
         </div>
 
         {/* Stats Overview */}

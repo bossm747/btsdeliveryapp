@@ -9,6 +9,7 @@ import OrderStatusTimeline from "@/components/order-status-timeline";
 import type { Order } from "@shared/schema";
 import type { OrderStatusStep } from "@/lib/types";
 import { ORDER_STATUSES } from "@/lib/types";
+import btsLogo from "@assets/btslogo.png";
 
 export default function OrderTracking() {
   const { id } = useParams();
@@ -38,6 +39,11 @@ export default function OrderTracking() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Card>
             <CardContent className="p-12 text-center">
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-20 h-20 object-contain mx-auto mb-6 opacity-50"
+              />
               <h1 className="text-2xl font-bold text-foreground mb-4">Order not found</h1>
               <p className="text-muted-foreground mb-6">
                 The order you're looking for doesn't exist or you don't have permission to view it.

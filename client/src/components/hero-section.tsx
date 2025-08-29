@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Search } from "lucide-react";
+import btsLogo from "@assets/btslogo.png";
 
 export default function HeroSection() {
   const [, setLocation] = useLocation();
@@ -21,6 +22,14 @@ export default function HeroSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
+            <div className="flex items-center space-x-4 mb-4">
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-16 h-16 object-contain"
+              />
+              <span className="text-2xl font-bold text-white/90">BTS Delivery</span>
+            </div>
             <h1 className="text-5xl lg:text-6xl font-bold leading-tight" data-testid="hero-title">
               Lasa ng Batangas, <br />
               <span className="text-accent">Delivered Fresh</span>

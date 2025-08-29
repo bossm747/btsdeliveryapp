@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/hooks/use-cart";
 import { ShoppingCart, Menu } from "lucide-react";
+import btsLogo from "@assets/btslogo.png";
 
 export default function Navbar() {
   const [, setLocation] = useLocation();
@@ -24,9 +25,11 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link href="/" className="flex items-center space-x-2" data-testid="logo-link">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">BTS</span>
-            </div>
+            <img 
+              src={btsLogo} 
+              alt="BTS Delivery Logo" 
+              className="w-10 h-10 object-contain"
+            />
             <span className="font-bold text-xl text-foreground">BTS Delivery</span>
           </Link>
           
