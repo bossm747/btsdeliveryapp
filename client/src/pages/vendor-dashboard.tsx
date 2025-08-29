@@ -18,7 +18,7 @@ import {
   Plus,
   Edit
 } from "lucide-react";
-import btsLogo from "@assets/btslogo.png";
+import btsLogo from "@assets/bts-logo-transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Order, Restaurant, MenuItem } from "@shared/schema";

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
 import { PAYMENT_METHODS } from "@/lib/types";
-import btsLogo from "@assets/btslogo.png";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 const deliveryAddressSchema = z.object({
   street: z.string().min(1, "Street address is required"),

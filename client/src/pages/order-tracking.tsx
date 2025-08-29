@@ -9,7 +9,7 @@ import OrderStatusTimeline from "@/components/order-status-timeline";
 import type { Order } from "@shared/schema";
 import type { OrderStatusStep } from "@/lib/types";
 import { ORDER_STATUSES } from "@/lib/types";
-import btsLogo from "@assets/btslogo.png";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function OrderTracking() {
   const { id } = useParams();

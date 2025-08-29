@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Search } from "lucide-react";
-import btsLogo from "@assets/btslogo.png";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function HeroSection() {
   const [, setLocation] = useLocation();

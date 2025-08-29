@@ -689,7 +689,7 @@ export default function AdvancedChatbot() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10 border-2 border-white">
-                  <AvatarImage src="/bts-logo.png" />
+                  <AvatarImage src="/assets/bts-logo-transparent.png" />
                   <AvatarFallback className="bg-white text-orange-500">BTS</AvatarFallback>
                 </Avatar>
                 <div>

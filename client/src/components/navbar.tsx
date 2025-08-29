@@ -8,7 +8,7 @@ import { ShoppingCart, Menu } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 import NotificationCenter from "@/components/notification-center";
 import LanguageToggle from "@/components/language-toggle";
-import btsLogo from "@assets/btslogo.png";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function Navbar() {
   const [, setLocation] = useLocation();
