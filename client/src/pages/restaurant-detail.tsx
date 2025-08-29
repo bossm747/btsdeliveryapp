@@ -185,7 +185,7 @@ export default function RestaurantDetail() {
           <div className="lg:col-span-1">
             <div className="sticky top-24">
               <CartSidebar 
-                deliveryFee={parseFloat(restaurant.deliveryFee)}
+                deliveryFee={parseFloat(restaurant.deliveryFee || "0")}
                 serviceFee={0}
               />
             </div>

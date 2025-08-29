@@ -16,7 +16,6 @@ export default function OrderTracking() {
   const { data: order, isLoading, refetch } = useQuery<Order>({
     queryKey: ["/api/orders", id],
     enabled: !!id,
-    refetchInterval: order?.status === ORDER_STATUSES.IN_TRANSIT ? 30000 : false, // Refresh every 30s when in transit
   });
 
   if (isLoading) {
@@ -75,7 +74,7 @@ export default function OrderTracking() {
       ORDER_STATUSES.DELIVERED,
     ];
 
-    const currentIndex = statusOrder.indexOf(currentStatus);
+    const currentIndex = statusOrder.indexOf(currentStatus as any);
     
     return allStatuses.map((statusInfo, index) => ({
       ...statusInfo,

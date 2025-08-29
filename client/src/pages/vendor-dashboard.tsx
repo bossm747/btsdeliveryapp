@@ -423,7 +423,7 @@ export default function VendorDashboard() {
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-2">
                         <Switch
-                          checked={item.isAvailable}
+                          checked={item.isAvailable ?? false}
                           onCheckedChange={(checked) => toggleMenuItemAvailability(item.id, checked)}
                           disabled={updateMenuItemMutation.isPending}
                           data-testid={`menu-item-toggle-${item.id}`}
