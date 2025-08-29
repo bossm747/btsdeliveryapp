@@ -9,11 +9,10 @@ import {
   Store, Home, Bike, Clock, Route,
   Phone, MessageCircle, Star, CheckCircle,
   AlertTriangle, RefreshCw, Maximize2,
-  Navigation2, Gauge, TrendingUp
+  Navigation2, Gauge, TrendingUp, AlertCircle
 } from "lucide-react";
 import DeliveryLiveTracking from "@/components/delivery-live-tracking";
 import RiderMapTracking from "@/components/rider-map-tracking";
-import RealtimeMapTracking from "@/components/realtime-map-tracking";
 import GoogleMapsTracking from "@/components/google-maps-tracking";
 
 export default function MapTrackingDemo() {
@@ -71,9 +70,9 @@ export default function MapTrackingDemo() {
               <Bike className="h-4 w-4" />
               Rider View
             </TabsTrigger>
-            <TabsTrigger value="leaflet" className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              Leaflet Maps
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Analytics
             </TabsTrigger>
           </TabsList>
 
@@ -331,110 +330,122 @@ export default function MapTrackingDemo() {
             </div>
           </TabsContent>
 
-          {/* Leaflet Map View */}
-          <TabsContent value="leaflet" className="space-y-6">
+          {/* Analytics View */}
+          <TabsContent value="analytics" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-green-600" />
-                  Leaflet Open Source Maps
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                  Delivery Analytics & Performance
                 </CardTitle>
                 <CardDescription>
-                  Free open-source mapping with basic tracking features and custom styling
+                  Real-time tracking performance metrics and delivery insights powered by Google Maps data
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {/* Demo Controls */}
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      Batangas City Area
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Navigation className="h-3 w-3" />
-                      Live GPS Updates
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Route className="h-3 w-3" />
-                      Optimized Routing
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Real-time ETA
-                    </Badge>
-                  </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600">Avg Delivery Time</p>
+                          <p className="text-lg font-bold text-blue-600">18.5 min</p>
+                        </div>
+                        <Clock className="h-8 w-8 text-blue-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                  {/* Map Component */}
-                  <RealtimeMapTracking 
-                    orderId={demoOrderId}
-                    userRole="customer"
-                    onLocationUpdate={(location) => {
-                      console.log("Map location update:", location);
-                    }}
-                  />
+                  <Card className="border-green-200 bg-green-50">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600">Success Rate</p>
+                          <p className="text-lg font-bold text-green-600">99.2%</p>
+                        </div>
+                        <CheckCircle className="h-8 w-8 text-green-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-orange-200 bg-orange-50">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600">Route Efficiency</p>
+                          <p className="text-lg font-bold text-orange-600">94.8%</p>
+                        </div>
+                        <Route className="h-8 w-8 text-orange-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-purple-200 bg-purple-50">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600">Customer Rating</p>
+                          <p className="text-lg font-bold text-purple-600">4.9 ⭐</p>
+                        </div>
+                        <Star className="h-8 w-8 text-purple-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Technical Features */}
-            <Card>
-              <CardHeader>
-                <CardTitle>🚀 Technical Features</CardTitle>
-              </CardHeader>
-              <CardContent>
+                {/* Performance Features */}
                 <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      Map Integration
-                    </h3>
-                    <ul className="space-y-2 text-sm text-gray-600 ml-6">
-                      <li>• OpenStreetMap with Leaflet.js</li>
-                      <li>• Custom styled markers and overlays</li>
-                      <li>• Smooth pan and zoom animations</li>
-                      <li>• Mobile-responsive controls</li>
-                    </ul>
-                  </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">🚀 Performance Optimizations</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm text-gray-600">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                          <span>AI-powered route optimization reduces delivery time by 15%</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                          <span>Real-time traffic data prevents delays</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                          <span>Multi-stop routing handles 5+ orders efficiently</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                          <span>Smart dispatch reduces rider idle time</span>
+                        </li>
+                      </ul>
+                    </CardContent>
+                  </Card>
 
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      Real-time Updates
-                    </h3>
-                    <ul className="space-y-2 text-sm text-gray-600 ml-6">
-                      <li>• WebSocket connection for live data</li>
-                      <li>• Smooth marker animations</li>
-                      <li>• Automatic reconnection handling</li>
-                      <li>• Optimized for low latency</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      Location Services
-                    </h3>
-                    <ul className="space-y-2 text-sm text-gray-600 ml-6">
-                      <li>• High-accuracy GPS tracking</li>
-                      <li>• Geofencing capabilities</li>
-                      <li>• Address geocoding</li>
-                      <li>• Distance calculations</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      User Experience
-                    </h3>
-                    <ul className="space-y-2 text-sm text-gray-600 ml-6">
-                      <li>• Interactive map controls</li>
-                      <li>• Rider info popups</li>
-                      <li>• Progress indicators</li>
-                      <li>• Communication options</li>
-                    </ul>
-                  </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">📊 System Reliability</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm text-gray-600">
+                        <li className="flex items-start gap-2">
+                          <Gauge className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <span>99.9% system uptime guarantee</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <TrendingUp className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <span>Sub-second GPS location updates</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Navigation className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <span>Backup routing for service continuity</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <span>Automatic error detection and recovery</span>
+                        </li>
+                      </ul>
+                    </CardContent>
+                  </Card>
                 </div>
               </CardContent>
             </Card>

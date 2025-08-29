@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Lazy load the enhanced map component
-const RealtimeMapTracking = lazy(() => import("./realtime-map-tracking"));
+// Lazy load the Google Maps tracking component
+const GoogleMapsTracking = lazy(() => import("./google-maps-tracking"));
 
 interface Location {
   lat: number;
@@ -241,7 +241,7 @@ export default function DeliveryLiveTracking({
           </div>
         }
       >
-        <RealtimeMapTracking 
+        <GoogleMapsTracking 
           orderId={orderId}
           userRole={userRole}
           onLocationUpdate={onLocationUpdate}
