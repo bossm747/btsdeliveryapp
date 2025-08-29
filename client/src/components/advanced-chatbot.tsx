@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   MessageCircle, Send, Bot, User, X, MapPin, Receipt, 
   BarChart3, Table, Map, Package, Clock, DollarSign,
   Shield, Lock, CheckCircle, AlertCircle, TrendingUp,
-  ShoppingCart, Bike, Store, HelpCircle, Sparkles
+  ShoppingCart, Bike, Store, HelpCircle, Sparkles, Eye, Navigation
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +21,7 @@ import {
 } from "recharts";
 import { Table as UITable, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import DeliveryLiveTracking from "./delivery-live-tracking";
 
 // Component types for rich rendering
 type MessageComponent = 
@@ -54,6 +56,8 @@ interface ChatContext {
 
 export default function AdvancedChatbot() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showTrackingDialog, setShowTrackingDialog] = useState(false);
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -242,13 +246,29 @@ export default function AdvancedChatbot() {
                     <p className="font-medium">{trackingData.rider}</p>
                   </div>
                 </div>
+                <Button
+                  size="sm"
+                  className="w-full mt-4"
+                  onClick={() => {
+                    setTrackingOrderId(orderId);
+                    setShowTrackingDialog(true);
+                  }}
+                >
+                  <Navigation className="h-4 w-4 mr-1" />
+                  View Real-Time Tracking
+                </Button>
               </div>
             </CardContent>
           </Card>
         )
       },
       { type: "progress", value: trackingData.progress, label: "Delivery Progress" },
-      { type: "text", content: `Estimated arrival: ${trackingData.estimatedTime}` }
+      { type: "text", content: `Estimated arrival: ${trackingData.estimatedTime}` },
+      { 
+        type: "alert", 
+        variant: "info", 
+        message: "🎯 Real-time tracking is now available! All parties (customer, merchant, admin) can track this delivery live." 
+      }
     ];
   };
 
@@ -468,7 +488,36 @@ export default function AdvancedChatbot() {
   const handleAction = async (action: string) => {
     switch (action) {
       case "track_order":
-        await processMessage("Track my latest order");
+        // Show real-time tracking dialog
+        setTrackingOrderId("ORD-2024-001"); // Use actual order ID in production
+        setShowTrackingDialog(true);
+        
+        // Also send a message about tracking
+        const trackingMessage: Message = {
+          id: Date.now().toString(),
+          sender: "bot",
+          timestamp: new Date(),
+          components: [
+            { type: "text", content: "Opening real-time tracking for your order..." },
+            {
+              type: "component",
+              component: (
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    setTrackingOrderId("ORD-2024-001");
+                    setShowTrackingDialog(true);
+                  }}
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  View Live Tracking
+                </Button>
+              )
+            }
+          ]
+        };
+        setMessages(prev => [...prev, trackingMessage]);
         break;
       case "show_analytics":
         await processMessage("Show me analytics");
@@ -897,6 +946,24 @@ export default function AdvancedChatbot() {
           </Tabs>
         </Card>
       )}
+
+      {/* Real-Time Tracking Dialog */}
+      <Dialog open={showTrackingDialog} onOpenChange={setShowTrackingDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-orange-500" />
+              Real-Time Delivery Tracking
+            </DialogTitle>
+          </DialogHeader>
+          {trackingOrderId && (
+            <DeliveryLiveTracking
+              orderId={trackingOrderId}
+              userRole="customer"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
     </>
   );

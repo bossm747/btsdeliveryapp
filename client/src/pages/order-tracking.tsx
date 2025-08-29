@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
-import OrderStatusTimeline from "@/components/order-status-timeline";
+import DeliveryLiveTracking from "@/components/delivery-live-tracking";
 import type { Order } from "@shared/schema";
-import type { OrderStatusStep } from "@/lib/types";
-import { ORDER_STATUSES } from "@/lib/types";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function OrderTracking() {
@@ -58,48 +56,8 @@ export default function OrderTracking() {
     );
   }
 
-  // Create status steps based on order status
-  const createStatusSteps = (currentStatus: string): OrderStatusStep[] => {
-    const allStatuses = [
-      { status: ORDER_STATUSES.PENDING, title: "Order Placed", description: "Your order has been received" },
-      { status: ORDER_STATUSES.CONFIRMED, title: "Order Confirmed", description: "Restaurant confirmed your order" },
-      { status: ORDER_STATUSES.PREPARING, title: "Preparing", description: "Restaurant is preparing your order" },
-      { status: ORDER_STATUSES.READY, title: "Ready for Pickup", description: "Order is ready and waiting for rider" },
-      { status: ORDER_STATUSES.PICKED_UP, title: "Picked Up", description: "Rider has picked up your order" },
-      { status: ORDER_STATUSES.IN_TRANSIT, title: "Out for Delivery", description: "Your order is on the way" },
-      { status: ORDER_STATUSES.DELIVERED, title: "Delivered", description: "Order delivered successfully" },
-    ];
-
-    const statusOrder = [
-      ORDER_STATUSES.PENDING,
-      ORDER_STATUSES.CONFIRMED,
-      ORDER_STATUSES.PREPARING,
-      ORDER_STATUSES.READY,
-      ORDER_STATUSES.PICKED_UP,
-      ORDER_STATUSES.IN_TRANSIT,
-      ORDER_STATUSES.DELIVERED,
-    ];
-
-    const currentIndex = statusOrder.indexOf(currentStatus as any);
-    
-    return allStatuses.map((statusInfo, index) => ({
-      ...statusInfo,
-      isCompleted: index < currentIndex || (currentStatus === ORDER_STATUSES.DELIVERED && index === currentIndex),
-      isActive: index === currentIndex && currentStatus !== ORDER_STATUSES.DELIVERED,
-      timestamp: index <= currentIndex ? "2:15 PM" : undefined, // Mock timestamp
-    }));
-  };
-
-  const statusSteps = createStatusSteps(order.status);
   const deliveryAddress = order.deliveryAddress as any;
   const orderItems = order.items as any[];
-
-  // Mock rider data - in real app this would come from the order or separate API
-  const mockRider = order.status === ORDER_STATUSES.IN_TRANSIT ? {
-    name: "Kuya Mario",
-    phone: "+63 917 123 4567",
-    imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"
-  } : undefined;
 
   return (
     <div className="min-h-screen bg-background py-8" data-testid="order-tracking-page">
@@ -131,15 +89,11 @@ export default function OrderTracking() {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Order Status Timeline */}
+          {/* Real-Time Delivery Tracking */}
           <div className="lg:col-span-2">
-            <OrderStatusTimeline
-              orderNumber={order.orderNumber}
-              currentStatus={order.status}
-              steps={statusSteps}
-              rider={mockRider}
-              estimatedArrival={order.status === ORDER_STATUSES.IN_TRANSIT ? "15 minutes" : undefined}
-              distance={order.status === ORDER_STATUSES.IN_TRANSIT ? "2.3 km away" : undefined}
+            <DeliveryLiveTracking
+              orderId={order.id}
+              userRole="customer"
             />
           </div>
 

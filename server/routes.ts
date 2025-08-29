@@ -1287,9 +1287,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
             
+          case "subscribe_tracking":
+            // Subscribe to real-time tracking
+            if (data.orderId && ws.subscriptions) {
+              ws.subscriptions.add(`tracking:${data.orderId}`);
+              ws.send(JSON.stringify({
+                type: "subscription_confirmed",
+                orderId: data.orderId,
+                role: data.role,
+                timestamp: new Date().toISOString()
+              }));
+            }
+            break;
+            
+          case "rider_location":
+            // Broadcast rider location to all subscribers
+            if (data.orderId && data.location) {
+              const trackingKey = `tracking:${data.orderId}`;
+              wss.clients.forEach((client: ExtendedWebSocket) => {
+                if (client.readyState === WebSocket.OPEN && 
+                    client.subscriptions?.has(trackingKey) &&
+                    client.clientId !== ws.clientId) {
+                  client.send(JSON.stringify({
+                    type: "location_update",
+                    orderId: data.orderId,
+                    location: data.location,
+                    timestamp: new Date().toISOString()
+                  }));
+                }
+              });
+            }
+            break;
+            
+          case "order_status_update":
+            // Broadcast order status to all subscribers
+            if (data.orderId && data.status) {
+              const trackingKey = `tracking:${data.orderId}`;
+              wss.clients.forEach((client: ExtendedWebSocket) => {
+                if (client.readyState === WebSocket.OPEN && 
+                    client.subscriptions?.has(trackingKey)) {
+                  client.send(JSON.stringify({
+                    type: "order_update",
+                    orderId: data.orderId,
+                    status: data.status,
+                    message: data.message,
+                    timestamp: new Date().toISOString()
+                  }));
+                }
+              });
+            }
+            break;
+            
           case "unsubscribe":
             if (data.orderId && ws.subscriptions) {
               ws.subscriptions.delete(data.orderId);
+              ws.subscriptions.delete(`tracking:${data.orderId}`);
               ws.send(JSON.stringify({
                 type: "unsubscribed",
                 orderId: data.orderId
