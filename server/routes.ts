@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRestaurantSchema, insertMenuCategorySchema, insertMenuItemSchema, insertOrderSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -234,6 +235,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching restaurants:", error);
       res.status(500).json({ message: "Failed to search restaurants" });
+    }
+  });
+
+  // NexusPay Payment Routes
+  app.post("/api/payment/create", async (req, res) => {
+    try {
+      const { amount, orderId } = req.body;
+      
+      // Create webhook URL for payment status updates
+      const webhookUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000'}/api/payment/webhook`;
+      const redirectUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000'}/order/${orderId}`;
+      
+      // Create payment with NexusPay
+      const payment = await nexusPayService.createCashInPayment(
+        amount,
+        webhookUrl,
+        redirectUrl
+      );
+      
+      // Store payment info in order
+      if (payment.transactionId) {
+        await storage.updateOrder(orderId, {
+          paymentTransactionId: payment.transactionId,
+          paymentStatus: 'pending'
+        });
+      }
+      
+      res.json({
+        success: true,
+        paymentLink: payment.link,
+        transactionId: payment.transactionId
+      });
+    } catch (error: any) {
+      console.error("Error creating payment:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to create payment" 
+      });
+    }
+  });
+
+  // Payment webhook endpoint
+  app.post("/api/payment/webhook", async (req, res) => {
+    try {
+      const { transactionId, status, amount } = req.body;
+      
+      // Find order with this transaction ID
+      const orders = await storage.getOrders();
+      const order = orders.find(o => o.paymentTransactionId === transactionId);
+      
+      if (order) {
+        // Update order payment status
+        await storage.updateOrder(order.id, {
+          paymentStatus: status === 'success' ? 'paid' : 'failed'
+        });
+      }
+      
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Webhook processing error:", error);
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
+  });
+
+  // Check payment status
+  app.get("/api/payment/status/:transactionId", async (req, res) => {
+    try {
+      const { transactionId } = req.params;
+      const status = await nexusPayService.getPaymentStatus(transactionId);
+      res.json(status);
+    } catch (error: any) {
+      console.error("Error checking payment status:", error);
+      res.status(500).json({ 
+        message: error.message || "Failed to check payment status" 
+      });
+    }
+  });
+
+  // Rider payout endpoint
+  app.post("/api/rider/payout", async (req, res) => {
+    try {
+      const { riderId, amount, accountNumber, name, paymentMethod } = req.body;
+      
+      // Determine payment code based on method
+      const code = paymentMethod === 'maya' ? NEXUSPAY_CODES.MAYA : NEXUSPAY_CODES.GCASH;
+      
+      // Create payout
+      const payout = await nexusPayService.createPayout(
+        code,
+        accountNumber,
+        name,
+        amount
+      );
+      
+      // Update rider balance
+      const rider = await storage.getRider(riderId);
+      if (rider) {
+        await storage.updateRider(riderId, {
+          earningsBalance: rider.earningsBalance - amount
+        });
+      }
+      
+      res.json({
+        success: true,
+        payoutLink: payout.payoutlink,
+        message: "Payout initiated successfully"
+      });
+    } catch (error: any) {
+      console.error("Error creating payout:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to create payout" 
+      });
     }
   });
 

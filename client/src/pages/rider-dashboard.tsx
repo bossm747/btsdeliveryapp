@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RiderPayout from "@/components/rider-payout";
 import { 
   MapPin, Package, Clock, DollarSign, Star, TrendingUp, 
   Navigation, Phone, CheckCircle, XCircle, AlertCircle 
@@ -46,8 +47,8 @@ export default function RiderDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rider/profile"] });
       toast({
-        title: online ? "Online na kayo!" : "Offline na kayo",
-        description: online ? "Makakatanggap na kayo ng deliveries" : "Hindi na kayo makakatanggap ng bagong delivery",
+        title: isOnline ? "Online na kayo!" : "Offline na kayo",
+        description: isOnline ? "Makakatanggap na kayo ng deliveries" : "Hindi na kayo makakatanggap ng bagong delivery",
       });
     }
   });
@@ -188,6 +189,7 @@ export default function RiderDashboard() {
           <TabsTrigger value="active">Active Deliveries</TabsTrigger>
           <TabsTrigger value="available">Available Orders</TabsTrigger>
           <TabsTrigger value="history">Delivery History</TabsTrigger>
+          <TabsTrigger value="earnings">Earnings & Payout</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="space-y-4">
@@ -338,6 +340,20 @@ export default function RiderDashboard() {
               </CardHeader>
             </Card>
           ))}
+        </TabsContent>
+
+        <TabsContent value="earnings" className="space-y-4">
+          <RiderPayout 
+            riderId={riderData?.id || "rider-1"}
+            currentBalance={earnings}
+            onPayoutSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/rider/profile"] });
+              toast({
+                title: "Payout successful!",
+                description: "Your earnings have been processed for withdrawal.",
+              });
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>

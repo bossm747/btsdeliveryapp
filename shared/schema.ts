@@ -93,6 +93,7 @@ export const orders = pgTable("orders", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: varchar("payment_method", { length: 50 }).notNull().default("cash"), // cash, gcash, maya, card
   paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"), // pending, paid, failed, refunded
+  paymentTransactionId: varchar("payment_transaction_id", { length: 100 }),
   deliveryAddress: jsonb("delivery_address").notNull(),
   specialInstructions: text("special_instructions"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),

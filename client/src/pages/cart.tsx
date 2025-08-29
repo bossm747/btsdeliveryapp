@@ -62,17 +62,38 @@ export default function Cart() {
 
   const createOrderMutation = useMutation({
     mutationFn: async (orderData: any) => {
-      return await apiRequest("POST", "/api/orders", orderData);
+      // First create the order
+      const orderResponse = await apiRequest("POST", "/api/orders", orderData);
+      const order = await orderResponse.json();
+      
+      // If payment method is not cash, create NexusPay payment
+      if (orderData.paymentMethod !== "cash") {
+        const paymentResponse = await apiRequest("POST", "/api/payment/create", {
+          amount: orderData.totalAmount,
+          orderId: order.id
+        });
+        const paymentData = await paymentResponse.json();
+        
+        if (paymentData.success && paymentData.paymentLink) {
+          // Redirect to NexusPay payment page
+          window.location.href = paymentData.paymentLink;
+          return order;
+        }
+      }
+      
+      return order;
     },
-    onSuccess: async (response) => {
-      const order = await response.json();
-      toast({
-        title: "Order placed successfully!",
-        description: `Your order #${order.orderNumber} has been placed.`,
-      });
-      clearCart();
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      setLocation(`/order/${order.id}`);
+    onSuccess: async (order) => {
+      if (form.getValues("paymentMethod") === "cash") {
+        toast({
+          title: "Order placed successfully!",
+          description: `Your order #${order.orderNumber} has been placed.`,
+        });
+        clearCart();
+        queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+        setLocation(`/order/${order.id}`);
+      }
+      // For digital payments, user will be redirected to payment page
     },
     onError: (error) => {
       toast({
