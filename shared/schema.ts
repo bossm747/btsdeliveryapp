@@ -474,6 +474,97 @@ export const insertBtsIncentivesSchema = createInsertSchema(btsIncentives);
 export const insertBtsAuditReportsSchema = createInsertSchema(btsAuditReports);
 export const insertBtsUndeclaredBookingsSchema = createInsertSchema(btsUndeclaredBookings);
 
+// GPS Tracking and Delivery Optimization Tables
+
+// Real-time rider location tracking
+export const riderLocations = pgTable("rider_locations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => users.id).notNull(), // rider user
+  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
+  accuracy: decimal("accuracy", { precision: 6, scale: 2 }), // GPS accuracy in meters
+  speed: decimal("speed", { precision: 6, scale: 2 }), // km/h
+  heading: decimal("heading", { precision: 6, scale: 2 }), // degrees 0-360
+  timestamp: timestamp("timestamp").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Delivery routes and optimization
+export const deliveryRoutes = pgTable("delivery_routes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => users.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  startLocation: jsonb("start_location").notNull(), // {lat, lng, address}
+  endLocation: jsonb("end_location").notNull(), // {lat, lng, address}
+  waypoints: jsonb("waypoints"), // [{lat, lng, address}] for multiple deliveries
+  optimizedRoute: jsonb("optimized_route"), // Google Maps route response
+  estimatedDistance: decimal("estimated_distance", { precision: 8, scale: 2 }), // km
+  estimatedDuration: integer("estimated_duration"), // minutes
+  actualDistance: decimal("actual_distance", { precision: 8, scale: 2 }),
+  actualDuration: integer("actual_duration"),
+  startTime: timestamp("start_time"),
+  endTime: timestamp("end_time"),
+  status: varchar("status", { length: 20 }).default("planned"), // planned, in_progress, completed, cancelled
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Delivery tracking events for real-time updates
+export const deliveryTrackingEvents = pgTable("delivery_tracking_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  riderId: uuid("rider_id").references(() => users.id).notNull(),
+  eventType: varchar("event_type", { length: 30 }).notNull(), // order_picked_up, en_route, nearby, delivered
+  location: jsonb("location"), // {lat, lng, address}
+  timestamp: timestamp("timestamp").defaultNow(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Delivery zones for optimization
+export const deliveryZones = pgTable("delivery_zones", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon coordinates
+  baseDeliveryFee: decimal("base_delivery_fee", { precision: 8, scale: 2 }).default("0"),
+  priorityLevel: integer("priority_level").default(1), // 1=high, 2=medium, 3=low
+  maxDeliveryTime: integer("max_delivery_time").default(60), // minutes
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// GPS Tracking Relations
+export const riderLocationsRelations = relations(riderLocations, ({ one }) => ({
+  rider: one(users, { fields: [riderLocations.riderId], references: [users.id] }),
+}));
+
+export const deliveryRoutesRelations = relations(deliveryRoutes, ({ one }) => ({
+  rider: one(users, { fields: [deliveryRoutes.riderId], references: [users.id] }),
+  order: one(orders, { fields: [deliveryRoutes.orderId], references: [orders.id] }),
+}));
+
+export const deliveryTrackingEventsRelations = relations(deliveryTrackingEvents, ({ one }) => ({
+  order: one(orders, { fields: [deliveryTrackingEvents.orderId], references: [orders.id] }),
+  rider: one(users, { fields: [deliveryTrackingEvents.riderId], references: [users.id] }),
+}));
+
+// GPS Tracking Zod schemas
+export const insertRiderLocationSchema = createInsertSchema(riderLocations);
+export const insertDeliveryRouteSchema = createInsertSchema(deliveryRoutes);
+export const insertDeliveryTrackingEventSchema = createInsertSchema(deliveryTrackingEvents);
+export const insertDeliveryZoneSchema = createInsertSchema(deliveryZones);
+
+// GPS Tracking TypeScript types
+export type RiderLocation = typeof riderLocations.$inferSelect;
+export type InsertRiderLocation = z.infer<typeof insertRiderLocationSchema>;
+export type DeliveryRoute = typeof deliveryRoutes.$inferSelect;
+export type InsertDeliveryRoute = z.infer<typeof insertDeliveryRouteSchema>;
+export type DeliveryTrackingEvent = typeof deliveryTrackingEvents.$inferSelect;
+export type InsertDeliveryTrackingEvent = z.infer<typeof insertDeliveryTrackingEventSchema>;
+export type DeliveryZone = typeof deliveryZones.$inferSelect;
+export type InsertDeliveryZone = z.infer<typeof insertDeliveryZoneSchema>;
+
 // BTS TypeScript types
 export type BtsRider = typeof btsRiders.$inferSelect;
 export type InsertBtsRider = z.infer<typeof insertBtsRiderSchema>;

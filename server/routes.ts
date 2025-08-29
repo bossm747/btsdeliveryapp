@@ -8,6 +8,7 @@ import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import * as geminiAI from "./services/gemini";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { gpsTrackingService } from "./gps-tracking";
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
