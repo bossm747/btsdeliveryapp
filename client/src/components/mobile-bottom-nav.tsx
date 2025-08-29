@@ -43,11 +43,12 @@ export default function MobileBottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-white/10">
-      {/* Glass morphism background with gradient */}
-      <div className="absolute inset-0 bts-glass backdrop-blur-xl bts-gradient-primary opacity-98"></div>
-      <div className="absolute inset-0 bts-shimmer opacity-15"></div>
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+    <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t-2 border-[#FFD23F]/30 shadow-2xl">
+      {/* Enhanced gradient background with better contrast */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#004225] via-[#004225]/95 to-[#004225]/90 backdrop-blur-xl"></div>
+      <div className="absolute inset-0 bg-gradient-to-r from-[#FF6B35]/10 via-transparent to-[#FFD23F]/10"></div>
+      <div className="absolute inset-0 bts-shimmer opacity-20"></div>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#FF6B35] via-[#FFD23F] to-[#FF6B35]"></div>
       
       {/* Navigation content */}
       <nav className="relative z-10 flex items-center justify-around px-2 py-2 safe-area-pb mobile-no-select">
@@ -57,19 +58,19 @@ export default function MobileBottomNav() {
             <Link key={item.path} href={item.path}>
               <div className={`relative flex flex-col items-center p-3 rounded-2xl transition-all duration-200 min-w-[64px] touch-manipulation ${
                 item.active 
-                  ? 'bts-glow-accent scale-110 bg-white/20' 
-                  : 'hover:bg-white/10 active:scale-95 active:bg-white/20'
+                  ? 'bg-gradient-to-b from-[#FFD23F]/30 to-[#FF6B35]/20 shadow-lg scale-105 border border-[#FFD23F]/40' 
+                  : 'hover:bg-[#FFD23F]/10 active:scale-95 active:bg-[#FF6B35]/15'
               }`}>
                 
                 {/* Icon container with glow effect */}
                 <div className={`relative p-2 rounded-xl transition-all duration-300 ${
-                  item.active ? 'bts-glow-primary' : ''
+                  item.active ? 'bg-gradient-to-br from-[#FFD23F]/20 to-[#FF6B35]/20 shadow-lg' : ''
                 }`}>
                   <IconComponent 
                     className={`h-6 w-6 transition-all duration-300 ${
                       item.active 
-                        ? 'text-[#FFD23F] drop-shadow-lg' 
-                        : 'text-white/80'
+                        ? 'text-[#FFD23F] drop-shadow-[0_2px_8px_rgba(255,210,63,0.8)]' 
+                        : 'text-white/90 hover:text-[#FFD23F]/80'
                     }`}
                   />
                   
@@ -84,15 +85,15 @@ export default function MobileBottomNav() {
                 {/* Label with gradient text */}
                 <span className={`text-xs font-medium mt-1 transition-all duration-300 ${
                   item.active 
-                    ? 'text-[#FFD23F] font-bold drop-shadow-lg' 
-                    : 'text-white/70'
+                    ? 'text-[#FFD23F] font-bold drop-shadow-[0_1px_4px_rgba(255,210,63,0.8)]' 
+                    : 'text-white/80 hover:text-white'
                 }`}>
                   {item.label}
                 </span>
                 
-                {/* Active indicator dot */}
+                {/* Enhanced active indicator */}
                 {item.active && (
-                  <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#FFD23F] bts-glow-accent"></div>
+                  <div className="absolute -bottom-1 w-8 h-0.5 rounded-full bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] shadow-lg drop-shadow-[0_2px_6px_rgba(255,210,63,0.6)]"></div>
                 )}
               </div>
             </Link>

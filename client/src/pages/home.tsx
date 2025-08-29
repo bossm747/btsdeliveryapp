@@ -141,15 +141,19 @@ export default function Home() {
       {/* Main Content */}
       <main className="pb-4">
         {/* Services Grid */}
-        <section className="px-4 py-4">
-          <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+        <section className="px-4 py-6 bg-gradient-to-b from-white to-gray-50/50 border-b border-gray-100">
+          <h2 className="text-lg font-bold mb-4 text-[#004225] flex items-center">
+            <span className="w-1 h-6 bg-gradient-to-b from-[#FF6B35] to-[#FFD23F] rounded-full mr-3"></span>
+            Our Services
+          </h2>
+          <div className="grid grid-cols-3 gap-4 md:grid-cols-6">
             {services.map((service) => (
               <Link key={service.path} href={service.path}>
-                <div className="flex flex-col items-center p-3 rounded-xl bts-hover-lift transition-all bg-white bts-border-gradient shadow-lg">
-                  <div className="w-14 h-14 rounded-xl bts-gradient-primary flex items-center justify-center mb-2 bts-glow-primary">
-                    <span className="text-2xl">{service.icon}</span>
+                <div className="flex flex-col items-center p-4 rounded-2xl bts-hover-lift transition-all bg-white border-2 border-gray-100 hover:border-[#FFD23F]/30 shadow-lg hover:shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] flex items-center justify-center mb-3 shadow-lg">
+                    <span className="text-2xl filter drop-shadow-sm">{service.icon}</span>
                   </div>
-                  <span className="text-xs font-medium text-gray-700">{service.name}</span>
+                  <span className="text-xs font-semibold text-[#004225] text-center leading-tight">{service.name}</span>
                 </div>
               </Link>
             ))}
@@ -157,12 +161,16 @@ export default function Home() {
         </section>
 
         {/* Promotions Carousel */}
-        <section className="px-4 py-4">
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+        <section className="px-4 py-6 bg-gradient-to-r from-[#004225]/5 to-[#FF6B35]/5 border-b border-[#FFD23F]/20">
+          <h2 className="text-lg font-bold mb-4 text-[#004225] flex items-center">
+            <span className="w-1 h-6 bg-gradient-to-b from-[#FFD23F] to-[#FF6B35] rounded-full mr-3"></span>
+            Special Offers
+          </h2>
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
             {promos.map((promo, index) => (
               <div
                 key={index}
-                className="min-w-[280px] p-4 rounded-xl bts-gradient-primary text-white bts-glow-primary bts-hover-lift"
+                className="min-w-[300px] p-5 rounded-2xl bg-gradient-to-br from-[#FF6B35] via-[#FF6B35] to-[#004225] text-white shadow-2xl bts-hover-lift border border-[#FFD23F]/30"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -177,14 +185,19 @@ export default function Home() {
         </section>
 
         {/* Categories */}
-        <section className="px-4 py-4">
-          <h2 className="text-lg font-bold mb-3">Categories</h2>
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+        <section className="px-4 py-6 bg-gradient-to-l from-white to-[#FFD23F]/10 border-b border-gray-100">
+          <h2 className="text-lg font-bold mb-4 text-[#004225] flex items-center">
+            <span className="w-1 h-6 bg-gradient-to-b from-[#004225] to-[#FF6B35] rounded-full mr-3"></span>
+            Categories
+          </h2>
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
             {categories.map((category) => (
               <button
                 key={category.name}
-                className={`flex flex-col items-center min-w-[70px] p-3 rounded-xl transition-all bts-hover-lift ${
-                  category.active ? 'bts-gradient-primary text-white bts-glow-primary' : 'bg-white border'
+                className={`flex flex-col items-center min-w-[80px] p-4 rounded-2xl transition-all bts-hover-lift shadow-lg ${
+                  category.active 
+                    ? 'bg-gradient-to-br from-[#FF6B35] to-[#004225] text-white shadow-xl border-2 border-[#FFD23F]/50' 
+                    : 'bg-white border-2 border-gray-200 hover:border-[#FF6B35]/30 hover:shadow-xl'
                 }`}
                 data-testid={`category-${category.name.toLowerCase()}`}
               >
@@ -196,20 +209,22 @@ export default function Home() {
         </section>
 
         {/* AI Recommendations */}
-        <section className="px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-orange-500" />
-              <h2 className="text-lg font-bold">AI Recommendations</h2>
+        <section className="px-4 py-6 bg-gradient-to-br from-[#FFD23F]/10 via-white to-[#FF6B35]/10 border-b border-[#004225]/20">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FFD23F] to-[#FF6B35] flex items-center justify-center shadow-lg">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-[#004225]">AI Recommendations</h2>
             </div>
             <Link href="/ai-recommendations">
-              <Button variant="ghost" size="sm" className="text-orange-500">
+              <Button variant="ghost" size="sm" className="text-[#FF6B35] hover:bg-[#FF6B35]/10 border border-[#FF6B35]/30">
                 See all
               </Button>
             </Link>
           </div>
           
-          <div className="bts-glass rounded-xl p-4 bts-border-gradient bts-shimmer">
+          <div className="bg-gradient-to-br from-white to-[#FFD23F]/10 rounded-2xl p-5 border-2 border-[#FFD23F]/30 shadow-xl backdrop-blur-sm">
             <p className="text-sm text-gray-700 mb-2">Powered by Innovatehub AI "Pareng Boyong"</p>
             <div className="space-y-2">
               <div className="flex items-center justify-between p-2 bg-white rounded-lg">
