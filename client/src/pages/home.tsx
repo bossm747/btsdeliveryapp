@@ -14,7 +14,7 @@ import PWAInstall from "@/components/pwa-install";
 // Import generated images
 import foodSpreadImg from "@/assets/generated/food-spread.jpg";
 import pabiliServiceImg from "@/assets/generated/pabili-service.jpg";
-import pabayad ServiceImg from "@/assets/generated/pabayad-service.jpg";
+import pabayadServiceImg from "@/assets/generated/pabayad-service.jpg";
 import parcelDeliveryImg from "@/assets/generated/parcel-delivery.jpg";
 import deliveryHeroImg from "@/assets/generated/delivery-hero.jpg";
 
@@ -30,6 +30,7 @@ export default function Home() {
     { 
       name: "Food", 
       icon: "🍔", 
+      image: foodSpreadImg,
       path: "/restaurants",
       color: "bg-orange-100",
       description: "Order from restaurants"
@@ -37,6 +38,7 @@ export default function Home() {
     { 
       name: "Pabili", 
       icon: "🛒", 
+      image: pabiliServiceImg,
       path: "/pabili",
       color: "bg-green-100",
       description: "Shopping service"
@@ -44,6 +46,7 @@ export default function Home() {
     { 
       name: "Pabayad", 
       icon: "💳", 
+      image: pabayadServiceImg,
       path: "/pabayad",
       color: "bg-blue-100",
       description: "Bills payment"
@@ -51,6 +54,7 @@ export default function Home() {
     { 
       name: "Padala", 
       icon: "📦", 
+      image: parcelDeliveryImg,
       path: "/parcel",
       color: "bg-purple-100",
       description: "Send parcels"
@@ -58,6 +62,7 @@ export default function Home() {
     { 
       name: "Mart", 
       icon: "🏪", 
+      image: pabiliServiceImg,
       path: "/mart",
       color: "bg-yellow-100",
       description: "Grocery shopping"
@@ -65,6 +70,7 @@ export default function Home() {
     { 
       name: "Express", 
       icon: "🚚", 
+      image: deliveryHeroImg,
       path: "/express",
       color: "bg-red-100",
       description: "Express delivery"
@@ -157,8 +163,12 @@ export default function Home() {
             {services.map((service) => (
               <Link key={service.path} href={service.path}>
                 <div className="flex flex-col items-center p-4 rounded-2xl bts-hover-lift transition-all bg-white border-2 border-gray-100 hover:border-[#FFD23F]/30 shadow-lg hover:shadow-xl">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] flex items-center justify-center mb-3 shadow-lg">
-                    <span className="text-2xl filter drop-shadow-sm">{service.icon}</span>
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] flex items-center justify-center mb-3 shadow-lg overflow-hidden">
+                    <img 
+                      src={service.image} 
+                      alt={service.name}
+                      className="w-full h-full object-cover rounded-2xl"
+                    />
                   </div>
                   <span className="text-xs font-semibold text-[#004225] text-center leading-tight">{service.name}</span>
                 </div>
@@ -285,7 +295,7 @@ export default function Home() {
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-sm">{restaurant.name}</h3>
-                        <p className="text-xs text-gray-500 mt-1">{restaurant.cuisine}</p>
+                        <p className="text-xs text-gray-500 mt-1">{restaurant.category}</p>
                         <div className="flex items-center gap-3 mt-2">
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 text-yellow-500 fill-current" />
@@ -293,7 +303,7 @@ export default function Home() {
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-500">{restaurant.deliveryTime || '25-35'} min</span>
+                            <span className="text-xs text-gray-500">{restaurant.estimatedDeliveryTime || 30} min</span>
                           </div>
                           {restaurant.isFeatured && (
                             <Badge className="text-[10px] px-1.5 py-0 h-4 bg-orange-100 text-orange-600">
