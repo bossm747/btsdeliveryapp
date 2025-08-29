@@ -9,13 +9,10 @@ import {
   insertOrderSchema, 
   insertUserSchema,
   insertRiderLocationHistorySchema,
-  insertRiderSessionSchema,
-  insertOrderAssignmentSchema,
-  insertDeliveryTrackingSchema,
+  insertRiderAssignmentQueueSchema,
   insertRiderPerformanceMetricsSchema,
   type RiderLocationHistory,
-  type DeliveryTracking,
-  type OrderAssignment
+  type RiderAssignmentQueue
 } from "@shared/schema";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
@@ -24,6 +21,7 @@ import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
+import { riderAssignmentService } from "./riderAssignmentService";
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -975,6 +973,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(rider);
     } catch (error) {
       res.status(500).json({ message: "Failed to verify rider" });
+    }
+  });
+
+  // Rider Assignment Routes
+  app.post("/api/rider-assignments", async (req, res) => {
+    try {
+      const { orderId, restaurantLocation, deliveryLocation, priority = 1, estimatedValue, maxDistance = 10 } = req.body;
+      
+      if (!orderId || !restaurantLocation || !deliveryLocation) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const assignmentId = await riderAssignmentService.createAssignment({
+        orderId,
+        restaurantLocation,
+        deliveryLocation,
+        priority,
+        estimatedValue: estimatedValue || 0,
+        maxDistance
+      });
+
+      if (!assignmentId) {
+        return res.status(500).json({ message: "Failed to create assignment" });
+      }
+
+      res.json({ assignmentId, message: "Assignment created successfully" });
+    } catch (error) {
+      console.error("Error creating rider assignment:", error);
+      res.status(500).json({ message: "Failed to create rider assignment" });
+    }
+  });
+
+  app.post("/api/rider-assignments/:assignmentId/accept", async (req, res) => {
+    try {
+      const { assignmentId } = req.params;
+      const { riderId } = req.body;
+
+      if (!riderId) {
+        return res.status(400).json({ message: "Rider ID is required" });
+      }
+
+      const success = await riderAssignmentService.acceptAssignment(assignmentId, riderId);
+      
+      if (!success) {
+        return res.status(400).json({ message: "Failed to accept assignment" });
+      }
+
+      res.json({ message: "Assignment accepted successfully" });
+    } catch (error) {
+      console.error("Error accepting assignment:", error);
+      res.status(500).json({ message: "Failed to accept assignment" });
+    }
+  });
+
+  app.get("/api/riders/:riderId/pending-assignments", async (req, res) => {
+    try {
+      const { riderId } = req.params;
+      const assignments = await riderAssignmentService.getRiderPendingAssignments(riderId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error getting pending assignments:", error);
+      res.status(500).json({ message: "Failed to get pending assignments" });
+    }
+  });
+
+  app.post("/api/riders/:riderId/location", async (req, res) => {
+    try {
+      const { riderId } = req.params;
+      const { latitude, longitude, accuracy } = req.body;
+
+      if (!latitude || !longitude) {
+        return res.status(400).json({ message: "Latitude and longitude are required" });
+      }
+
+      const success = await riderAssignmentService.updateRiderLocation(riderId, {
+        lat: latitude,
+        lng: longitude,
+        accuracy
+      });
+
+      if (!success) {
+        return res.status(500).json({ message: "Failed to update location" });
+      }
+
+      res.json({ message: "Location updated successfully" });
+    } catch (error) {
+      console.error("Error updating rider location:", error);
+      res.status(500).json({ message: "Failed to update rider location" });
     }
   });
 

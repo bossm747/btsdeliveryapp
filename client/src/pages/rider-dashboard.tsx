@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ export default function RiderDashboard() {
   const [isOnline, setIsOnline] = useState(false);
   const [activeTab, setActiveTab] = useState("map");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch rider data
   const { data: riderData } = useQuery({
@@ -80,23 +82,123 @@ export default function RiderDashboard() {
     }
   });
 
-  // Get user location
+  // Get user location and setup WebSocket
   useEffect(() => {
     if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
+      const watchId = navigator.geolocation.watchPosition(
         (position) => {
-          setCurrentLocation({
+          const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          });
+          };
+          setCurrentLocation(newLocation);
+          
+          // Send location update to server
+          if (riderData?.id && isOnline) {
+            apiRequest("POST", `/api/riders/${riderData.id}/location`, {
+              latitude: newLocation.lat,
+              longitude: newLocation.lng,
+              accuracy: position.coords.accuracy
+            }).catch(console.error);
+          }
         },
         (error) => {
           console.error("Error getting location:", error);
         },
         { enableHighAccuracy: true }
       );
+
+      return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, []);
+
+    // Setup WebSocket for real-time notifications
+    const connectWebSocket = () => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      wsRef.current = new WebSocket(wsUrl);
+
+      wsRef.current.onopen = () => {
+        // Subscribe to rider-specific notifications
+        if (riderData?.id) {
+          wsRef.current?.send(JSON.stringify({
+            type: "subscribe",
+            channel: `rider_${riderData.id}`
+          }));
+        }
+      };
+
+      wsRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        } catch (error) {
+          console.error("Error parsing WebSocket message:", error);
+        }
+      };
+
+      wsRef.current.onclose = () => {
+        // Attempt to reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+      };
+    };
+
+    if (riderData?.id) {
+      connectWebSocket();
+    }
+
+    return () => {
+      wsRef.current?.close();
+    };
+  }, [riderData?.id, isOnline]);
+
+  const handleWebSocketMessage = (data: any) => {
+    switch (data.type) {
+      case "new_assignment":
+        setPendingAssignments(prev => [...prev, data.assignment]);
+        toast({
+          title: "Bagong Order!",
+          description: `May delivery request para sa Order #${data.assignment.orderId}`,
+        });
+        // Play notification sound or vibrate
+        if ('vibrate' in navigator) {
+          navigator.vibrate(200);
+        }
+        break;
+        
+      case "assignment_timeout":
+        setPendingAssignments(prev => prev.filter(a => a.id !== data.assignmentId));
+        toast({
+          title: "Assignment Expired", 
+          description: "Hindi naaccept ang order sa loob ng oras",
+          variant: "destructive"
+        });
+        break;
+        
+      case "order_update":
+        queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries"] });
+        break;
+    }
+  };
+
+  // Load pending assignments
+  useEffect(() => {
+    if (riderData?.id) {
+      loadPendingAssignments();
+    }
+  }, [riderData?.id]);
+
+  const loadPendingAssignments = async () => {
+    try {
+      if (riderData?.id) {
+        const response = await apiRequest("GET", `/api/riders/${riderData.id}/pending-assignments`);
+        const assignments = await response.json();
+        setPendingAssignments(assignments);
+      }
+    } catch (error) {
+      console.error("Error loading pending assignments:", error);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -109,25 +211,120 @@ export default function RiderDashboard() {
     }
   };
 
-  const earnings = riderData?.earningsBalance || 0;
-  const rating = riderData?.rating || 0;
-  const totalDeliveries = riderData?.totalDeliveries || 0;
+  const earnings = (riderData as any)?.earningsBalance || 0;
+  const rating = (riderData as any)?.rating || 0;
+  const totalDeliveries = (riderData as any)?.totalDeliveries || 0;
+
+  // Accept assignment mutation
+  const acceptAssignmentMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      return await apiRequest("POST", `/api/rider-assignments/${assignmentId}/accept`, {
+        riderId: riderData?.id
+      });
+    },
+    onSuccess: () => {
+      setPendingAssignments(prev => prev.filter(a => a.id !== assignmentId));
+      queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries"] });
+      toast({
+        title: "Assignment Accepted!",
+        description: "Puntahan ang restaurant para kunin ang order",
+      });
+    }
+  });
 
   const renderMainContent = () => {
     switch (activeTab) {
+      case "notifications":
+        return (
+          <div data-testid="notifications-content" className="space-y-4">
+            <h3 className="text-lg font-semibold text-[#004225] mb-4">
+              Mga Pending na Assignment
+            </h3>
+            
+            {pendingAssignments.length > 0 ? (
+              pendingAssignments.map((assignment: any) => (
+                <Card key={assignment.id} className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-[#FF6B35]/5 to-[#FFD23F]/5">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg text-[#004225]">
+                        Order #{assignment.orderId}
+                      </CardTitle>
+                      <Badge className="bg-[#FF6B35] text-white">
+                        Priority {assignment.priority}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Estimated Value: ₱{parseFloat(assignment.estimatedValue || '0').toFixed(2)}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-4">
+                    <div className="text-sm space-y-2">
+                      <div>
+                        <span className="font-medium">Pickup:</span> Restaurant Location
+                      </div>
+                      <div>
+                        <span className="font-medium">Delivery:</span> Customer Location
+                      </div>
+                      <div>
+                        <span className="font-medium">Timeout:</span>{' '}
+                        {new Date(assignment.timeoutAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        className="flex-1 bg-[#004225] hover:bg-[#004225]/90 text-white"
+                        onClick={() => acceptAssignmentMutation.mutate(assignment.id)}
+                        disabled={acceptAssignmentMutation.isPending}
+                        data-testid={`accept-assignment-${assignment.id}`}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        {acceptAssignmentMutation.isPending ? "Accepting..." : "Accept"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-red-500 text-red-500 hover:bg-red-50"
+                        onClick={() => {
+                          // Handle rejection
+                          setPendingAssignments(prev => prev.filter(a => a.id !== assignment.id));
+                          toast({
+                            title: "Assignment Declined",
+                            description: "Binago ang assignment sa ibang rider"
+                          });
+                        }}
+                        data-testid={`reject-assignment-${assignment.id}`}
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Decline
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl">
+                <CardContent className="text-center py-8">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-500">Walang pending na assignments</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+
       case "map":
         return (
           <div data-testid="live-tracking-content">
-            <RiderMapTracking riderId={riderData?.id || "rider-1"} />
+            <RiderMapTracking riderId={(riderData as any)?.id || "rider-1"} />
           </div>
         );
 
       case "active":
         return (
           <div data-testid="active-deliveries-content">
-            {activeDeliveries.length > 0 ? (
+            {(activeDeliveries as any[]).length > 0 ? (
               <div className="space-y-4">
-                {activeDeliveries.map((delivery: any) => (
+                {(activeDeliveries as any[]).map((delivery: any) => (
                   <Card key={delivery.id} className="border-0 shadow-lg bg-white dark:bg-gray-800 rounded-3xl overflow-hidden active:scale-[0.98] transition-transform duration-150 touch-manipulation">
                     <CardHeader className="bg-gradient-to-r from-[#FF6B35]/5 to-[#FFD23F]/5 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between">
@@ -215,9 +412,9 @@ export default function RiderDashboard() {
       case "history":
         return (
           <div data-testid="delivery-history-content">
-            {deliveryHistory.length > 0 ? (
+            {(deliveryHistory as any[]).length > 0 ? (
               <div className="space-y-4">
-                {deliveryHistory.map((delivery: any) => (
+                {(deliveryHistory as any[]).map((delivery: any) => (
                   <Card key={delivery.id}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
@@ -273,7 +470,7 @@ export default function RiderDashboard() {
       case "earnings":
         return (
           <div data-testid="earnings-payout-content">
-            <RiderPayout />
+            <RiderPayout riderId={(riderData as any)?.id || "rider-1"} currentBalance={earnings} />
           </div>
         );
 
@@ -289,13 +486,13 @@ export default function RiderDashboard() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         riderData={{
-          name: riderData?.name,
+          name: (riderData as any)?.name,
           rating: rating,
           totalDeliveries: totalDeliveries,
           earningsBalance: earnings
         }}
         isOnline={isOnline}
-        activeDeliveries={activeDeliveries.length}
+        activeDeliveries={(activeDeliveries as any[]).length}
       />
 
       {/* Main Content */}
@@ -306,14 +503,16 @@ export default function RiderDashboard() {
             <div className="flex-1 min-w-0">
               {/* Mobile Title - Always visible on mobile */}
               <h1 className="text-xl lg:text-2xl font-bold text-[#004225] lg:block truncate" data-testid="text-title">
-                {activeTab === "map" ? "Live Tracking" :
+                {activeTab === "notifications" ? "Notifications" :
+                 activeTab === "map" ? "Live Tracking" :
                  activeTab === "active" ? "Active Deliveries" :
                  activeTab === "available" ? "Available Orders" :
                  activeTab === "history" ? "Delivery History" :
                  activeTab === "earnings" ? "Earnings & Payout" : "Dashboard"}
               </h1>
               <p className="text-muted-foreground text-sm hidden lg:block">
-                {activeTab === "map" ? "Real-time GPS tracking and navigation" :
+                {activeTab === "notifications" ? "Order assignments and pending requests" :
+                 activeTab === "map" ? "Real-time GPS tracking and navigation" :
                  activeTab === "active" ? "Your current delivery assignments" :
                  activeTab === "available" ? "New delivery opportunities" :
                  activeTab === "history" ? "Your completed deliveries" :
@@ -365,7 +564,7 @@ export default function RiderDashboard() {
         <div className="grid grid-cols-5 py-2">
           {[
             { id: 'map', icon: MapPin, label: 'Live', color: 'text-blue-500' },
-            { id: 'active', icon: Package, label: 'Active', color: 'text-orange-500', badge: activeDeliveries.length },
+            { id: 'active', icon: Package, label: 'Active', color: 'text-orange-500', badge: (activeDeliveries as any[]).length },
             { id: 'available', icon: Clock, label: 'Orders', color: 'text-green-500' },
             { id: 'history', icon: BarChart3, label: 'History', color: 'text-purple-500' },
             { id: 'earnings', icon: DollarSign, label: 'Earnings', color: 'text-yellow-500' }

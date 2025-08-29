@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { riderLocations, deliveryRoutes, deliveryTrackingEvents } from "@shared/schema";
+import { riderLocationHistory, orders, riders } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
-import type { InsertRiderLocation, InsertDeliveryRoute, InsertDeliveryTrackingEvent } from "@shared/schema";
+import type { InsertRiderLocationHistory } from "@shared/schema";
 
 export interface LocationData {
   latitude: number;
@@ -30,18 +30,37 @@ export class GPSTrackingService {
   /**
    * Update rider's current location
    */
-  async updateRiderLocation(riderId: string, location: LocationData): Promise<void> {
-    const locationData: InsertRiderLocation = {
+  async updateRiderLocation(riderId: string, location: LocationData, orderId?: string): Promise<void> {
+    const locationData: InsertRiderLocationHistory = {
       riderId,
-      latitude: location.latitude.toString(),
-      longitude: location.longitude.toString(),
-      accuracy: location.accuracy?.toString(),
-      speed: location.speed?.toString(),
-      heading: location.heading?.toString(),
+      location: {
+        lat: location.latitude,
+        lng: location.longitude,
+        accuracy: location.accuracy,
+        speed: location.speed,
+        heading: location.heading,
+        timestamp: (location.timestamp || new Date()).toISOString()
+      },
       timestamp: location.timestamp || new Date(),
+      orderId: orderId || null,
+      activityType: "idle"
     };
 
-    await db.insert(riderLocations).values(locationData);
+    await db.insert(riderLocationHistory).values(locationData);
+    
+    // Also update rider's current location
+    await db.update(riders)
+      .set({
+        currentLocation: {
+          lat: location.latitude,
+          lng: location.longitude,
+          accuracy: location.accuracy,
+          timestamp: (location.timestamp || new Date()).toISOString()
+        },
+        lastLocationUpdate: new Date(),
+        lastActivityAt: new Date()
+      })
+      .where(eq(riders.id, riderId));
   }
 
   /**

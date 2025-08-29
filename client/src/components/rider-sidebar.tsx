@@ -18,7 +18,8 @@ import {
   Settings,
   LogOut,
   User,
-  BarChart3
+  BarChart3,
+  Bell
 } from 'lucide-react';
 
 interface RiderSidebarProps {
@@ -43,6 +44,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    icon: Bell,
+    description: 'Order assignments'
+  },
   {
     id: 'map',
     label: 'Live Tracking',

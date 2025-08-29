@@ -77,6 +77,43 @@ export const menuItems = pgTable("menu_items", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Riders table - Enhanced for advanced tracking
+export const riders = pgTable("riders", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  vehicleType: varchar("vehicle_type", { length: 20 }).notNull(), // motorcycle, bicycle, car
+  licenseNumber: varchar("license_number", { length: 50 }),
+  vehiclePlate: varchar("vehicle_plate", { length: 20 }),
+  isOnline: boolean("is_online").default(false),
+  currentLocation: jsonb("current_location"), // {lat, lng, accuracy, timestamp}
+  lastLocationUpdate: timestamp("last_location_update"),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  totalDeliveries: integer("total_deliveries").default(0),
+  completedDeliveries: integer("completed_deliveries").default(0),
+  cancelledDeliveries: integer("cancelled_deliveries").default(0),
+  averageDeliveryTime: integer("average_delivery_time").default(0), // minutes
+  earningsBalance: decimal("earnings_balance", { precision: 10, scale: 2 }).default("0"),
+  todayEarnings: decimal("today_earnings", { precision: 10, scale: 2 }).default("0"),
+  weeklyEarnings: decimal("weekly_earnings", { precision: 10, scale: 2 }).default("0"),
+  monthlyEarnings: decimal("monthly_earnings", { precision: 10, scale: 2 }).default("0"),
+  performanceScore: decimal("performance_score", { precision: 5, scale: 2 }).default("0"), // 0-100
+  onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }).default("0"), // percentage
+  customerSatisfactionRate: decimal("customer_satisfaction_rate", { precision: 5, scale: 2 }).default("0"), // percentage
+  activeOrdersCount: integer("active_orders_count").default(0),
+  maxActiveOrders: integer("max_active_orders").default(3),
+  shiftStart: timestamp("shift_start"),
+  shiftEnd: timestamp("shift_end"),
+  totalOnlineTime: integer("total_online_time").default(0), // minutes
+  zonePreferences: jsonb("zone_preferences"), // {preferredAreas: [], avoidAreas: []}
+  isVerified: boolean("is_verified").default(false),
+  isAvailableForOrders: boolean("is_available_for_orders").default(true),
+  lastActivityAt: timestamp("last_activity_at"),
+  emergencyContact: varchar("emergency_contact", { length: 100 }),
+  emergencyPhone: varchar("emergency_phone", { length: 20 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Orders table
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -111,21 +148,54 @@ export const orderStatusHistory = pgTable("order_status_history", {
   notes: text("notes"),
 });
 
-// Riders table
-export const riders = pgTable("riders", {
+// Rider Location Tracking table
+export const riderLocationHistory = pgTable("rider_location_history", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid("user_id").references(() => users.id).notNull(),
-  vehicleType: varchar("vehicle_type", { length: 20 }).notNull(), // motorcycle, bicycle, car
-  licenseNumber: varchar("license_number", { length: 50 }),
-  vehiclePlate: varchar("vehicle_plate", { length: 20 }),
-  isOnline: boolean("is_online").default(false),
-  currentLocation: jsonb("current_location"), // {lat, lng}
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
-  totalDeliveries: integer("total_deliveries").default(0),
-  earningsBalance: decimal("earnings_balance", { precision: 10, scale: 2 }).default("0"),
-  isVerified: boolean("is_verified").default(false),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  location: jsonb("location").notNull(), // {lat, lng, accuracy, speed, heading}
+  timestamp: timestamp("timestamp").defaultNow(),
+  orderId: uuid("order_id").references(() => orders.id), // if during active delivery
+  activityType: varchar("activity_type", { length: 20 }).default("idle"), // idle, traveling_to_pickup, traveling_to_delivery, at_restaurant, at_customer
+});
+
+// Rider Assignment Queue table
+export const riderAssignmentQueue = pgTable("rider_assignment_queue", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  assignedRiderId: uuid("assigned_rider_id").references(() => riders.id),
+  priority: integer("priority").default(1), // 1-5, higher = more urgent
+  maxDistance: decimal("max_distance", { precision: 5, scale: 2 }).default("10"), // km
+  estimatedValue: decimal("estimated_value", { precision: 10, scale: 2 }),
+  restaurantLocation: jsonb("restaurant_location").notNull(),
+  deliveryLocation: jsonb("delivery_location").notNull(),
+  assignmentAttempts: integer("assignment_attempts").default(0),
+  rejectedByRiders: jsonb("rejected_by_riders"), // array of rider IDs who rejected
+  assignmentStatus: varchar("assignment_status", { length: 20 }).default("pending"), // pending, assigned, accepted, rejected, timeout
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  assignedAt: timestamp("assigned_at"),
+  acceptedAt: timestamp("accepted_at"),
+  timeoutAt: timestamp("timeout_at"),
+});
+
+// Rider Performance Metrics table
+export const riderPerformanceMetrics = pgTable("rider_performance_metrics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  date: timestamp("date").notNull(),
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  cancelledOrders: integer("cancelled_orders").default(0),
+  averageDeliveryTime: integer("average_delivery_time").default(0), // minutes
+  averageRating: decimal("average_rating", { precision: 3, scale: 2 }).default("0"),
+  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
+  onlineTimeMinutes: integer("online_time_minutes").default(0),
+  totalDistanceTraveled: decimal("total_distance_traveled", { precision: 8, scale: 2 }).default("0"), // km
+  fuelCost: decimal("fuel_cost", { precision: 8, scale: 2 }).default("0"),
+  acceptanceRate: decimal("acceptance_rate", { precision: 5, scale: 2 }).default("0"), // percentage
+  onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }).default("0"),
+  customerSatisfactionScore: decimal("customer_satisfaction_score", { precision: 5, scale: 2 }).default("0"),
+  incidentsCount: integer("incidents_count").default(0),
+  bonusEarned: decimal("bonus_earned", { precision: 10, scale: 2 }).default("0"),
 });
 
 // Reviews and ratings
@@ -140,81 +210,6 @@ export const reviews = pgTable("reviews", {
   comment: text("comment"),
   createdAt: timestamp("created_at").defaultNow(),
 });
-
-// Relations
-export const usersRelations = relations(users, ({ many }) => ({
-  ownedRestaurants: many(restaurants),
-  orders: many(orders),
-  reviews: many(reviews),
-  riderProfile: many(riders),
-}));
-
-export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
-  owner: one(users, { fields: [restaurants.ownerId], references: [users.id] }),
-  menuCategories: many(menuCategories),
-  menuItems: many(menuItems),
-  orders: many(orders),
-  reviews: many(reviews),
-}));
-
-export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
-  restaurant: one(restaurants, { fields: [menuCategories.restaurantId], references: [restaurants.id] }),
-  menuItems: many(menuItems),
-}));
-
-export const menuItemsRelations = relations(menuItems, ({ one }) => ({
-  restaurant: one(restaurants, { fields: [menuItems.restaurantId], references: [restaurants.id] }),
-  category: one(menuCategories, { fields: [menuItems.categoryId], references: [menuCategories.id] }),
-}));
-
-export const ordersRelations = relations(orders, ({ one, many }) => ({
-  customer: one(users, { fields: [orders.customerId], references: [users.id] }),
-  restaurant: one(restaurants, { fields: [orders.restaurantId], references: [restaurants.id] }),
-  rider: one(users, { fields: [orders.riderId], references: [users.id] }),
-  statusHistory: many(orderStatusHistory),
-  review: many(reviews),
-}));
-
-export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
-  order: one(orders, { fields: [orderStatusHistory.orderId], references: [orders.id] }),
-}));
-
-export const ridersRelations = relations(riders, ({ one }) => ({
-  user: one(users, { fields: [riders.userId], references: [users.id] }),
-}));
-
-export const reviewsRelations = relations(reviews, ({ one }) => ({
-  order: one(orders, { fields: [reviews.orderId], references: [orders.id] }),
-  customer: one(users, { fields: [reviews.customerId], references: [users.id] }),
-  restaurant: one(restaurants, { fields: [reviews.restaurantId], references: [restaurants.id] }),
-  rider: one(users, { fields: [reviews.riderId], references: [users.id] }),
-}));
-
-// Zod schemas for validation  
-export const insertUserSchema = createInsertSchema(users);
-export const insertRestaurantSchema = createInsertSchema(restaurants);
-export const insertMenuCategorySchema = createInsertSchema(menuCategories);
-export const insertMenuItemSchema = createInsertSchema(menuItems);
-export const insertOrderSchema = createInsertSchema(orders);
-export const insertRiderSchema = createInsertSchema(riders);
-export const insertReviewSchema = createInsertSchema(reviews);
-
-// TypeScript types
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type Restaurant = typeof restaurants.$inferSelect;
-export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
-export type MenuCategory = typeof menuCategories.$inferSelect;
-export type InsertMenuCategory = z.infer<typeof insertMenuCategorySchema>;
-export type MenuItem = typeof menuItems.$inferSelect;
-export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
-export type Order = typeof orders.$inferSelect;
-export type InsertOrder = z.infer<typeof insertOrderSchema>;
-export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
-export type Rider = typeof riders.$inferSelect;
-export type InsertRider = z.infer<typeof insertRiderSchema>;
-export type Review = typeof reviews.$inferSelect;
-export type InsertReview = z.infer<typeof insertReviewSchema>;
 
 // Loyalty Points System Tables
 export const loyaltyPoints = pgTable("loyalty_points", {
@@ -267,21 +262,6 @@ export const redemptions = pgTable("redemptions", {
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow()
 });
-
-// Loyalty Types
-export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
-export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions);
-export const insertRewardSchema = createInsertSchema(rewards);
-export const insertRedemptionSchema = createInsertSchema(redemptions);
-
-export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
-export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
-export type PointsTransaction = typeof pointsTransactions.$inferSelect;
-export type InsertPointsTransaction = z.infer<typeof insertPointsTransactionSchema>;
-export type Reward = typeof rewards.$inferSelect;
-export type InsertReward = z.infer<typeof insertRewardSchema>;
-export type Redemption = typeof redemptions.$inferSelect;
-export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
 
 // ==================== BTS OPERATIONAL SYSTEM TABLES ====================
 // These tables are based on actual BTS Excel spreadsheet data analysis
@@ -430,6 +410,74 @@ export const btsUndeclaredBookings = pgTable("bts_undeclared_bookings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  ownedRestaurants: many(restaurants),
+  orders: many(orders),
+  reviews: many(reviews),
+  riderProfile: many(riders),
+}));
+
+export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
+  owner: one(users, { fields: [restaurants.ownerId], references: [users.id] }),
+  menuCategories: many(menuCategories),
+  menuItems: many(menuItems),
+  orders: many(orders),
+  reviews: many(reviews),
+}));
+
+export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
+  restaurant: one(restaurants, { fields: [menuCategories.restaurantId], references: [restaurants.id] }),
+  menuItems: many(menuItems),
+}));
+
+export const menuItemsRelations = relations(menuItems, ({ one }) => ({
+  restaurant: one(restaurants, { fields: [menuItems.restaurantId], references: [restaurants.id] }),
+  category: one(menuCategories, { fields: [menuItems.categoryId], references: [menuCategories.id] }),
+}));
+
+export const ridersRelations = relations(riders, ({ one, many }) => ({
+  user: one(users, { fields: [riders.userId], references: [users.id] }),
+  locationHistory: many(riderLocationHistory),
+  assignmentQueue: many(riderAssignmentQueue),
+  performanceMetrics: many(riderPerformanceMetrics),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  customer: one(users, { fields: [orders.customerId], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [orders.restaurantId], references: [restaurants.id] }),
+  rider: one(users, { fields: [orders.riderId], references: [users.id] }),
+  statusHistory: many(orderStatusHistory),
+  review: many(reviews),
+  riderLocationHistory: many(riderLocationHistory),
+  assignmentQueue: many(riderAssignmentQueue),
+}));
+
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, { fields: [orderStatusHistory.orderId], references: [orders.id] }),
+}));
+
+export const riderLocationHistoryRelations = relations(riderLocationHistory, ({ one }) => ({
+  rider: one(riders, { fields: [riderLocationHistory.riderId], references: [riders.id] }),
+  order: one(orders, { fields: [riderLocationHistory.orderId], references: [orders.id] }),
+}));
+
+export const riderAssignmentQueueRelations = relations(riderAssignmentQueue, ({ one }) => ({
+  order: one(orders, { fields: [riderAssignmentQueue.orderId], references: [orders.id] }),
+  assignedRider: one(riders, { fields: [riderAssignmentQueue.assignedRiderId], references: [riders.id] }),
+}));
+
+export const riderPerformanceMetricsRelations = relations(riderPerformanceMetrics, ({ one }) => ({
+  rider: one(riders, { fields: [riderPerformanceMetrics.riderId], references: [riders.id] }),
+}));
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  order: one(orders, { fields: [reviews.orderId], references: [orders.id] }),
+  customer: one(users, { fields: [reviews.customerId], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [reviews.restaurantId], references: [restaurants.id] }),
+  rider: one(users, { fields: [reviews.riderId], references: [users.id] }),
+}));
+
 // BTS Relations  
 export const btsRidersRelations = relations(btsRiders, ({ one, many }) => ({
   user: one(users, { fields: [btsRiders.userId], references: [users.id] }),
@@ -450,8 +498,6 @@ export const btsLateRemittanceRelations = relations(btsLateRemittance, ({ one })
   originalRemit: one(btsSalesRemittance, { fields: [btsLateRemittance.originalRemitId], references: [btsSalesRemittance.id] }),
 }));
 
-// Attendance can link to different employee types, so we'll skip direct relation for now
-
 export const btsIncentivesRelations = relations(btsIncentives, ({ one }) => ({
   rider: one(btsRiders, { fields: [btsIncentives.riderId], references: [btsRiders.id] }),
 }));
@@ -464,278 +510,62 @@ export const btsUndeclaredBookingsRelations = relations(btsUndeclaredBookings, (
   rider: one(btsRiders, { fields: [btsUndeclaredBookings.riderId], references: [btsRiders.id] }),
 }));
 
-// ==================== ADVANCED RIDER TRACKING SYSTEM ====================
-
-// Real-time rider location tracking with history
-export const riderLocationHistory = pgTable("rider_location_history", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  riderId: uuid("rider_id").references(() => riders.id).notNull(),
-  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
-  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
-  accuracy: decimal("accuracy", { precision: 8, scale: 2 }), // GPS accuracy in meters
-  speed: decimal("speed", { precision: 6, scale: 2 }), // km/h
-  heading: decimal("heading", { precision: 5, scale: 2 }), // degrees
-  altitude: decimal("altitude", { precision: 8, scale: 2 }), // meters
-  timestamp: timestamp("timestamp").defaultNow(),
-  batteryLevel: integer("battery_level"), // percentage
-  isOnline: boolean("is_online").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Rider work sessions for tracking active periods
-export const riderSessions = pgTable("rider_sessions", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  riderId: uuid("rider_id").references(() => riders.id).notNull(),
-  startTime: timestamp("start_time").defaultNow(),
-  endTime: timestamp("end_time"),
-  startLocation: jsonb("start_location"), // {lat, lng, address}
-  endLocation: jsonb("end_location"), // {lat, lng, address}
-  totalDistance: decimal("total_distance", { precision: 10, scale: 2 }).default("0"), // km
-  totalOrders: integer("total_orders").default(0),
-  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
-  status: varchar("status", { length: 20 }).default("active"), // active, paused, ended
-  deviceInfo: jsonb("device_info"), // device type, app version
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Order assignment tracking with advanced algorithms
-export const orderAssignments = pgTable("order_assignments", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  riderId: uuid("rider_id").references(() => riders.id),
-  assignedBy: varchar("assigned_by", { length: 20 }).default("system"), // system, manual, rider_accepted
-  assignmentTime: timestamp("assignment_time").defaultNow(),
-  acceptedTime: timestamp("accepted_time"),
-  rejectedTime: timestamp("rejected_time"),
-  status: varchar("status", { length: 20 }).default("pending"), // pending, accepted, rejected, cancelled, completed
-  riderDistance: decimal("rider_distance", { precision: 8, scale: 2 }), // km from restaurant
-  estimatedPickupTime: timestamp("estimated_pickup_time"),
-  actualPickupTime: timestamp("actual_pickup_time"),
-  estimatedDeliveryTime: timestamp("estimated_delivery_time"),
-  actualDeliveryTime: timestamp("actual_delivery_time"),
-  rejectionReason: varchar("rejection_reason", { length: 100 }),
-  priority: integer("priority").default(1), // 1=highest, 5=lowest
-  assignmentScore: decimal("assignment_score", { precision: 5, scale: 2 }), // algorithm score
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Real-time delivery tracking
-export const deliveryTracking = pgTable("delivery_tracking", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  riderId: uuid("rider_id").references(() => riders.id).notNull(),
-  currentStatus: varchar("current_status", { length: 20 }).notNull(),
-  currentLocation: jsonb("current_location").notNull(), // {lat, lng}
-  restaurantLocation: jsonb("restaurant_location").notNull(),
-  deliveryLocation: jsonb("delivery_location").notNull(),
-  routeToRestaurant: jsonb("route_to_restaurant"), // Google Maps route data
-  routeToCustomer: jsonb("route_to_customer"), // Google Maps route data
-  estimatedArrivalRestaurant: timestamp("estimated_arrival_restaurant"),
-  estimatedArrivalCustomer: timestamp("estimated_arrival_customer"),
-  distanceToRestaurant: decimal("distance_to_restaurant", { precision: 8, scale: 2 }),
-  distanceToCustomer: decimal("distance_to_customer", { precision: 8, scale: 2 }),
-  totalTravelTime: integer("total_travel_time"), // minutes
-  lastLocationUpdate: timestamp("last_location_update").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Rider performance analytics
-export const riderPerformanceMetrics = pgTable("rider_performance_metrics", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  riderId: uuid("rider_id").references(() => riders.id).notNull(),
-  date: timestamp("date").notNull(),
-  onlineHours: decimal("online_hours", { precision: 4, scale: 2 }).default("0"),
-  activeHours: decimal("active_hours", { precision: 4, scale: 2 }).default("0"),
-  totalOrders: integer("total_orders").default(0),
-  completedOrders: integer("completed_orders").default(0),
-  cancelledOrders: integer("cancelled_orders").default(0),
-  rejectedOrders: integer("rejected_orders").default(0),
-  averageDeliveryTime: decimal("average_delivery_time", { precision: 5, scale: 2 }), // minutes
-  totalDistance: decimal("total_distance", { precision: 10, scale: 2 }).default("0"), // km
-  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
-  customerRatings: decimal("customer_ratings", { precision: 3, scale: 2 }),
-  onTimePercentage: decimal("on_time_percentage", { precision: 5, scale: 2 }),
-  acceptanceRate: decimal("acceptance_rate", { precision: 5, scale: 2 }),
-  completionRate: decimal("completion_rate", { precision: 5, scale: 2 }),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Geofencing zones for service areas
-export const serviceZones = pgTable("service_zones", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name", { length: 100 }).notNull(),
-  city: varchar("city", { length: 100 }).notNull(),
-  province: varchar("province", { length: 100 }).notNull(),
-  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon
-  isActive: boolean("is_active").default(true),
-  deliveryFee: decimal("delivery_fee", { precision: 8, scale: 2 }).default("0"),
-  minimumOrder: decimal("minimum_order", { precision: 8, scale: 2 }).default("0"),
-  maxDeliveryRadius: decimal("max_delivery_radius", { precision: 6, scale: 2 }).default("10"), // km
-  peakHours: jsonb("peak_hours"), // {start: "17:00", end: "21:00"}
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Advanced Relations
-export const riderLocationHistoryRelations = relations(riderLocationHistory, ({ one }) => ({
-  rider: one(riders, { fields: [riderLocationHistory.riderId], references: [riders.id] }),
-}));
-
-export const riderSessionsRelations = relations(riderSessions, ({ one }) => ({
-  rider: one(riders, { fields: [riderSessions.riderId], references: [riders.id] }),
-}));
-
-export const orderAssignmentsRelations = relations(orderAssignments, ({ one }) => ({
-  order: one(orders, { fields: [orderAssignments.orderId], references: [orders.id] }),
-  rider: one(riders, { fields: [orderAssignments.riderId], references: [riders.id] }),
-}));
-
-export const deliveryTrackingRelations = relations(deliveryTracking, ({ one }) => ({
-  order: one(orders, { fields: [deliveryTracking.orderId], references: [orders.id] }),
-  rider: one(riders, { fields: [deliveryTracking.riderId], references: [riders.id] }),
-}));
-
-export const riderPerformanceMetricsRelations = relations(riderPerformanceMetrics, ({ one }) => ({
-  rider: one(riders, { fields: [riderPerformanceMetrics.riderId], references: [riders.id] }),
-}));
-
-// Advanced Tracking Types
+// Zod schemas for validation  
+export const insertUserSchema = createInsertSchema(users);
+export const insertRestaurantSchema = createInsertSchema(restaurants);
+export const insertMenuCategorySchema = createInsertSchema(menuCategories);
+export const insertMenuItemSchema = createInsertSchema(menuItems);
+export const insertOrderSchema = createInsertSchema(orders);
+export const insertRiderSchema = createInsertSchema(riders);
+export const insertReviewSchema = createInsertSchema(reviews);
 export const insertRiderLocationHistorySchema = createInsertSchema(riderLocationHistory);
-export const insertRiderSessionSchema = createInsertSchema(riderSessions);
-export const insertOrderAssignmentSchema = createInsertSchema(orderAssignments);
-export const insertDeliveryTrackingSchema = createInsertSchema(deliveryTracking);
+export const insertRiderAssignmentQueueSchema = createInsertSchema(riderAssignmentQueue);
 export const insertRiderPerformanceMetricsSchema = createInsertSchema(riderPerformanceMetrics);
-export const insertServiceZoneSchema = createInsertSchema(serviceZones);
 
+// Loyalty Types
+export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
+export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions);
+export const insertRewardSchema = createInsertSchema(rewards);
+export const insertRedemptionSchema = createInsertSchema(redemptions);
+
+// TypeScript types
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type Restaurant = typeof restaurants.$inferSelect;
+export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
+export type MenuCategory = typeof menuCategories.$inferSelect;
+export type InsertMenuCategory = z.infer<typeof insertMenuCategorySchema>;
+export type MenuItem = typeof menuItems.$inferSelect;
+export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
+export type Rider = typeof riders.$inferSelect;
+export type InsertRider = z.infer<typeof insertRiderSchema>;
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type RiderLocationHistory = typeof riderLocationHistory.$inferSelect;
 export type InsertRiderLocationHistory = z.infer<typeof insertRiderLocationHistorySchema>;
-export type RiderSession = typeof riderSessions.$inferSelect;
-export type InsertRiderSession = z.infer<typeof insertRiderSessionSchema>;
-export type OrderAssignment = typeof orderAssignments.$inferSelect;
-export type InsertOrderAssignment = z.infer<typeof insertOrderAssignmentSchema>;
-export type DeliveryTracking = typeof deliveryTracking.$inferSelect;
-export type InsertDeliveryTracking = z.infer<typeof insertDeliveryTrackingSchema>;
+export type RiderAssignmentQueue = typeof riderAssignmentQueue.$inferSelect;
+export type InsertRiderAssignmentQueue = z.infer<typeof insertRiderAssignmentQueueSchema>;
 export type RiderPerformanceMetrics = typeof riderPerformanceMetrics.$inferSelect;
 export type InsertRiderPerformanceMetrics = z.infer<typeof insertRiderPerformanceMetricsSchema>;
-export type ServiceZone = typeof serviceZones.$inferSelect;
-export type InsertServiceZone = z.infer<typeof insertServiceZoneSchema>;
 
-// BTS Zod schemas for validation
-export const insertBtsRiderSchema = createInsertSchema(btsRiders);
-export const insertBtsSalesRemittanceSchema = createInsertSchema(btsSalesRemittance);
-export const insertBtsLateRemittanceSchema = createInsertSchema(btsLateRemittance);
-export const insertBtsAttendanceSchema = createInsertSchema(btsAttendance);
-export const insertBtsPayrollSchema = createInsertSchema(btsPayroll);
-export const insertBtsIncentivesSchema = createInsertSchema(btsIncentives);
-export const insertBtsAuditReportsSchema = createInsertSchema(btsAuditReports);
-export const insertBtsUndeclaredBookingsSchema = createInsertSchema(btsUndeclaredBookings);
+export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
+export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
+export type PointsTransaction = typeof pointsTransactions.$inferSelect;
+export type InsertPointsTransaction = z.infer<typeof insertPointsTransactionSchema>;
+export type Reward = typeof rewards.$inferSelect;
+export type InsertReward = z.infer<typeof insertRewardSchema>;
+export type Redemption = typeof redemptions.$inferSelect;
+export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
 
-// GPS Tracking and Delivery Optimization Tables
-
-// Real-time rider location tracking
-export const riderLocations = pgTable("rider_locations", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  riderId: uuid("rider_id").references(() => users.id).notNull(), // rider user
-  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
-  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
-  accuracy: decimal("accuracy", { precision: 6, scale: 2 }), // GPS accuracy in meters
-  speed: decimal("speed", { precision: 6, scale: 2 }), // km/h
-  heading: decimal("heading", { precision: 6, scale: 2 }), // degrees 0-360
-  timestamp: timestamp("timestamp").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Delivery routes and optimization
-export const deliveryRoutes = pgTable("delivery_routes", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  riderId: uuid("rider_id").references(() => users.id).notNull(),
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  startLocation: jsonb("start_location").notNull(), // {lat, lng, address}
-  endLocation: jsonb("end_location").notNull(), // {lat, lng, address}
-  waypoints: jsonb("waypoints"), // [{lat, lng, address}] for multiple deliveries
-  optimizedRoute: jsonb("optimized_route"), // Google Maps route response
-  estimatedDistance: decimal("estimated_distance", { precision: 8, scale: 2 }), // km
-  estimatedDuration: integer("estimated_duration"), // minutes
-  actualDistance: decimal("actual_distance", { precision: 8, scale: 2 }),
-  actualDuration: integer("actual_duration"),
-  startTime: timestamp("start_time"),
-  endTime: timestamp("end_time"),
-  status: varchar("status", { length: 20 }).default("planned"), // planned, in_progress, completed, cancelled
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Delivery tracking events for real-time updates
-export const deliveryTrackingEvents = pgTable("delivery_tracking_events", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  riderId: uuid("rider_id").references(() => users.id).notNull(),
-  eventType: varchar("event_type", { length: 30 }).notNull(), // order_picked_up, en_route, nearby, delivered
-  location: jsonb("location"), // {lat, lng, address}
-  timestamp: timestamp("timestamp").defaultNow(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Delivery zones for optimization
-export const deliveryZones = pgTable("delivery_zones", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name", { length: 100 }).notNull(),
-  description: text("description"),
-  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon coordinates
-  baseDeliveryFee: decimal("base_delivery_fee", { precision: 8, scale: 2 }).default("0"),
-  priorityLevel: integer("priority_level").default(1), // 1=high, 2=medium, 3=low
-  maxDeliveryTime: integer("max_delivery_time").default(60), // minutes
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// GPS Tracking Relations
-export const riderLocationsRelations = relations(riderLocations, ({ one }) => ({
-  rider: one(users, { fields: [riderLocations.riderId], references: [users.id] }),
-}));
-
-export const deliveryRoutesRelations = relations(deliveryRoutes, ({ one }) => ({
-  rider: one(users, { fields: [deliveryRoutes.riderId], references: [users.id] }),
-  order: one(orders, { fields: [deliveryRoutes.orderId], references: [orders.id] }),
-}));
-
-export const deliveryTrackingEventsRelations = relations(deliveryTrackingEvents, ({ one }) => ({
-  order: one(orders, { fields: [deliveryTrackingEvents.orderId], references: [orders.id] }),
-  rider: one(users, { fields: [deliveryTrackingEvents.riderId], references: [users.id] }),
-}));
-
-// GPS Tracking Zod schemas
-export const insertRiderLocationSchema = createInsertSchema(riderLocations);
-export const insertDeliveryRouteSchema = createInsertSchema(deliveryRoutes);
-export const insertDeliveryTrackingEventSchema = createInsertSchema(deliveryTrackingEvents);
-export const insertDeliveryZoneSchema = createInsertSchema(deliveryZones);
-
-// GPS Tracking TypeScript types
-export type RiderLocation = typeof riderLocations.$inferSelect;
-export type InsertRiderLocation = z.infer<typeof insertRiderLocationSchema>;
-export type DeliveryRoute = typeof deliveryRoutes.$inferSelect;
-export type InsertDeliveryRoute = z.infer<typeof insertDeliveryRouteSchema>;
-export type DeliveryTrackingEvent = typeof deliveryTrackingEvents.$inferSelect;
-export type InsertDeliveryTrackingEvent = z.infer<typeof insertDeliveryTrackingEventSchema>;
-export type DeliveryZone = typeof deliveryZones.$inferSelect;
-export type InsertDeliveryZone = z.infer<typeof insertDeliveryZoneSchema>;
-
-// BTS TypeScript types
+// BTS System Types
 export type BtsRider = typeof btsRiders.$inferSelect;
-export type InsertBtsRider = z.infer<typeof insertBtsRiderSchema>;
 export type BtsSalesRemittance = typeof btsSalesRemittance.$inferSelect;
-export type InsertBtsSalesRemittance = z.infer<typeof insertBtsSalesRemittanceSchema>;
 export type BtsLateRemittance = typeof btsLateRemittance.$inferSelect;
-export type InsertBtsLateRemittance = z.infer<typeof insertBtsLateRemittanceSchema>;
 export type BtsAttendance = typeof btsAttendance.$inferSelect;
-export type InsertBtsAttendance = z.infer<typeof insertBtsAttendanceSchema>;
 export type BtsPayroll = typeof btsPayroll.$inferSelect;
-export type InsertBtsPayroll = z.infer<typeof insertBtsPayrollSchema>;
-export type BtsIncentives = typeof btsIncentives.$inferSelect;
-export type InsertBtsIncentives = z.infer<typeof insertBtsIncentivesSchema>;
-export type BtsAuditReports = typeof btsAuditReports.$inferSelect;
-export type InsertBtsAuditReports = z.infer<typeof insertBtsAuditReportsSchema>;
-export type BtsUndeclaredBookings = typeof btsUndeclaredBookings.$inferSelect;
-export type InsertBtsUndeclaredBookings = z.infer<typeof insertBtsUndeclaredBookingsSchema>;
+export type BtsIncentive = typeof btsIncentives.$inferSelect;
+export type BtsAuditReport = typeof btsAuditReports.$inferSelect;
+export type BtsUndeclaredBooking = typeof btsUndeclaredBookings.$inferSelect;
