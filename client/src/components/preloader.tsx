@@ -47,49 +47,50 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
       rotate: 0 
     },
     to: async (next) => {
-      // Phase 1: Zoom in
+      // Phase 1: Zoom in (1.5 seconds)
       await next({ 
         scale: 1.2, 
         opacity: 1, 
         x: 0,
         rotate: 0,
-        config: config.slow 
+        config: { duration: 1500 } 
       });
       
       setPhase("shake");
       
-      // Phase 2: Shake effect
-      for (let i = 0; i < 3; i++) {
+      // Phase 2: Shake effect (3 seconds total)
+      const shakeCount = 15; // More shakes for 3 seconds
+      for (let i = 0; i < shakeCount; i++) {
         await next({ 
-          x: -10,
-          rotate: -2,
-          config: { duration: 50 } 
+          x: -8,
+          rotate: -3,
+          config: { duration: 100 } 
         });
         await next({ 
-          x: 10,
-          rotate: 2,
-          config: { duration: 50 } 
+          x: 8,
+          rotate: 3,
+          config: { duration: 100 } 
         });
       }
       await next({ 
         x: 0,
         rotate: 0,
-        config: { duration: 50 } 
+        config: { duration: 100 } 
       });
       
       setPhase("exit");
       
-      // Phase 3: Exit to right
+      // Phase 3: Fast exit to right (0.5 seconds)
       await next({ 
-        x: window.innerWidth + 200,
-        scale: 0.8,
+        x: window.innerWidth + 300,
+        scale: 0.6,
         opacity: 0,
-        rotate: 360,
-        config: { ...config.slow, duration: 800 }
+        rotate: 720,
+        config: { duration: 500, easing: t => t * t } // Fast acceleration
       });
       
       setPhase("complete");
-      setTimeout(onLoadComplete, 300);
+      setTimeout(onLoadComplete, 100);
     }
   });
   
@@ -135,7 +136,7 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
   // P5.js draw loop
   const draw = (p5: p5Types) => {
     // Dark gradient background
-    p5.clear();
+    p5.clear(0, 0, 0, 0);
     
     // Ambient lighting
     p5.ambientLight(100);
@@ -200,9 +201,6 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
       p5.translate(x, y, 0);
       p5.rotateZ(p5.frameCount * 0.02);
       p5.fill(255, 255, 255, 100);
-      p5.textSize(30);
-      p5.textAlign(p5.CENTER, p5.CENTER);
-      p5.text(foodEmojis[i % foodEmojis.length], 0, 0);
       p5.pop();
     }
     p5.pop();
@@ -305,7 +303,7 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
         </div>
       </div>
       
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% {
             transform: translateY(0) rotate(0deg);

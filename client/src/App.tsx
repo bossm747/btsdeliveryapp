@@ -43,12 +43,14 @@ function Router() {
 
 function App() {
   const [showPreloader, setShowPreloader] = useState(true);
+  const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
     // Check if it's the first visit
     const hasVisited = sessionStorage.getItem('hasVisited');
     if (hasVisited) {
       setShowPreloader(false);
+      setShowContent(true);
     } else {
       sessionStorage.setItem('hasVisited', 'true');
     }
@@ -56,6 +58,10 @@ function App() {
 
   const handleLoadComplete = () => {
     setShowPreloader(false);
+    // Small delay to ensure smooth transition
+    setTimeout(() => {
+      setShowContent(true);
+    }, 100);
   };
 
   if (showPreloader) {
@@ -63,22 +69,24 @@ function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <LanguageProvider>
-        <CartProvider>
-          <TooltipProvider>
-            <div className="min-h-screen flex flex-col">
-              <Navbar />
-              <main className="flex-1">
-                <Router />
-              </main>
-              <Footer />
-            </div>
-            <Toaster />
-          </TooltipProvider>
-        </CartProvider>
-      </LanguageProvider>
-    </QueryClientProvider>
+    <div className={`fade-in-content ${showContent ? 'visible' : ''}`}>
+      <QueryClientProvider client={queryClient}>
+        <LanguageProvider>
+          <CartProvider>
+            <TooltipProvider>
+              <div className="min-h-screen flex flex-col">
+                <Navbar />
+                <main className="flex-1">
+                  <Router />
+                </main>
+                <Footer />
+              </div>
+              <Toaster />
+            </TooltipProvider>
+          </CartProvider>
+        </LanguageProvider>
+      </QueryClientProvider>
+    </div>
   );
 }
 
