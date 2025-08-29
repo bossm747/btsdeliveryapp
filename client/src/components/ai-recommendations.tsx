@@ -111,7 +111,13 @@ export default function AIRecommendations({ customerId }: { customerId?: string 
       if (!location) return { restaurants: [], dishes: [] };
       
       // Get order history from local storage or API
-      const orderHistory = JSON.parse(localStorage.getItem("orderHistory") || "[]");
+      let orderHistory = [];
+      try {
+        orderHistory = JSON.parse(localStorage.getItem("orderHistory") || "[]");
+      } catch (error) {
+        // Use empty array if localStorage fails
+        orderHistory = [];
+      }
       
       try {
         const response = await apiRequest("POST", "/api/ai/recommendations", {
@@ -120,11 +126,13 @@ export default function AIRecommendations({ customerId }: { customerId?: string 
           location
         });
         
+        const data = await response.json();
+        
         // If API returns empty data, use mock recommendations
-        if (!response.restaurants?.length && !response.dishes?.length) {
+        if (!data.restaurants?.length && !data.dishes?.length) {
           return getMockRecommendations();
         }
-        return response;
+        return data;
       } catch (error) {
         // Return mock data if API fails
         return getMockRecommendations();

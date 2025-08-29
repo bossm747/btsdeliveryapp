@@ -56,12 +56,16 @@ function App() {
     }, 6000); // Maximum 6 seconds for extended animation
     
     // Skip preloader if already visited in this session
-    const hasVisited = sessionStorage.getItem('hasVisited');
-    if (hasVisited) {
-      setShowPreloader(false);
-      setShowContent(true);
-    } else {
-      sessionStorage.setItem('hasVisited', 'true');
+    try {
+      const hasVisited = sessionStorage.getItem('hasVisited');
+      if (hasVisited) {
+        setShowPreloader(false);
+        setShowContent(true);
+      } else {
+        sessionStorage.setItem('hasVisited', 'true');
+      }
+    } catch (error) {
+      // Continue with preloader if sessionStorage fails
     }
     
     return () => clearTimeout(timeout);

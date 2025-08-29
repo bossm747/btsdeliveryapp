@@ -74,19 +74,21 @@ export default function AIChatbot({ orderId, orderStatus, customerName }: Chatbo
         orderStatus,
         customerName: customerName || "Customer"
       });
+      
+      const data = await response.json();
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: response.response,
+        text: data.response || "Pasensya na po, may problem. Please try again.",
         sender: "bot",
         timestamp: new Date(),
-        suggestedActions: response.suggestedActions
+        suggestedActions: data.suggestedActions
       };
 
       setMessages(prev => [...prev, botMessage]);
 
       // If human support is required, show a toast
-      if (response.requiresHumanSupport) {
+      if (data.requiresHumanSupport) {
         toast({
           title: "Connecting to Support",
           description: "A human agent will assist you shortly.",

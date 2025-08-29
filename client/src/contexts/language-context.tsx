@@ -171,12 +171,20 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<"en" | "tl">(() => {
-    const saved = localStorage.getItem("bts-language");
-    return (saved as "en" | "tl") || "tl"; // Default to Tagalog
+    try {
+      const saved = localStorage.getItem("bts-language");
+      return (saved as "en" | "tl") || "tl"; // Default to Tagalog
+    } catch (error) {
+      return "tl"; // Default to Tagalog if localStorage fails
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem("bts-language", language);
+    try {
+      localStorage.setItem("bts-language", language);
+    } catch (error) {
+      // Silently fail if localStorage is not available
+    }
     document.documentElement.lang = language === "tl" ? "tl" : "en";
   }, [language]);
 

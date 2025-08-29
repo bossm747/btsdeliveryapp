@@ -72,7 +72,8 @@ export default function DeliveryPrediction({
           weatherCondition: weather,
           timeOfDay: new Date().toLocaleTimeString()
         });
-        setPrediction(response);
+        const data = await response.json();
+        setPrediction(data);
       } catch (error) {
         console.error("Error getting prediction:", error);
         // Fallback prediction

@@ -26,7 +26,7 @@ export default function PWAInstall() {
     setIsIOS(isIOSDevice);
 
     // For iOS, show install instructions
-    if (isIOSDevice && !window.navigator.standalone) {
+    if (isIOSDevice && !(window.navigator as any).standalone) {
       setTimeout(() => setShowInstallBanner(true), 2000);
       return;
     }
@@ -43,9 +43,14 @@ export default function PWAInstall() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     // Check if should show install prompt
-    const lastPromptTime = localStorage.getItem('pwa-install-prompt-time');
-    if (!lastPromptTime || Date.now() - parseInt(lastPromptTime) > 7 * 24 * 60 * 60 * 1000) {
-      // Show every 7 days
+    try {
+      const lastPromptTime = localStorage.getItem('pwa-install-prompt-time');
+      if (!lastPromptTime || Date.now() - parseInt(lastPromptTime) > 7 * 24 * 60 * 60 * 1000) {
+        // Show every 7 days
+        setTimeout(() => setShowInstallBanner(true), 5000);
+      }
+    } catch (error) {
+      // Show banner if localStorage check fails
       setTimeout(() => setShowInstallBanner(true), 5000);
     }
 
@@ -73,12 +78,20 @@ export default function PWAInstall() {
     setShowInstallBanner(false);
     
     // Save prompt time
-    localStorage.setItem('pwa-install-prompt-time', Date.now().toString());
+    try {
+      localStorage.setItem('pwa-install-prompt-time', Date.now().toString());
+    } catch (error) {
+      // Silently fail if localStorage is not available
+    }
   };
 
   const handleDismiss = () => {
     setShowInstallBanner(false);
-    localStorage.setItem('pwa-install-prompt-time', Date.now().toString());
+    try {
+      localStorage.setItem('pwa-install-prompt-time', Date.now().toString());
+    } catch (error) {
+      // Silently fail if localStorage is not available
+    }
   };
 
   if (isInstalled || !showInstallBanner) return null;
