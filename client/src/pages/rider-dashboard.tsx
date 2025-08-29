@@ -19,15 +19,31 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 export default function RiderDashboard() {
   const { toast } = useToast();
   const [isOnline, setIsOnline] = useState(false);
-  const [activeTab, setActiveTab] = useState("tracking");
+  const [activeTab, setActiveTab] = useState("map");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Listen for mobile navigation tab changes
+  // Listen for mobile navigation tab changes with improved synchronization
   useEffect(() => {
     const handleTabChange = (event: CustomEvent) => {
-      setActiveTab(event.detail.tab);
+      const newTab = event.detail.tab;
+      console.log("Rider tab change received:", newTab);
+      setActiveTab(newTab);
+      
+      // Force re-render for map when switching to tracking/map tab
+      if (newTab === "tracking" || newTab === "map") {
+        setTimeout(() => {
+          if (window.google) {
+            const mapElements = document.querySelectorAll('[data-testid="google-maps-container"]');
+            mapElements.forEach((mapEl: any) => {
+              if (mapEl && window.google.maps) {
+                window.google.maps.event.trigger(mapEl, 'resize');
+              }
+            });
+          }
+        }, 200);
+      }
     };
 
     window.addEventListener('riderTabChange', handleTabChange as EventListener);
@@ -509,7 +525,7 @@ export default function RiderDashboard() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
+      <div className="flex-1 lg:ml-0 pb-20 md:pb-0">
         {/* Header - Native Mobile Style */}
         <div className="bg-gradient-to-br from-white via-white to-gray-50/50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-900/50 border-b border-gray-100 dark:border-gray-700 px-4 lg:px-6 py-3 lg:py-4">
           <div className="flex items-center justify-between">

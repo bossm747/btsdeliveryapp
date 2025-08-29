@@ -26,8 +26,8 @@ export default function MobileBottomNav() {
   const isAdminDashboard = location.includes("/admin-dashboard") || location.includes("/admin-riders") || location.includes("/bts-dashboard");
   const isVendorDashboard = location.includes("/vendor-dashboard");
 
-  // Track active rider tab
-  const [activeRiderTab, setActiveRiderTab] = useState("tracking");
+  // Track active rider tab - sync with rider dashboard default
+  const [activeRiderTab, setActiveRiderTab] = useState("map");
 
   useEffect(() => {
     const handleTabChange = (event: CustomEvent) => {
@@ -41,21 +41,21 @@ export default function MobileBottomNav() {
     };
   }, []);
 
-  // Rider navigation items
+  // Rider navigation items - mapped to match rider dashboard tabs
   const riderNavItems: NavItem[] = [
     {
       icon: Navigation,
       label: "Live Map",
       path: "/rider-dashboard",
-      active: activeRiderTab === "tracking",
-      tabAction: "tracking"
+      active: activeRiderTab === "map",
+      tabAction: "map"
     },
     {
       icon: Package,
-      label: "Deliveries",
+      label: "Active",
       path: "/rider-dashboard",
-      active: activeRiderTab === "deliveries",
-      tabAction: "deliveries"
+      active: activeRiderTab === "active",
+      tabAction: "active"
     },
     {
       icon: BarChart3,
@@ -73,10 +73,10 @@ export default function MobileBottomNav() {
     },
     {
       icon: User,
-      label: "Profile",
+      label: "History",
       path: "/rider-dashboard",
-      active: activeRiderTab === "profile",
-      tabAction: "profile"
+      active: activeRiderTab === "history",
+      tabAction: "history"
     }
   ];
 

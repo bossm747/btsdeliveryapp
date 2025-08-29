@@ -198,6 +198,37 @@ export const riderPerformanceMetrics = pgTable("rider_performance_metrics", {
   bonusEarned: decimal("bonus_earned", { precision: 10, scale: 2 }).default("0"),
 });
 
+// Payment transactions for NexusPay integration
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  customerId: uuid("customer_id").references(() => users.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("PHP"),
+  paymentMethod: varchar("payment_method", { length: 50 }).notNull(), // nexuspay_gcash, nexuspay_maya, nexuspay_card, cash
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed, cancelled, refunded
+  nexusPayTransactionId: varchar("nexuspay_transaction_id", { length: 100 }),
+  nexusPayReferenceNumber: varchar("nexuspay_reference_number", { length: 100 }),
+  nexusPayStatus: varchar("nexuspay_status", { length: 50 }),
+  nexusPayResponse: jsonb("nexuspay_response"), // Full response from NexusPay API
+  failureReason: text("failure_reason"),
+  paidAt: timestamp("paid_at"),
+  refundedAt: timestamp("refunded_at"),
+  refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payment status history for tracking payment state changes
+export const paymentStatusHistory = pgTable("payment_status_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentId: uuid("payment_id").references(() => payments.id).notNull(),
+  fromStatus: varchar("from_status", { length: 20 }),
+  toStatus: varchar("to_status", { length: 20 }).notNull(),
+  notes: text("notes"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
 // Reviews and ratings
 export const reviews = pgTable("reviews", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

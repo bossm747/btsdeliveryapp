@@ -203,10 +203,13 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
   const [restaurantMarker, setRestaurantMarker] = useState<any>(null);
   const [customerMarker, setCustomerMarker] = useState<any>(null);
 
-  // Initialize Google Maps with proper cleanup and re-initialization
+  // Initialize Google Maps with mobile optimization and proper cleanup
   useEffect(() => {
     const initializeMap = () => {
-      if (!mapRef.current || !window.google) return;
+      if (!mapRef.current || !window.google) {
+        console.log("Map initialization failed: container or google not available");
+        return;
+      }
 
       // Clear any existing map instance
       if (mapInstance) {
@@ -233,10 +236,19 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
       // Create map centered on current location or default to Batangas
       const center = currentLocation || { lat: 13.7565, lng: 121.0583 };
       
+      // Mobile-optimized map configuration
       const map = new window.google.maps.Map(mapRef.current, {
         zoom: 15,
         center,
         mapTypeId: 'roadmap',
+        gestureHandling: 'greedy', // Better mobile touch handling
+        zoomControl: true,
+        zoomControlOptions: {
+          position: window.google.maps.ControlPosition.RIGHT_BOTTOM
+        },
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
         styles: [
           {
             featureType: 'poi',
@@ -283,12 +295,14 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
 
       setRiderMarker(riderMkr);
 
-      // Trigger resize event to ensure map renders properly
+      // Enhanced mobile-specific map initialization
       setTimeout(() => {
         if (window.google && map) {
           window.google.maps.event.trigger(map, 'resize');
+          map.setCenter(center);
+          console.log("Map initialized successfully for mobile");
         }
-      }, 100);
+      }, 150);
     };
 
     // Load Google Maps API if not already loaded
@@ -461,12 +475,17 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
   }, [activeDelivery, mapInstance, directionsService, directionsRenderer, currentLocation]);
 
   const renderMap = () => (
-    <div className="relative w-full h-full bg-gray-100 rounded-lg overflow-hidden">
+    <div className="relative w-full h-full bg-gray-100 rounded-lg overflow-hidden touch-none">
       <div 
         ref={mapRef} 
-        className="w-full h-full"
+        className="w-full h-full touch-none"
         data-testid="google-maps-container"
         key={mapKey} // Force re-render on tab changes
+        style={{ 
+          minHeight: '300px',
+          width: '100%',
+          height: '100%'
+        }}
       />
       
       {/* Loading indicator */}
@@ -623,7 +642,7 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
         <TabsContent value="map" className="space-y-4">
           <Card>
             <CardContent className="p-0">
-              <div className="h-[500px]">
+              <div className="h-[400px] md:h-[500px] lg:h-[600px] w-full">
                 {renderMap()}
               </div>
             </CardContent>
