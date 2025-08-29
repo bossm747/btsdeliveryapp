@@ -1384,6 +1384,205 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GPS Tracking and Delivery Optimization Routes
+  
+  // Update rider location
+  app.post("/api/gps/location", async (req, res) => {
+    try {
+      const { riderId, latitude, longitude, accuracy, speed, heading } = req.body;
+      
+      if (!riderId || !latitude || !longitude) {
+        return res.status(400).json({ message: "Missing required location data" });
+      }
+
+      await gpsTrackingService.updateRiderLocation(riderId, {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        accuracy: accuracy ? parseFloat(accuracy) : undefined,
+        speed: speed ? parseFloat(speed) : undefined,
+        heading: heading ? parseFloat(heading) : undefined,
+      });
+
+      // Broadcast location update via WebSocket
+      const locationUpdate = {
+        type: "rider_location_update",
+        riderId,
+        location: { lat: parseFloat(latitude), lng: parseFloat(longitude) },
+        timestamp: new Date().toISOString()
+      };
+
+      // Will be broadcast to subscribers via WebSocket
+      if ((global as any).broadcastNotification) {
+        (global as any).broadcastNotification(locationUpdate);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating rider location:", error);
+      res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
+  // Get rider's current location
+  app.get("/api/gps/rider/:riderId/location", async (req, res) => {
+    try {
+      const location = await gpsTrackingService.getRiderLatestLocation(req.params.riderId);
+      if (!location) {
+        return res.status(404).json({ message: "No location data found" });
+      }
+      res.json(location);
+    } catch (error) {
+      console.error("Error fetching rider location:", error);
+      res.status(500).json({ message: "Failed to fetch location" });
+    }
+  });
+
+  // Get rider's location history
+  app.get("/api/gps/rider/:riderId/history", async (req, res) => {
+    try {
+      const hours = parseInt(req.query.hours as string) || 24;
+      const history = await gpsTrackingService.getRiderLocationHistory(req.params.riderId, hours);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching location history:", error);
+      res.status(500).json({ message: "Failed to fetch location history" });
+    }
+  });
+
+  // Create optimized delivery route
+  app.post("/api/gps/route", async (req, res) => {
+    try {
+      const { riderId, orderId, startLocation, endLocation, waypoints } = req.body;
+      
+      if (!riderId || !orderId || !startLocation || !endLocation) {
+        return res.status(400).json({ message: "Missing required route data" });
+      }
+
+      const route = await gpsTrackingService.createDeliveryRoute(
+        riderId,
+        orderId,
+        startLocation,
+        endLocation,
+        waypoints
+      );
+
+      res.json(route);
+    } catch (error) {
+      console.error("Error creating delivery route:", error);
+      res.status(500).json({ message: "Failed to create delivery route" });
+    }
+  });
+
+  // Start delivery route
+  app.post("/api/gps/route/:routeId/start", async (req, res) => {
+    try {
+      await gpsTrackingService.startDeliveryRoute(req.params.routeId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error starting delivery route:", error);
+      res.status(500).json({ message: "Failed to start delivery route" });
+    }
+  });
+
+  // Complete delivery route
+  app.post("/api/gps/route/:routeId/complete", async (req, res) => {
+    try {
+      const { actualDistance, actualDuration } = req.body;
+      await gpsTrackingService.completeDeliveryRoute(
+        req.params.routeId,
+        actualDistance,
+        actualDuration
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error completing delivery route:", error);
+      res.status(500).json({ message: "Failed to complete delivery route" });
+    }
+  });
+
+  // Add delivery tracking event
+  app.post("/api/gps/tracking-event", async (req, res) => {
+    try {
+      const { orderId, riderId, eventType, location, notes } = req.body;
+      
+      if (!orderId || !riderId || !eventType) {
+        return res.status(400).json({ message: "Missing required tracking data" });
+      }
+
+      const event = await gpsTrackingService.addTrackingEvent(
+        orderId,
+        riderId,
+        eventType,
+        location,
+        notes
+      );
+
+      // Broadcast tracking event via WebSocket
+      const trackingUpdate = {
+        type: "delivery_tracking_event",
+        orderId,
+        riderId,
+        eventType,
+        location,
+        timestamp: new Date().toISOString()
+      };
+
+      if ((global as any).broadcastNotification) {
+        (global as any).broadcastNotification(trackingUpdate);
+      }
+
+      res.json(event);
+    } catch (error) {
+      console.error("Error adding tracking event:", error);
+      res.status(500).json({ message: "Failed to add tracking event" });
+    }
+  });
+
+  // Get order tracking events
+  app.get("/api/gps/order/:orderId/tracking", async (req, res) => {
+    try {
+      const events = await gpsTrackingService.getOrderTrackingEvents(req.params.orderId);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching tracking events:", error);
+      res.status(500).json({ message: "Failed to fetch tracking events" });
+    }
+  });
+
+  // Get estimated arrival time
+  app.post("/api/gps/eta", async (req, res) => {
+    try {
+      const { riderId, destination } = req.body;
+      
+      if (!riderId || !destination) {
+        return res.status(400).json({ message: "Missing rider ID or destination" });
+      }
+
+      const eta = await gpsTrackingService.getEstimatedArrival(riderId, destination);
+      res.json({ estimatedMinutes: eta });
+    } catch (error) {
+      console.error("Error calculating ETA:", error);
+      res.status(500).json({ message: "Failed to calculate ETA" });
+    }
+  });
+
+  // Check if rider is near delivery location
+  app.post("/api/gps/rider/:riderId/near-delivery", async (req, res) => {
+    try {
+      const { deliveryLocation } = req.body;
+      
+      if (!deliveryLocation) {
+        return res.status(400).json({ message: "Missing delivery location" });
+      }
+
+      const isNear = await gpsTrackingService.isRiderNearDelivery(req.params.riderId, deliveryLocation);
+      res.json({ isNear });
+    } catch (error) {
+      console.error("Error checking proximity:", error);
+      res.status(500).json({ message: "Failed to check proximity" });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // WebSocket server for real-time notifications

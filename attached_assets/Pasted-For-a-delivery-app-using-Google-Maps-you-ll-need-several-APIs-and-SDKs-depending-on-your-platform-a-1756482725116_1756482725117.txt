@@ -1,0 +1,74 @@
+For a delivery app using Google Maps, you’ll need several APIs and SDKs depending on your platform and features. Here are the key components:
+
+## Google Maps APIs
+
+**Maps JavaScript API** (for web) or **Maps SDK for Android/iOS** (for mobile)
+
+- Display interactive maps
+- Show delivery locations, routes, and driver positions
+- Customize markers for restaurants, customers, and drivers
+
+**Places API**
+
+- Search for restaurants and delivery addresses
+- Auto-complete address entry
+- Get detailed place information including photos and reviews
+
+**Geocoding API**
+
+- Convert addresses to coordinates and vice versa
+- Validate delivery addresses
+- Handle address formatting
+
+**Directions API**
+
+- Calculate optimal routes between pickup and delivery points
+- Get turn-by-turn navigation instructions
+- Estimate delivery times and distances
+- Support multiple waypoints for batch deliveries
+
+**Distance Matrix API**
+
+- Calculate travel times and distances between multiple origins and destinations
+- Useful for assigning orders to the nearest available drivers
+- Bulk calculations for route optimization
+
+## Additional Google Services
+
+**Geolocation API**
+
+- Determine user’s current location
+- Auto-populate delivery addresses
+
+**Roads API** (optional)
+
+- Snap GPS coordinates to roads for more accurate tracking
+- Useful for real-time driver tracking
+
+**Google Cloud Functions** or **Firebase Functions**
+
+- Backend serverless functions for processing deliveries
+- Handle webhooks and real-time updates
+
+## Platform-Specific SDKs
+
+**For Android:**
+
+- Google Play Services Location API
+- Maps SDK for Android
+
+**For iOS:**
+
+- Google Maps SDK for iOS
+- Core Location Framework
+
+**For Web:**
+
+- Maps JavaScript API
+- Google Maps Platform Web Services
+
+## Pricing Considerations
+
+Most Google Maps APIs use pay-per-use pricing, but Google provides $200 in free monthly usage credits. For a delivery app, you’ll want to monitor usage of the Directions API and Distance Matrix API as these tend to be the most frequently called.
+
+Would you like me to elaborate on implementing any specific API or discuss the architecture for integrating these services into your delivery app?​​​​​​​​​​​​​​​​
