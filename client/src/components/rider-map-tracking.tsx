@@ -54,6 +54,7 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
   const [deliveryQueue, setDeliveryQueue] = useState<Delivery[]>([]);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [mapKey, setMapKey] = useState(0); // For forcing map re-renders
   const [earnings, setEarnings] = useState({
     today: 0,
     trips: 0,
@@ -202,10 +203,32 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
   const [restaurantMarker, setRestaurantMarker] = useState<any>(null);
   const [customerMarker, setCustomerMarker] = useState<any>(null);
 
-  // Initialize Google Maps
+  // Initialize Google Maps with proper cleanup and re-initialization
   useEffect(() => {
     const initializeMap = () => {
       if (!mapRef.current || !window.google) return;
+
+      // Clear any existing map instance
+      if (mapInstance) {
+        // Clean up existing markers and renderers
+        if (riderMarker) {
+          riderMarker.setMap(null);
+          setRiderMarker(null);
+        }
+        if (restaurantMarker) {
+          restaurantMarker.setMap(null);
+          setRestaurantMarker(null);
+        }
+        if (customerMarker) {
+          customerMarker.setMap(null);
+          setCustomerMarker(null);
+        }
+        if (directionsRenderer) {
+          directionsRenderer.setMap(null);
+          setDirectionsRenderer(null);
+        }
+        setMapInstance(null);
+      }
 
       // Create map centered on current location or default to Batangas
       const center = currentLocation || { lat: 13.7565, lng: 121.0583 };
@@ -259,6 +282,13 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
       });
 
       setRiderMarker(riderMkr);
+
+      // Trigger resize event to ensure map renders properly
+      setTimeout(() => {
+        if (window.google && map) {
+          window.google.maps.event.trigger(map, 'resize');
+        }
+      }, 100);
     };
 
     // Load Google Maps API if not already loaded
@@ -270,9 +300,48 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
       script.onload = initializeMap;
       document.head.appendChild(script);
     } else {
-      initializeMap();
+      // Use setTimeout to ensure the DOM is ready
+      setTimeout(initializeMap, 100);
     }
-  }, []);
+
+    // Cleanup function
+    return () => {
+      if (riderMarker) {
+        riderMarker.setMap(null);
+      }
+      if (restaurantMarker) {
+        restaurantMarker.setMap(null);
+      }
+      if (customerMarker) {
+        customerMarker.setMap(null);
+      }
+      if (directionsRenderer) {
+        directionsRenderer.setMap(null);
+      }
+    };
+  }, [mapRef.current]); // Re-initialize when map container changes
+
+  // Re-trigger map resize when component becomes visible
+  useEffect(() => {
+    if (mapInstance && mapRef.current) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && window.google) {
+            setTimeout(() => {
+              window.google.maps.event.trigger(mapInstance, 'resize');
+              if (currentLocation) {
+                mapInstance.setCenter(currentLocation);
+              }
+            }, 100);
+          }
+        });
+      });
+
+      observer.observe(mapRef.current);
+
+      return () => observer.disconnect();
+    }
+  }, [mapInstance, currentLocation]);
 
   // Update rider location on map
   useEffect(() => {
@@ -397,6 +466,7 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
         ref={mapRef} 
         className="w-full h-full"
         data-testid="google-maps-container"
+        key={mapKey} // Force re-render on tab changes
       />
       
       {/* Loading indicator */}
@@ -533,7 +603,17 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
         </Card>
       </div>
 
-      <Tabs defaultValue="map" className="space-y-4">
+      <Tabs defaultValue="map" className="space-y-4" onValueChange={(value) => {
+        // Refresh map when switching to map tab
+        if (value === "map") {
+          setTimeout(() => {
+            setMapKey(prev => prev + 1);
+            if (mapInstance && window.google) {
+              window.google.maps.event.trigger(mapInstance, 'resize');
+            }
+          }, 100);
+        }
+      }}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="map">Live Map</TabsTrigger>
           <TabsTrigger value="active">Active Delivery</TabsTrigger>

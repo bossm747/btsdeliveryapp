@@ -40,6 +40,7 @@ export function RealTimeRiderTracking() {
   const [assignments, setAssignments] = useState<PendingAssignment[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [selectedRider, setSelectedRider] = useState<string | null>(null);
+  const [mapKey, setMapKey] = useState(0); // For forcing map re-renders
   const wsRef = useRef<WebSocket | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
 
@@ -240,7 +241,14 @@ export function RealTimeRiderTracking() {
         </div>
       </div>
 
-      <Tabs defaultValue="map" className="w-full">
+      <Tabs defaultValue="map" className="w-full" onValueChange={(value) => {
+        // Refresh map when switching to map tab
+        if (value === "map") {
+          setTimeout(() => {
+            setMapKey(prev => prev + 1);
+          }, 100);
+        }
+      }}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="map" data-testid="tab-map">Live Map</TabsTrigger>
           <TabsTrigger value="riders" data-testid="tab-riders">Rider List</TabsTrigger>
@@ -257,6 +265,7 @@ export function RealTimeRiderTracking() {
                 ref={mapRef} 
                 className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center"
                 data-testid="rider-map"
+                key={mapKey} // Force re-render on tab changes
               >
                 <div className="text-center">
                   <p className="text-lg font-medium">Google Maps Integration</p>
