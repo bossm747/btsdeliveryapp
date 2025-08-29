@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -19,6 +20,7 @@ import Parcel from "@/pages/parcel";
 import RiderDashboard from "@/pages/rider-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
+import Preloader from "@/components/preloader";
 
 function Router() {
   return (
@@ -40,6 +42,26 @@ function Router() {
 }
 
 function App() {
+  const [showPreloader, setShowPreloader] = useState(true);
+
+  useEffect(() => {
+    // Check if it's the first visit
+    const hasVisited = sessionStorage.getItem('hasVisited');
+    if (hasVisited) {
+      setShowPreloader(false);
+    } else {
+      sessionStorage.setItem('hasVisited', 'true');
+    }
+  }, []);
+
+  const handleLoadComplete = () => {
+    setShowPreloader(false);
+  };
+
+  if (showPreloader) {
+    return <Preloader onLoadComplete={handleLoadComplete} />;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
