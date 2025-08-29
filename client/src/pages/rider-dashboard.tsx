@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RiderSidebar from "@/components/rider-sidebar";
 import RiderPayout from "@/components/rider-payout";
 import RiderMapTracking from "@/components/rider-map-tracking";
 import { 
   MapPin, Package, Clock, DollarSign, Star, TrendingUp, 
   Navigation, Phone, CheckCircle, XCircle, AlertCircle,
-  Activity, Zap, Shield, Brain, BarChart3
+  Activity, Zap, Shield, Brain, BarChart3, User, Bell, 
+  Settings, Wallet, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,6 +25,13 @@ export default function RiderDashboard() {
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  
+  // Modal states for card navigation
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showEarningsModal, setShowEarningsModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Listen for mobile navigation tab changes with improved synchronization
   useEffect(() => {
@@ -583,8 +592,75 @@ export default function RiderDashboard() {
         </div>
 
         {/* Content Area - Native Mobile Style */}
-        <div className="p-4 lg:p-6 pb-20 lg:pb-6 overflow-y-auto">
+        <div className="p-4 lg:p-6 pb-32 lg:pb-6 overflow-y-auto">
           {renderMainContent()}
+        </div>
+
+        {/* Card Navigation Area - Between map and footer */}
+        <div className="lg:hidden fixed bottom-16 left-0 right-0 px-4 pb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-4">
+            <div className="grid grid-cols-4 gap-3">
+              {/* Profile Card */}
+              <Card 
+                className="border-0 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
+                onClick={() => setShowProfileModal(true)}
+                data-testid="card-profile"
+              >
+                <CardContent className="p-3 text-center">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Profile</p>
+                </CardContent>
+              </Card>
+
+              {/* Notifications Card */}
+              <Card 
+                className="border-0 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
+                onClick={() => setShowNotificationModal(true)}
+                data-testid="card-notifications"
+              >
+                <CardContent className="p-3 text-center relative">
+                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Bell className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-xs font-medium text-orange-700 dark:text-orange-300">Alerts</p>
+                  {/* Notification badge */}
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                    <span className="text-[10px] text-white font-bold">3</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Earnings Card */}
+              <Card 
+                className="border-0 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
+                onClick={() => setShowEarningsModal(true)}
+                data-testid="card-earnings"
+              >
+                <CardContent className="p-3 text-center">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Wallet className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-xs font-medium text-green-700 dark:text-green-300">Wallet</p>
+                </CardContent>
+              </Card>
+
+              {/* Settings Card */}
+              <Card 
+                className="border-0 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 cursor-pointer hover:scale-105 transition-transform duration-200 active:scale-95"
+                onClick={() => setShowSettingsModal(true)}
+                data-testid="card-settings"
+              >
+                <CardContent className="p-3 text-center">
+                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Settings className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Settings</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -651,6 +727,199 @@ export default function RiderDashboard() {
         {/* Safe area for devices with home indicator */}
         <div className="h-safe-area-inset-bottom" />
       </div>
+
+      {/* Modal Components */}
+      
+      {/* Profile Modal */}
+      <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#004225] flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Rider Profile
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] rounded-full flex items-center justify-center">
+                <User className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-[#004225]">{riderData?.name || "Juan Cruz"}</h3>
+                <p className="text-sm text-gray-600">Rider ID: {riderData?.id || "R-001"}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Star className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm font-medium">{riderData?.rating || "4.8"}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                <p className="text-sm text-blue-600 dark:text-blue-400">Total Deliveries</p>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{riderData?.totalDeliveries || "0"}</p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                <p className="text-sm text-green-600 dark:text-green-400">Success Rate</p>
+                <p className="text-xl font-bold text-green-700 dark:text-green-300">{riderData?.successRate || "98"}%</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[#004225]">Status</Label>
+              <div className="flex items-center space-x-2">
+                <Switch 
+                  checked={isOnline} 
+                  onCheckedChange={(checked) => {
+                    setIsOnline(checked);
+                    updateStatusMutation.mutate(checked);
+                  }}
+                />
+                <Label className={isOnline ? "text-green-600" : "text-gray-500"}>
+                  {isOnline ? "Online - Tumatanggap ng deliveries" : "Offline"}
+                </Label>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notifications Modal */}
+      <Dialog open={showNotificationModal} onOpenChange={setShowNotificationModal}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#004225] flex items-center gap-2">
+              <Bell className="w-5 h-5" />
+              Notifications & Alerts
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {/* Sample notifications */}
+            <div className="flex items-start space-x-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <Package className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[#004225]">New delivery assignment available</p>
+                <p className="text-xs text-gray-600">Order #12345 - Max's Restaurant</p>
+                <p className="text-xs text-gray-500">2 minutes ago</p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[#004225]">Payment received</p>
+                <p className="text-xs text-gray-600">₱250.00 for delivery #12340</p>
+                <p className="text-xs text-gray-500">1 hour ago</p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <Star className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[#004225]">5-star rating received!</p>
+                <p className="text-xs text-gray-600">Customer loved your service</p>
+                <p className="text-xs text-gray-500">3 hours ago</p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Earnings Modal */}
+      <Dialog open={showEarningsModal} onOpenChange={setShowEarningsModal}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#004225] flex items-center gap-2">
+              <Wallet className="w-5 h-5" />
+              Earnings & Wallet
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] p-6 rounded-xl text-white">
+              <div className="text-center">
+                <p className="text-sm opacity-90">Total Balance</p>
+                <p className="text-3xl font-bold">₱2,450.00</p>
+                <p className="text-xs opacity-75">Available for withdrawal</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                <p className="text-sm text-green-600 dark:text-green-400">Today's Earnings</p>
+                <p className="text-xl font-bold text-green-700 dark:text-green-300">₱480.00</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                <p className="text-sm text-blue-600 dark:text-blue-400">This Week</p>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-300">₱1,890.00</p>
+              </div>
+            </div>
+
+            <Button className="w-full bg-[#004225] hover:bg-[#004225]/90 text-white">
+              Withdraw Earnings
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Modal */}
+      <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#004225] flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Rider Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[#004225]">Push Notifications</p>
+                  <p className="text-sm text-gray-600">Receive delivery alerts</p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[#004225]">Location Sharing</p>
+                  <p className="text-sm text-gray-600">Share location with customers</p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[#004225]">Auto-Accept Orders</p>
+                  <p className="text-sm text-gray-600">Automatically accept assignments</p>
+                </div>
+                <Switch />
+              </div>
+            </div>
+
+            <div className="border-t pt-4 space-y-2">
+              <Button variant="outline" className="w-full justify-start">
+                <User className="w-4 h-4 mr-2" />
+                Edit Profile
+              </Button>
+              <Button variant="outline" className="w-full justify-start">
+                <Shield className="w-4 h-4 mr-2" />
+                Privacy & Security
+              </Button>
+              <Button variant="outline" className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50">
+                <XCircle className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
