@@ -8,6 +8,7 @@ import { CartProvider } from "@/hooks/use-cart";
 import { LanguageProvider } from "@/contexts/language-context";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import MobileBottomNav from "@/components/mobile-bottom-nav";
 import Home from "@/pages/home";
 import Restaurants from "@/pages/restaurants";
 import RestaurantDetail from "@/pages/restaurant-detail";
@@ -93,11 +94,16 @@ function App() {
             <TooltipProvider>
               <div className="min-h-screen flex flex-col">
                 <Navbar />
-                <main className="flex-1">
+                <main className="flex-1 pb-20 md:pb-0">
                   <Router />
                 </main>
-                <Footer />
+                {/* Hide footer on mobile, show desktop footer */}
+                <div className="hidden md:block">
+                  <Footer />
+                </div>
               </div>
+              {/* Mobile bottom navigation - only on mobile */}
+              <MobileBottomNav />
               <Toaster />
             </TooltipProvider>
           </CartProvider>
