@@ -192,8 +192,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Download CTA */}
-      <section className="py-16 hero-gradient text-white" data-testid="download-cta-section">
+      {/* Get Started CTA */}
+      <section className="py-16 hero-gradient text-white" data-testid="get-started-section">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl lg:text-5xl font-bold mb-6">
             Ready to Experience BTS Delivery?
@@ -203,21 +203,35 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Button className="bg-black text-white px-8 py-4 text-lg hover:bg-black/80" data-testid="download-ios">
-              <Download className="mr-2 h-5 w-5" />
-              <div className="text-left">
-                <div className="text-xs">Download on the</div>
-                <div className="text-lg font-bold">App Store</div>
-              </div>
-            </Button>
+            <Link href="/restaurants">
+              <Button className="bg-white text-primary px-8 py-4 text-lg hover:bg-white/90" data-testid="order-now-button">
+                <ArrowRight className="mr-2 h-5 w-5" />
+                <div className="text-left">
+                  <div className="text-xs">Start Ordering</div>
+                  <div className="text-lg font-bold">Order Now</div>
+                </div>
+              </Button>
+            </Link>
             
-            <Button className="bg-black text-white px-8 py-4 text-lg hover:bg-black/80" data-testid="download-android">
+            <Button 
+              className="bg-black/20 backdrop-blur text-white border border-white/30 px-8 py-4 text-lg hover:bg-black/30" 
+              data-testid="save-webapp-button"
+              onClick={() => {
+                alert("Add to Home Screen: On your mobile browser, tap the Share button and select 'Add to Home Screen' to install BTS Delivery as a web app!");
+              }}
+            >
               <Download className="mr-2 h-5 w-5" />
               <div className="text-left">
-                <div className="text-xs">Get it on</div>
-                <div className="text-lg font-bold">Google Play</div>
+                <div className="text-xs">Save as Web App</div>
+                <div className="text-lg font-bold">Install PWA</div>
               </div>
             </Button>
+          </div>
+          
+          <div className="mb-8">
+            <p className="text-white/80 text-sm">
+              ✓ No app download needed • ✓ Works on any device • ✓ Always up-to-date
+            </p>
           </div>
           
           <div className="flex items-center justify-center space-x-8 text-white/80">
