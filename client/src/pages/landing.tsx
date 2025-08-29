@@ -219,11 +219,11 @@ export default function Landing() {
                 { title: "Para sa Riders", desc: "Earn money with flexible schedule", href: "/signup?role=rider" }
               ].map((cta, index) => (
                 <Link key={index} href={cta.href}>
-                  <Card className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+                  <Card className="bg-white/90 backdrop-blur-sm border-white/30 hover:bg-white transition-all duration-300 cursor-pointer shadow-lg">
                     <CardContent className="p-6 text-center">
-                      <h3 className="font-semibold text-lg mb-2">{cta.title}</h3>
-                      <p className="text-sm opacity-75 mb-4">{cta.desc}</p>
-                      <ArrowRight className="w-5 h-5 mx-auto" />
+                      <h3 className="font-semibold text-lg mb-2 text-[#004225]">{cta.title}</h3>
+                      <p className="text-sm text-gray-700 mb-4">{cta.desc}</p>
+                      <ArrowRight className="w-5 h-5 mx-auto text-[#FF6B35]" />
                     </CardContent>
                   </Card>
                 </Link>
