@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RiderSidebar from "@/components/rider-sidebar";
 import RiderPayout from "@/components/rider-payout";
 import RiderMapTracking from "@/components/rider-map-tracking";
 import { 
