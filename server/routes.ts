@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { 
   insertRestaurantSchema, 
@@ -14,7 +16,8 @@ import {
   type RiderLocationHistory,
   type RiderAssignmentQueue,
   riders,
-  users
+  users,
+  userSessions
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { db, pool } from "./db";
@@ -35,7 +38,206 @@ interface ExtendedWebSocket extends WebSocket {
   subscriptions?: Set<string>;
 }
 
+// JWT secret - in production this should be from environment variables
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-here-please-change-in-production";
+
+// Authentication middleware
+const authenticateToken = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Access token required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // Check if session is still valid
+    const [session] = await db.select()
+      .from(userSessions)
+      .where(eq(userSessions.sessionToken, token));
+    
+    if (!session || new Date() > session.expiresAt) {
+      return res.status(401).json({ message: "Token expired" });
+    }
+
+    // Get user data
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.id, decoded.userId));
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    req.user = user;
+    req.sessionId = session.id;
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: "Invalid token" });
+  }
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // ============= AUTHENTICATION ROUTES =============
+  
+  // Register endpoint
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { firstName, lastName, email, phone, password, role } = req.body;
+
+      // Validate input
+      if (!email || !password || !firstName || !lastName || !role) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      // Check if user already exists
+      const [existingUser] = await db.select()
+        .from(users)
+        .where(eq(users.email, email));
+
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Create user
+      const [newUser] = await db.insert(users).values({
+        email,
+        phone,
+        firstName,
+        lastName,
+        role,
+        passwordHash,
+        status: "active"
+      }).returning();
+
+      // Create session
+      const sessionToken = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+      const refreshToken = jwt.sign({ userId: newUser.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
+      
+      await db.insert(userSessions).values({
+        userId: newUser.id,
+        sessionToken,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: {
+          userAgent: req.headers['user-agent'],
+          ip: req.ip
+        }
+      });
+
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = newUser;
+
+      res.status(201).json({
+        message: "User created successfully",
+        user: userResponse,
+        token: sessionToken
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Login endpoint
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Find user by email
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, email));
+
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Check password
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Check if user is active
+      if (user.status !== "active") {
+        return res.status(401).json({ message: "Account is suspended or inactive" });
+      }
+
+      // Create session
+      const sessionToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
+      
+      await db.insert(userSessions).values({
+        userId: user.id,
+        sessionToken,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: {
+          userAgent: req.headers['user-agent'],
+          ip: req.ip
+        }
+      });
+
+      // Update last login
+      await db.update(users)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
+
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+
+      res.json({
+        message: "Login successful",
+        user: userResponse,
+        token: sessionToken
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get current user endpoint
+  app.get("/api/auth/me", authenticateToken, async (req: any, res) => {
+    try {
+      const { passwordHash: _, ...userResponse } = req.user;
+      res.json(userResponse);
+    } catch (error) {
+      console.error("Get user error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Logout endpoint
+  app.post("/api/auth/logout", authenticateToken, async (req: any, res) => {
+    try {
+      // Delete session
+      await db.delete(userSessions)
+        .where(eq(userSessions.id, req.sessionId));
+
+      res.json({ message: "Logged out successfully" });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ============= OTHER ROUTES =============
   
   // User routes
   app.post("/api/users", async (req, res) => {

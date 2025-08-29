@@ -13,16 +13,43 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table for customers, vendors, riders, and admins
+// User Sessions for authentication
+export const userSessions = pgTable("user_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionToken: varchar("session_token", { length: 255 }).unique().notNull(),
+  refreshToken: varchar("refresh_token", { length: 255 }).unique(),
+  deviceInfo: jsonb("device_info"), // {browser, os, device, ip}
+  expiresAt: timestamp("expires_at").notNull(),
+  lastActiveAt: timestamp("last_active_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Role Permissions System
+export const rolePermissions = pgTable("role_permissions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  role: varchar("role", { length: 20 }).notNull(), // customer, vendor, rider, admin
+  resource: varchar("resource", { length: 50 }).notNull(), // orders, restaurants, deliveries, users, etc
+  actions: jsonb("actions").notNull(), // {create: true, read: true, update: false, delete: false}
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Enhanced Users table with comprehensive role management
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email", { length: 255 }).unique().notNull(),
   phone: varchar("phone", { length: 20 }).unique(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
   role: varchar("role", { length: 20 }).notNull().default("customer"), // customer, vendor, rider, admin
   status: varchar("status", { length: 20 }).notNull().default("active"), // active, inactive, suspended
   profileImageUrl: varchar("profile_image_url", { length: 500 }),
+  lastLoginAt: timestamp("last_login_at"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  phoneVerifiedAt: timestamp("phone_verified_at"),
+  permissions: jsonb("permissions"), // role-specific permissions override
+  preferences: jsonb("preferences"), // user dashboard preferences
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
