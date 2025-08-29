@@ -84,7 +84,7 @@ export default function AIRecommendations({ customerId }: { customerId?: string 
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-700">{recommendations.timeBasedSuggestion}</p>
+            <p className="text-sm text-gray-900 font-medium">{recommendations.timeBasedSuggestion}</p>
           </CardContent>
         </Card>
       )}
@@ -99,19 +99,19 @@ export default function AIRecommendations({ customerId }: { customerId?: string 
             </div>
             <Badge variant="secondary">Para sa Inyo</Badge>
           </div>
-          <CardDescription>Based on your preferences and order history</CardDescription>
+          <CardDescription className="text-gray-700">Based on your preferences and order history</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {recommendations.restaurants.slice(0, 3).map((restaurant, index) => (
-            <div key={index} className="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
+            <div key={index} className="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors bg-white">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h4 className="font-semibold">{restaurant.name}</h4>
+                  <h4 className="font-semibold text-gray-900">{restaurant.name}</h4>
                   <Badge variant="outline" className="text-xs">
                     {restaurant.matchScore}% Match
                   </Badge>
                 </div>
-                <p className="text-sm text-gray-600">{restaurant.reason}</p>
+                <p className="text-sm text-gray-800">{restaurant.reason}</p>
               </div>
               <Link href={`/restaurant/${restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}>
                 <Button size="sm" variant="outline" data-testid={`button-view-${index}`}>
@@ -130,15 +130,15 @@ export default function AIRecommendations({ customerId }: { customerId?: string 
             <TrendingUp className="h-5 w-5 text-green-600" />
             <CardTitle>Subukan Ngayon</CardTitle>
           </div>
-          <CardDescription>Dishes you might enjoy based on your taste</CardDescription>
+          <CardDescription className="text-gray-700">Dishes you might enjoy based on your taste</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {recommendations.dishes.slice(0, 4).map((dish, index) => (
-              <div key={index} className="p-3 border rounded-lg hover:border-orange-300 transition-colors">
-                <h4 className="font-medium text-sm">{dish.name}</h4>
-                <p className="text-xs text-gray-500 mt-1">{dish.restaurant}</p>
-                <p className="text-xs text-gray-600 mt-2">{dish.reason}</p>
+              <div key={index} className="p-3 border rounded-lg hover:border-orange-300 transition-colors bg-white">
+                <h4 className="font-medium text-sm text-gray-900">{dish.name}</h4>
+                <p className="text-xs text-gray-700 mt-1 font-medium">{dish.restaurant}</p>
+                <p className="text-xs text-gray-800 mt-2">{dish.reason}</p>
               </div>
             ))}
           </div>

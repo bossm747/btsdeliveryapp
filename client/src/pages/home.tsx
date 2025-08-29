@@ -33,7 +33,7 @@ export default function Home() {
               </h2>
             </div>
             <p className="text-xl text-muted-foreground">
-              Personalized suggestions just for you, powered by Google Gemini AI
+              Personalized suggestions just for you, powered by Innovatehub AI "Pareng Boyong"
             </p>
           </div>
           <AIRecommendations customerId="user-1" />
