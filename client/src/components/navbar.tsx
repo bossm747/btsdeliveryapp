@@ -3,8 +3,16 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCart } from "@/hooks/use-cart";
-import { ShoppingCart, Menu } from "lucide-react";
+import { ShoppingCart, Menu, ChevronDown, Package, Users, Settings, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 import NotificationCenter from "@/components/notification-center";
 import LanguageToggle from "@/components/language-toggle";
@@ -18,13 +26,32 @@ export default function Navbar() {
 
   const totalItems = getTotalItems();
 
-  const navigationItems = [
+  // Main services - always visible
+  const mainServices = [
     { label: t("service.food"), href: "/restaurants" },
     { label: t("service.pabili"), href: "/pabili" },
     { label: t("service.pabayad"), href: "/pabayad" },
     { label: t("service.parcel"), href: "/parcel" },
-    { label: "Para sa Vendors", href: "/vendor-dashboard" },
-    { label: "Para sa Riders", href: "/rider-dashboard" },
+  ];
+
+  // Customer management items
+  const customerItems = [
+    { label: "My Orders", href: "/customer-orders", icon: Package },
+    { label: "Track Order", href: "/order-tracking", icon: Package },
+  ];
+
+  // Business dashboard items
+  const businessItems = [
+    { label: "Vendor Dashboard", href: "/vendor-dashboard", icon: BarChart3 },
+    { label: "Rider Dashboard", href: "/rider-dashboard", icon: Users },
+  ];
+
+  // Admin management items
+  const adminItems = [
+    { label: "Admin Dashboard", href: "/admin-dashboard", icon: Settings },
+    { label: "Manage Riders", href: "/admin-riders", icon: Users },
+    { label: "BTS Tracking", href: "/bts-dashboard", icon: BarChart3 },
+    { label: "Map Demo", href: "/map-tracking-demo", icon: Package },
   ];
 
   return (
@@ -41,7 +68,8 @@ export default function Navbar() {
           </Link>
           
           <div className="hidden md:flex items-center space-x-6">
-            {navigationItems.map((item) => (
+            {/* Main Services */}
+            {mainServices.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
@@ -51,6 +79,81 @@ export default function Navbar() {
                 {item.label}
               </Link>
             ))}
+            
+            {/* Customer Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-1">
+                  <span>My Account</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Customer Services</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {customerItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.label} asChild>
+                      <Link href={item.href} className="flex items-center space-x-2 w-full">
+                        <Icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Business Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-1">
+                  <span>Business</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Business Dashboards</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {businessItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.label} asChild>
+                      <Link href={item.href} className="flex items-center space-x-2 w-full">
+                        <Icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Admin Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-1">
+                  <span>Admin</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Admin Management</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {adminItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.label} asChild>
+                      <Link href={item.href} className="flex items-center space-x-2 w-full">
+                        <Icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             <NotificationCenter userId="user-1" userRole="customer" />
             
@@ -103,17 +206,79 @@ export default function Navbar() {
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px]">
                 <div className="flex flex-col space-y-4 mt-8">
-                  {navigationItems.map((item) => (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className="text-foreground hover:text-primary transition-colors py-2 border-b border-border"
-                      onClick={() => setIsOpen(false)}
-                      data-testid={`mobile-nav-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
+                  {/* Main Services */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Main Services</h3>
+                    {mainServices.map((item) => (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        className="text-foreground hover:text-primary transition-colors py-2 border-b border-border block"
+                        onClick={() => setIsOpen(false)}
+                        data-testid={`mobile-nav-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Customer Items */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Customer</h3>
+                    {customerItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors py-2 border-b border-border"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+
+                  {/* Business Items */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Business</h3>
+                    {businessItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors py-2 border-b border-border"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+
+                  {/* Admin Items */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Admin</h3>
+                    {adminItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors py-2 border-b border-border"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4">
                     Mag-Login
                   </Button>
