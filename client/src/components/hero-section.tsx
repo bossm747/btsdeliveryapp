@@ -26,7 +26,7 @@ export default function HeroSection() {
               <img 
                 src={btsLogo} 
                 alt="BTS Delivery Logo" 
-                className="w-16 h-16 object-contain"
+                className="w-16 h-16 object-contain rounded-full bg-white p-1"
               />
               <span className="text-2xl font-bold text-white/90">BTS Delivery</span>
             </div>

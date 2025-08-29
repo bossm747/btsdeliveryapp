@@ -35,7 +35,7 @@ export default function Navbar() {
             <img 
               src={btsLogo} 
               alt="BTS Delivery Logo" 
-              className="w-10 h-10 object-contain"
+              className="w-10 h-10 object-contain rounded-full bg-white p-0.5"
             />
             <span className="font-bold text-xl text-foreground">BTS Delivery</span>
           </Link>
