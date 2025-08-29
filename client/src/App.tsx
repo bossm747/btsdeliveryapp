@@ -94,7 +94,7 @@ function App() {
             <TooltipProvider>
               <div className="min-h-screen flex flex-col">
                 <Navbar />
-                <main className="flex-1 pb-20 md:pb-0">
+                <main className="flex-1 pb-24 md:pb-0 min-h-screen">
                   <Router />
                 </main>
                 {/* Hide footer on mobile, show desktop footer */}

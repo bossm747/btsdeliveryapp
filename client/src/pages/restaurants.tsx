@@ -72,7 +72,7 @@ export default function Restaurants() {
   }) || [];
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="restaurants-page">
+    <div className="min-h-screen bg-background py-8 pb-8 md:pb-8" data-testid="restaurants-page">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-4" data-testid="restaurants-title">

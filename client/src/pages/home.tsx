@@ -139,7 +139,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="pb-4">
+      <main className="pb-8 md:pb-4">
         {/* Services Grid */}
         <section className="px-4 py-6 bg-gradient-to-b from-white to-gray-50/50 border-b border-gray-100">
           <h2 className="text-lg font-bold mb-4 text-[#004225] flex items-center">

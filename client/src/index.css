@@ -108,6 +108,27 @@
   .mobile-app-header {
     padding-top: env(safe-area-inset-top, 20px);
   }
+  
+  /* Ensure proper bottom spacing for fixed navigation */
+  .mobile-page-content {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  /* Prevent content from being hidden behind navigation */
+  main {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  
+  /* Ensure last elements in sections are properly visible */
+  section:last-child,
+  div:last-child {
+    margin-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  /* Mobile page content wrapper */
+  .mobile-safe-bottom {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .dark {
