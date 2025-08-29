@@ -126,7 +126,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0" data-testid="home-page">
+    <div className="min-h-screen bg-gray-50" data-testid="home-page">
       {/* Mobile Header - Fixed */}
       <header className="sticky top-0 z-40 bg-white shadow-sm">
         {/* Location Bar */}

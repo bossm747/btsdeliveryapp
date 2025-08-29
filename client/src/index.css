@@ -73,29 +73,9 @@
 
 /* Global mobile page spacing to ensure content is never hidden */
 @media (max-width: 768px) {
-  /* Force all page containers to have bottom spacing */
-  .min-h-screen {
-    padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important;
-  }
-  
-  /* Ensure last content elements have extra margin */
-  .page-container > *:last-child,
-  .section-container > *:last-child,
-  div[data-testid] > *:last-child {
-    margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
-  }
-  
   /* Ensure scroll end position is above navigation */
   html {
-    scroll-padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Apply extra bottom margin to common content containers */
-  [data-testid$="-grid"]:last-child,
-  [data-testid$="-results"]:last-child,
-  [data-testid$="-list"]:last-child,
-  [data-testid$="-content"]:last-child {
-    margin-bottom: calc(32px + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
   
   /* Permanent sticky mobile bottom navigation */
@@ -171,43 +151,9 @@
     padding-top: env(safe-area-inset-top, 20px);
   }
   
-  /* Ensure proper bottom spacing for fixed navigation */
-  .mobile-page-content {
+  /* Single clean bottom spacing for mobile content */
+  .min-h-screen {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Prevent content from being hidden behind navigation */
-  main {
-    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
-  }
-  
-  /* Ensure last elements in sections are properly visible */
-  section:last-child,
-  .section-content:last-child,
-  .page-content:last-child {
-    margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Mobile page content wrapper */
-  .mobile-safe-bottom {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Ensure all page content has proper bottom spacing */
-  .pb-safe-bottom {
-    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Force content to not overlap with navigation */
-  body {
-    margin-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Reset body margin on desktop */
-  @media (min-width: 768px) {
-    body {
-      margin-bottom: 0;
-    }
   }
 }
 
