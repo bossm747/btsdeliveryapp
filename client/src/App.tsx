@@ -19,6 +19,7 @@ import Pabayad from "@/pages/pabayad";
 import Parcel from "@/pages/parcel";
 import RiderDashboard from "@/pages/rider-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import MapTrackingDemo from "@/pages/map-tracking-demo";
 import NotFound from "@/pages/not-found";
 import Preloader from "@/components/preloader";
 
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/parcel" component={Parcel} />
       <Route path="/rider-dashboard" component={RiderDashboard} />
       <Route path="/admin-dashboard" component={AdminDashboard} />
+      <Route path="/map-tracking-demo" component={MapTrackingDemo} />
       <Route component={NotFound} />
     </Switch>
   );

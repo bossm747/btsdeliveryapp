@@ -224,4 +224,60 @@
   .animate-fade-in-up {
     animation: fadeInUp 0.8s ease-out forwards;
   }
+  
+  /* Leaflet Map Styles */
+  .leaflet-container {
+    font-family: inherit;
+    z-index: 1;
+  }
+  
+  .leaflet-popup-content-wrapper {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  .leaflet-popup-content {
+    margin: 8px 12px;
+    font-size: 14px;
+  }
+  
+  .custom-div-icon {
+    background: transparent;
+    border: none;
+  }
+  
+  .rider-marker {
+    background: transparent;
+    border: none;
+  }
+  
+  .restaurant-marker {
+    background: transparent;
+    border: none;
+  }
+  
+  .customer-marker {
+    background: transparent;
+    border: none;
+  }
+  
+  /* Map control buttons */
+  .leaflet-control {
+    margin: 0 !important;
+  }
+  
+  .leaflet-control-zoom {
+    display: none; /* Hide default zoom controls as we have custom ones */
+  }
+  
+  /* Animated route path */
+  @keyframes dash {
+    to {
+      stroke-dashoffset: -20;
+    }
+  }
+  
+  .route-animation {
+    animation: dash 1s linear infinite;
+  }
 }

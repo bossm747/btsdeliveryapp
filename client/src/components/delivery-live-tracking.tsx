@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   MapPin, Navigation, Clock, Phone, MessageCircle,
   Store, Home, Package, Bike, User, CheckCircle,
-  AlertCircle, Activity, Route, Shield
+  AlertCircle, Activity, Route, Shield, RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+// Lazy load the enhanced map component
+const RealtimeMapTracking = lazy(() => import("./realtime-map-tracking"));
 
 interface Location {
   lat: number;
@@ -228,133 +231,22 @@ export default function DeliveryLiveTracking({
   };
 
   const renderMap = () => {
-    const riderLoc = riderLocation || trackingData?.rider?.location;
-    
+    // Use the enhanced real-time map tracking component for actual map display
     return (
-      <div ref={mapRef} className="relative w-full h-full bg-gray-100 rounded-lg overflow-hidden">
-        {/* Map Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
-          {/* Grid Pattern */}
-          <svg className="absolute inset-0 w-full h-full opacity-20">
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="gray" strokeWidth="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-          
-          {/* Restaurant Marker */}
-          {trackingData && (
-            <div 
-              className="absolute z-10 transform -translate-x-1/2 -translate-y-1/2"
-              style={{ left: "30%", top: "40%" }}
-            >
-              <div className="relative">
-                <div className="bg-orange-500 rounded-full p-3 shadow-lg">
-                  <Store className="h-6 w-6 text-white" />
-                </div>
-                <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                  <span className="text-xs font-medium bg-white px-2 py-1 rounded shadow">
-                    {trackingData.restaurant.name}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Customer Marker */}
-          {trackingData && (
-            <div 
-              className="absolute z-10 transform -translate-x-1/2 -translate-y-1/2"
-              style={{ left: "70%", top: "60%" }}
-            >
-              <div className="relative">
-                <div className="bg-green-500 rounded-full p-3 shadow-lg">
-                  <Home className="h-6 w-6 text-white" />
-                </div>
-                <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                  <span className="text-xs font-medium bg-white px-2 py-1 rounded shadow">
-                    Customer
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Rider Marker */}
-          {riderLoc && (
-            <div 
-              className="absolute z-20 transform -translate-x-1/2 -translate-y-1/2"
-              style={{ 
-                left: `${45 + (riderLoc.lng - 121.0583) * 1000}%`, 
-                top: `${50 + (riderLoc.lat - 13.7565) * 1000}%`,
-                transition: "all 1s ease-out"
-              }}
-            >
-              <div className="relative">
-                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-75"></div>
-                <div className="relative bg-blue-600 rounded-full p-3 shadow-lg">
-                  <Bike className="h-6 w-6 text-white" />
-                </div>
-                {trackingData?.rider && (
-                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                    <span className="text-xs font-medium bg-white px-2 py-1 rounded shadow">
-                      {trackingData.rider.name}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Route Path */}
-          {trackingData && riderLoc && (
-            <svg className="absolute inset-0 z-0">
-              <path
-                d="M 30% 40% Q 45% 45% 50% 50% T 70% 60%"
-                stroke="#FF6B35"
-                strokeWidth="3"
-                strokeDasharray="5,5"
-                fill="none"
-                className="animate-pulse"
-              />
-            </svg>
-          )}
-        </div>
-        
-        {/* Connection Status */}
-        <div className="absolute top-4 left-4 flex items-center gap-2">
-          <Badge variant={isConnected ? "default" : "destructive"} className="flex items-center gap-1">
-            <Activity className={`h-3 w-3 ${isConnected ? "animate-pulse" : ""}`} />
-            {isConnected ? "Live" : "Connecting..."}
-          </Badge>
-          {userRole === "rider" && (
-            <Badge className="bg-blue-500 text-white">
-              <Navigation className="h-3 w-3 mr-1" />
-              GPS Active
-            </Badge>
-          )}
-        </div>
-        
-        {/* Map Controls */}
-        <div className="absolute top-4 right-4 flex gap-2">
-          <Button 
-            size="sm" 
-            variant={mapView === "2d" ? "default" : "outline"}
-            onClick={() => setMapView("2d")}
-          >
-            2D
-          </Button>
-          <Button 
-            size="sm" 
-            variant={mapView === "3d" ? "default" : "outline"}
-            onClick={() => setMapView("3d")}
-          >
-            3D
-          </Button>
-        </div>
-      </div>
+      <Suspense 
+        fallback={
+          <div className="relative w-full h-full bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-orange-500" />
+            <span className="ml-2 text-gray-600">Loading map...</span>
+          </div>
+        }
+      >
+        <RealtimeMapTracking 
+          orderId={orderId}
+          userRole={userRole}
+          onLocationUpdate={onLocationUpdate}
+        />
+      </Suspense>
     );
   };
 
