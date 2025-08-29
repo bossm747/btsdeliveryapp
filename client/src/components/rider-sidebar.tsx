@@ -172,10 +172,10 @@ export default function RiderSidebar({
                 setIsMobileMenuOpen(false);
               }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group",
+                "w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-left transition-all duration-200 group active:scale-98 touch-manipulation",
                 isActive
-                  ? "bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] text-white shadow-lg shadow-[#FF6B35]/25"
-                  : "hover:bg-[#004225]/5 text-gray-700 dark:text-gray-300 hover:text-[#004225]"
+                  ? "bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] text-white shadow-lg shadow-[#FF6B35]/25 scale-105"
+                  : "hover:bg-[#004225]/5 text-gray-700 dark:text-gray-300 hover:text-[#004225] active:bg-[#004225]/10"
               )}
               data-testid={`sidebar-nav-${item.id}`}
             >
@@ -257,15 +257,15 @@ export default function RiderSidebar({
 
   return (
     <>
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button - Native App Style */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Button
           onClick={() => setIsMobileMenuOpen(true)}
           size="icon"
-          className="bg-white shadow-lg border border-gray-200"
+          className="bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] shadow-xl border-0 rounded-2xl w-12 h-12 active:scale-95 transition-transform duration-150"
           data-testid="mobile-menu-toggle"
         >
-          <Menu className="h-4 w-4" />
+          <Menu className="h-5 w-5 text-white" />
         </Button>
       </div>
 
@@ -274,30 +274,36 @@ export default function RiderSidebar({
         <SidebarContent />
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar Overlay - Native App Style */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex">
-          {/* Backdrop */}
+        <div className="lg:hidden fixed inset-0 z-40">
+          {/* Backdrop with blur effect */}
           <div 
-            className="fixed inset-0 bg-black/50 transition-opacity"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-all duration-300"
             onClick={() => setIsMobileMenuOpen(false)}
           />
           
-          {/* Sidebar */}
-          <div className="relative w-80 bg-white dark:bg-gray-900 shadow-xl">
-            {/* Close Button */}
+          {/* Sidebar - Native mobile drawer style */}
+          <div className="relative w-[85vw] max-w-sm bg-white dark:bg-gray-900 shadow-2xl h-full transform transition-transform duration-300 ease-out rounded-r-3xl overflow-hidden">
+            {/* Mobile Header with close gesture area */}
             <div className="absolute top-4 right-4 z-10">
               <Button
                 onClick={() => setIsMobileMenuOpen(false)}
                 size="icon"
                 variant="ghost"
+                className="rounded-full w-10 h-10 bg-gray-100 dark:bg-gray-800 active:scale-95 transition-all duration-150"
                 data-testid="mobile-menu-close"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
             
-            <SidebarContent />
+            {/* Swipe indicator */}
+            <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            
+            <div className="pt-4">
+              <SidebarContent />
+            </div>
           </div>
         </div>
       )}
