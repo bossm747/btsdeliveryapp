@@ -24,6 +24,16 @@ import hawaiianPizzaImg from "@/assets/generated/hawaiian-pizza.jpg";
 import pm2InasalImg from "@/assets/generated/pm2-inasal.jpg";
 import sisigBowlImg from "@/assets/generated/sisig-bowl.jpg";
 
+// Import category images
+import categoryAllImg from "@/assets/generated/category-all.jpg";
+import categoryFastFoodImg from "@/assets/generated/category-fast-food.jpg";
+import categoryPizzaImg from "@/assets/generated/category-pizza.jpg";
+import categoryFilipinoImg from "@/assets/generated/category-filipino.jpg";
+import categoryChickenImg from "@/assets/generated/category-chicken.jpg";
+import categoryCoffeeImg from "@/assets/generated/category-coffee.jpg";
+import categoryDessertsImg from "@/assets/generated/category-desserts.jpg";
+import categoryHealthyImg from "@/assets/generated/category-healthy.jpg";
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const { data: restaurants, isLoading } = useQuery<Restaurant[]>({
@@ -84,14 +94,14 @@ export default function Home() {
   ];
 
   const categories = [
-    { name: "All", emoji: "🍽️", active: true },
-    { name: "Fast Food", emoji: "🍟" },
-    { name: "Pizza", emoji: "🍕" },
-    { name: "Filipino", emoji: "🥘" },
-    { name: "Chicken", emoji: "🍗" },
-    { name: "Coffee", emoji: "☕" },
-    { name: "Desserts", emoji: "🍰" },
-    { name: "Healthy", emoji: "🥗" }
+    { name: "All", emoji: "🍽️", image: categoryAllImg, active: true },
+    { name: "Fast Food", emoji: "🍟", image: categoryFastFoodImg },
+    { name: "Pizza", emoji: "🍕", image: categoryPizzaImg },
+    { name: "Filipino", emoji: "🥘", image: categoryFilipinoImg },
+    { name: "Chicken", emoji: "🍗", image: categoryChickenImg },
+    { name: "Coffee", emoji: "☕", image: categoryCoffeeImg },
+    { name: "Desserts", emoji: "🍰", image: categoryDessertsImg },
+    { name: "Healthy", emoji: "🥗", image: categoryHealthyImg }
   ];
 
   const promos = [
@@ -217,14 +227,20 @@ export default function Home() {
             {categories.map((category) => (
               <button
                 key={category.name}
-                className={`flex flex-col items-center min-w-[80px] p-4 rounded-2xl transition-all bts-hover-lift shadow-lg ${
+                className={`flex flex-col items-center min-w-[80px] p-3 rounded-2xl transition-all bts-hover-lift shadow-lg ${
                   category.active 
                     ? 'bg-gradient-to-br from-[#FF6B35] to-[#004225] text-white shadow-xl border-2 border-[#FFD23F]/50' 
                     : 'bg-white border-2 border-gray-200 hover:border-[#FF6B35]/30 hover:shadow-xl'
                 }`}
                 data-testid={`category-${category.name.toLowerCase()}`}
               >
-                <span className="text-2xl mb-1">{category.emoji}</span>
+                <div className="w-12 h-12 rounded-xl overflow-hidden mb-2 bg-gray-100">
+                  <img 
+                    src={category.image} 
+                    alt={category.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
                 <span className="text-xs font-medium">{category.name}</span>
               </button>
             ))}

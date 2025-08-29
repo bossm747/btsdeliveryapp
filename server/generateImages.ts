@@ -157,5 +157,71 @@ export async function generateDishImages() {
   return true;
 }
 
+export async function generateCategoryImages() {
+  const categoryImages = [
+    {
+      name: "all",
+      prompt: "Variety of Filipino food dishes arranged beautifully, overhead view, colorful spread including rice, meat, vegetables, traditional Filipino cuisine presentation",
+      filename: "category-all.jpg"
+    },
+    {
+      name: "fast-food",
+      prompt: "Modern fast food items including burgers, fries, fried chicken, clean restaurant style presentation, appetizing food photography",
+      filename: "category-fast-food.jpg"
+    },
+    {
+      name: "pizza",
+      prompt: "Delicious pizza with melted cheese and toppings, wood-fired oven style, Italian cuisine, professional food photography",
+      filename: "category-pizza.jpg"
+    },
+    {
+      name: "filipino",
+      prompt: "Traditional Filipino dishes including adobo, rice, vegetables, authentic Filipino home cooking style, served on banana leaf",
+      filename: "category-filipino.jpg"
+    },
+    {
+      name: "chicken",
+      prompt: "Variety of chicken dishes including fried chicken, grilled chicken, crispy golden coating, appetizing chicken food photography",
+      filename: "category-chicken.jpg"
+    },
+    {
+      name: "coffee",
+      prompt: "Fresh coffee cup with latte art, coffee beans, warm lighting, cozy cafe atmosphere, premium coffee presentation",
+      filename: "category-coffee.jpg"
+    },
+    {
+      name: "desserts",
+      prompt: "Filipino desserts including halo-halo, leche flan, ube ice cream, colorful sweet treats, dessert food photography",
+      filename: "category-desserts.jpg"
+    },
+    {
+      name: "healthy",
+      prompt: "Fresh salad bowl with vegetables, fruits, healthy ingredients, clean eating presentation, vibrant colors, nutritious food",
+      filename: "category-healthy.jpg"
+    }
+  ];
+
+  console.log("Starting category image generation...");
+  
+  for (const image of categoryImages) {
+    try {
+      console.log(`Generating ${image.name}...`);
+      const imagePath = path.join(assetsDir, image.filename);
+      
+      await generateImage(image.prompt, imagePath);
+      console.log(`✅ Generated: ${image.filename}`);
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      console.error(`❌ Failed to generate ${image.name}:`, error);
+    }
+  }
+  
+  console.log("Category image generation complete!");
+  return true;
+}
+
 // Export for use in routes
 export { generateImage };
