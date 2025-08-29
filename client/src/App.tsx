@@ -103,10 +103,8 @@ function App() {
                 <div className="hidden md:block">
                   <Footer />
                 </div>
-                {/* Mobile bottom navigation - only on mobile */}
-                <div className="md:hidden">
-                  <MobileBottomNav />
-                </div>
+                {/* Mobile bottom navigation - positioned outside main container */}
+                <MobileBottomNav />
               </div>
               <Toaster />
             </TooltipProvider>
