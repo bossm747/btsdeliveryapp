@@ -237,6 +237,242 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pabili Service Routes
+  app.post("/api/pabili", async (req, res) => {
+    try {
+      const pabiliData = {
+        ...req.body,
+        serviceType: "pabili",
+        status: "pending"
+      };
+      
+      // Create order with pabili service type
+      const order = await storage.createOrder({
+        customerId: req.body.customerId || "guest",
+        restaurantId: "pabili-service",
+        items: pabiliData.items,
+        subtotal: pabiliData.estimatedBudget,
+        deliveryFee: pabiliData.deliveryFee || 49,
+        serviceFee: pabiliData.serviceFee || 50,
+        totalAmount: pabiliData.estimatedBudget + (pabiliData.deliveryFee || 49) + (pabiliData.serviceFee || 50),
+        paymentMethod: "cash",
+        paymentStatus: "pending",
+        deliveryAddress: { address: pabiliData.deliveryAddress },
+        specialInstructions: pabiliData.specialInstructions
+      });
+      
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating pabili request:", error);
+      res.status(500).json({ message: "Failed to create pabili request" });
+    }
+  });
+
+  // Pabayad Service Routes  
+  app.post("/api/pabayad", async (req, res) => {
+    try {
+      const pabayData = {
+        ...req.body,
+        serviceType: "pabayad",
+        status: "pending"
+      };
+      
+      // Create order with pabayad service type
+      const order = await storage.createOrder({
+        customerId: req.body.customerId || "guest",
+        restaurantId: "pabayad-service",
+        items: [{ 
+          name: `Bill Payment - ${pabayData.billType}`,
+          accountNumber: pabayData.accountNumber,
+          amount: pabayData.amount
+        }],
+        subtotal: pabayData.amount,
+        deliveryFee: 0,
+        serviceFee: pabayData.serviceFee || 25,
+        totalAmount: pabayData.amount + (pabayData.serviceFee || 25),
+        paymentMethod: "cash",
+        paymentStatus: "pending",
+        deliveryAddress: { phone: pabayData.contactNumber },
+        specialInstructions: `Account: ${pabayData.accountNumber}, Due: ${pabayData.dueDate}`
+      });
+      
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating pabayad request:", error);
+      res.status(500).json({ message: "Failed to create pabayad request" });
+    }
+  });
+
+  // Parcel Service Routes
+  app.post("/api/parcel", async (req, res) => {
+    try {
+      const parcelData = {
+        ...req.body,
+        serviceType: "parcel",
+        status: "pending"
+      };
+      
+      // Create order with parcel service type
+      const order = await storage.createOrder({
+        customerId: req.body.customerId || "guest",
+        restaurantId: "parcel-service",
+        items: [{
+          name: `Parcel Delivery - ${parcelData.packageSize}`,
+          description: parcelData.itemDescription,
+          value: parcelData.itemValue
+        }],
+        subtotal: 0,
+        deliveryFee: parcelData.deliveryFee,
+        serviceFee: 0,
+        totalAmount: parcelData.deliveryFee,
+        paymentMethod: "cash",
+        paymentStatus: "pending",
+        deliveryAddress: {
+          sender: parcelData.sender,
+          receiver: parcelData.receiver
+        },
+        specialInstructions: parcelData.specialInstructions
+      });
+      
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating parcel request:", error);
+      res.status(500).json({ message: "Failed to create parcel request" });
+    }
+  });
+
+  // Rider Routes
+  app.get("/api/rider/profile", async (req, res) => {
+    try {
+      // Mock rider profile for now
+      const riderProfile = {
+        id: "rider-1",
+        name: "Juan Dela Cruz",
+        vehicleType: "motorcycle",
+        rating: 4.8,
+        totalDeliveries: 523,
+        earningsBalance: 2450.50,
+        isOnline: false,
+        isVerified: true
+      };
+      res.json(riderProfile);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch rider profile" });
+    }
+  });
+
+  app.get("/api/rider/deliveries/active", async (req, res) => {
+    try {
+      // Return active deliveries for the rider
+      const activeDeliveries: any[] = [];
+      res.json(activeDeliveries);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch active deliveries" });
+    }
+  });
+
+  app.get("/api/rider/deliveries/history", async (req, res) => {
+    try {
+      // Return delivery history
+      const history: any[] = [];
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch delivery history" });
+    }
+  });
+
+  app.patch("/api/rider/status", async (req, res) => {
+    try {
+      const { isOnline, currentLocation } = req.body;
+      // Update rider status
+      res.json({ success: true, isOnline });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update status" });
+    }
+  });
+
+  app.post("/api/rider/deliveries/:orderId/accept", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      // Accept delivery
+      res.json({ success: true, orderId });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to accept delivery" });
+    }
+  });
+
+  // Admin Routes
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      const stats = {
+        totalUsers: 1543,
+        activeRestaurants: 127,
+        totalOrders: 8432,
+        activeRiders: 89,
+        onlineRiders: 34,
+        revenueToday: 125430.50
+      };
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      // Return users list
+      const users: any[] = [];
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/admin/restaurants", async (req, res) => {
+    try {
+      const restaurants = await storage.getRestaurants();
+      res.json(restaurants);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch restaurants" });
+    }
+  });
+
+  app.get("/api/admin/orders", async (req, res) => {
+    try {
+      const orders = await storage.getOrders();
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/admin/riders", async (req, res) => {
+    try {
+      const riders = await storage.getRiders();
+      res.json(riders);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch riders" });
+    }
+  });
+
+  app.patch("/api/admin/restaurants/:id/approve", async (req, res) => {
+    try {
+      const restaurant = await storage.updateRestaurant(req.params.id, { isActive: true });
+      res.json(restaurant);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to approve restaurant" });
+    }
+  });
+
+  app.patch("/api/admin/riders/:id/verify", async (req, res) => {
+    try {
+      const rider = await storage.updateRider(req.params.id, { isVerified: true });
+      res.json(rider);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to verify rider" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

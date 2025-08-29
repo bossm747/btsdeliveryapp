@@ -15,9 +15,12 @@ export default function Navbar() {
   const totalItems = getTotalItems();
 
   const navigationItems = [
-    { label: "Para sa Customers", href: "/" },
+    { label: "Food", href: "/restaurants" },
+    { label: "Pabili", href: "/pabili" },
+    { label: "Pabayad", href: "/pabayad" },
+    { label: "Parcel", href: "/parcel" },
     { label: "Para sa Vendors", href: "/vendor-dashboard" },
-    { label: "Para sa Riders", href: "#" },
+    { label: "Para sa Riders", href: "/rider-dashboard" },
   ];
 
   return (
