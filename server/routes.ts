@@ -23,6 +23,7 @@ import * as geminiAI from "./services/gemini";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
+import { generatePlatformImages } from "./generateImages";
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -974,6 +975,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(rider);
     } catch (error) {
       res.status(500).json({ message: "Failed to verify rider" });
+    }
+  });
+
+  // Generate platform images endpoint
+  app.post("/api/admin/generate-images", async (req, res) => {
+    try {
+      console.log("Starting image generation...");
+      await generatePlatformImages();
+      res.json({ success: true, message: "Images generated successfully" });
+    } catch (error) {
+      console.error("Error generating images:", error);
+      res.status(500).json({ message: "Failed to generate images" });
     }
   });
 
