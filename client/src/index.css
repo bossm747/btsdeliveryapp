@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(210, 11%, 97%); /* #F8F9FA */
+  --foreground: hsl(209, 20%, 25%); /* #2C3E50 */
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(209, 20%, 25%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(209, 20%, 25%);
+  --primary: hsl(15, 100%, 60%); /* #FF6B35 */
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(150, 100%, 13%); /* #004225 */
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --muted: hsl(210, 11%, 91%);
+  --muted-foreground: hsl(215, 16%, 47%);
+  --accent: hsl(49, 100%, 62%); /* #FFD23F */
+  --accent-foreground: hsl(150, 100%, 13%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  --ring: hsl(15, 100%, 60%);
+  --success: hsl(145, 63%, 42%); /* #27AE60 */
+  --chart-1: hsl(15, 100%, 60%);
+  --chart-2: hsl(150, 100%, 13%);
+  --chart-3: hsl(49, 100%, 62%);
+  --chart-4: hsl(145, 63%, 42%);
+  --chart-5: hsl(341.4894, 75.2%, 50.9804%);
+  --sidebar: hsl(0, 0%, 100%);
+  --sidebar-foreground: hsl(209, 20%, 25%);
+  --sidebar-primary: hsl(15, 100%, 60%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(49, 100%, 62%);
+  --sidebar-accent-foreground: hsl(150, 100%, 13%);
+  --sidebar-border: hsl(214, 32%, 91%);
+  --sidebar-ring: hsl(15, 100%, 60%);
+  --font-sans: "Nunito", "Open Sans", system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+  --radius: 12px;
+  --shadow-2xs: 0px 2px 0px 0px hsl(15, 100%, 60%);
+  --shadow-xs: 0px 2px 0px 0px hsl(15, 100%, 60%);
+  --shadow-sm: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 1px 2px -1px hsl(15, 100%, 60%);
+  --shadow: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 1px 2px -1px hsl(15, 100%, 60%);
+  --shadow-md: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 2px 4px -1px hsl(15, 100%, 60%);
+  --shadow-lg: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 4px 6px -1px hsl(15, 100%, 60%);
+  --shadow-xl: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 8px 10px -1px hsl(15, 100%, 60%);
+  --shadow-2xl: 0px 2px 0px 0px hsl(15, 100%, 60%);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark {
+  --background: hsl(0, 0%, 0%);
+  --foreground: hsl(200, 6.6667%, 91.1765%);
+  --card: hsl(228, 9.8039%, 10%);
+  --card-foreground: hsl(0, 0%, 85.0980%);
+  --popover: hsl(0, 0%, 0%);
+  --popover-foreground: hsl(200, 6.6667%, 91.1765%);
+  --primary: hsl(15, 100%, 60%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(150, 100%, 13%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --muted: hsl(0, 0%, 9.4118%);
+  --muted-foreground: hsl(210, 3.3898%, 46.2745%);
+  --accent: hsl(49, 100%, 62%);
+  --accent-foreground: hsl(150, 100%, 13%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 5.2632%, 14.9020%);
+  --input: hsl(207, 27.6596%, 18.4314%);
+  --ring: hsl(15, 100%, 60%);
+  --success: hsl(145, 63%, 42%);
+  --chart-1: hsl(15, 100%, 60%);
+  --chart-2: hsl(150, 100%, 13%);
+  --chart-3: hsl(49, 100%, 62%);
+  --chart-4: hsl(145, 63%, 42%);
+  --chart-5: hsl(341.4894, 75.2%, 50.9804%);
+  --sidebar: hsl(228, 9.8039%, 10%);
+  --sidebar-foreground: hsl(0, 0%, 85.0980%);
+  --sidebar-primary: hsl(15, 100%, 60%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(49, 100%, 62%);
+  --sidebar-accent-foreground: hsl(150, 100%, 13%);
+  --sidebar-border: hsl(205.7143, 15.7895%, 26.0784%);
+  --sidebar-ring: hsl(15, 100%, 60%);
+  --font-sans: "Nunito", "Open Sans", system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+  --radius: 12px;
+  --shadow-2xs: 0px 2px 0px 0px hsl(15, 100%, 60%);
+  --shadow-xs: 0px 2px 0px 0px hsl(15, 100%, 60%);
+  --shadow-sm: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 1px 2px -1px hsl(15, 100%, 60%);
+  --shadow: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 1px 2px -1px hsl(15, 100%, 60%);
+  --shadow-md: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 2px 4px -1px hsl(15, 100%, 60%);
+  --shadow-lg: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 4px 6px -1px hsl(15, 100%, 60%);
+  --shadow-xl: 0px 2px 0px 0px hsl(15, 100%, 60%), 0px 8px 10px -1px hsl(15, 100%, 60%);
+  --shadow-2xl: 0px 2px 0px 0px hsl(15, 100%, 60%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Nunito", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .hero-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  }
+  
+  .service-card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+  }
+  
+  .restaurant-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s ease;
+  }
+  
+  .sticky-header {
+    backdrop-filter: blur(8px);
+    background-color: rgba(248, 249, 250, 0.95);
+  }
+  
+  .order-status-active {
+    background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+  }
+}
