@@ -47,19 +47,19 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
       rotate: 0 
     },
     to: async (next) => {
-      // Phase 1: Zoom in (1.5 seconds)
+      // Phase 1: Zoom in (1 second)
       await next({ 
         scale: 1.2, 
         opacity: 1, 
         x: 0,
         rotate: 0,
-        config: { duration: 1500 } 
+        config: { duration: 1000 } 
       });
       
       setPhase("shake");
       
-      // Phase 2: Shake effect (3 seconds total)
-      const shakeCount = 15; // More shakes for 3 seconds
+      // Phase 2: Shake effect (2 seconds total)
+      const shakeCount = 10; // Fewer shakes for 2 seconds
       for (let i = 0; i < shakeCount; i++) {
         await next({ 
           x: -8,
@@ -80,13 +80,13 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
       
       setPhase("exit");
       
-      // Phase 3: Fast exit to right (0.5 seconds)
+      // Phase 3: Fast exit to right (0.3 seconds)
       await next({ 
         x: window.innerWidth + 300,
         scale: 0.6,
         opacity: 0,
         rotate: 720,
-        config: { duration: 500, easing: t => t * t } // Fast acceleration
+        config: { duration: 300, easing: t => t * t } // Fast acceleration
       });
       
       setPhase("complete");

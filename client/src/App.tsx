@@ -48,7 +48,14 @@ function App() {
   const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
-    // Check if it's the first visit
+    // Auto-skip preloader after maximum time to prevent getting stuck
+    const timeout = setTimeout(() => {
+      if (showPreloader) {
+        handleLoadComplete();
+      }
+    }, 4000); // Maximum 4 seconds
+    
+    // Skip preloader if already visited in this session
     const hasVisited = sessionStorage.getItem('hasVisited');
     if (hasVisited) {
       setShowPreloader(false);
@@ -56,6 +63,8 @@ function App() {
     } else {
       sessionStorage.setItem('hasVisited', 'true');
     }
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const handleLoadComplete = () => {
