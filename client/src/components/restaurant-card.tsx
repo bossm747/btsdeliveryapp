@@ -14,7 +14,7 @@ export default function RestaurantCard({ restaurant }: RestaurantCardProps) {
 
   return (
     <Link href={`/restaurant/${restaurant.id}`}>
-      <Card className="restaurant-card cursor-pointer transition-all duration-300 hover:shadow-xl" data-testid={`restaurant-card-${restaurant.id}`}>
+      <Card className="restaurant-card cursor-pointer bts-hover-lift bts-border-gradient bg-white" data-testid={`restaurant-card-${restaurant.id}`}>
         <div className="relative">
           <img 
             src={restaurant.imageUrl || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=300"} 
@@ -23,14 +23,14 @@ export default function RestaurantCard({ restaurant }: RestaurantCardProps) {
             data-testid={`restaurant-image-${restaurant.id}`}
           />
           {restaurant.isFeatured && (
-            <Badge className="absolute top-2 left-2 bg-accent text-accent-foreground">
+            <Badge className="absolute top-2 left-2 bts-gradient-primary text-white bts-glow-primary">
               Featured
             </Badge>
           )}
         </div>
         <CardContent className="p-6">
           <div className="flex justify-between items-start mb-3">
-            <h3 className="text-xl font-bold text-foreground" data-testid={`restaurant-name-${restaurant.id}`}>
+            <h3 className="text-xl font-bold bts-text-gradient" data-testid={`restaurant-name-${restaurant.id}`}>
               {restaurant.name}
             </h3>
             <div className="flex items-center space-x-1">

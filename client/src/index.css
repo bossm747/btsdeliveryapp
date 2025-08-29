@@ -3,7 +3,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* BTS Brand Gradient Variables */
 :root {
+  --bts-primary: #FF6B35;
+  --bts-secondary: #004225;
+  --bts-accent: #FFD23F;
+  --gradient-primary: linear-gradient(135deg, #FF6B35 0%, #FFD23F 100%);
+  --gradient-secondary: linear-gradient(135deg, #004225 0%, #FF6B35 100%);
+  --gradient-radial: radial-gradient(circle at center, #FF6B35 0%, #FFD23F 40%, #004225 100%);
+  --glow-primary: 0 0 30px rgba(255, 107, 53, 0.3);
+  --glow-accent: 0 0 20px rgba(255, 210, 63, 0.4);
   --background: hsl(210, 11%, 97%); /* #F8F9FA */
   --foreground: hsl(209, 20%, 25%); /* #2C3E50 */
   --card: hsl(0, 0%, 100%);
@@ -157,6 +166,76 @@
     animation: glow 2s ease-in-out infinite;
   }
   
+  /* BTS Radiant Accent Utilities */
+  .bts-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bts-gradient-secondary {
+    background: var(--gradient-secondary);
+  }
+
+  .bts-gradient-radial {
+    background: var(--gradient-radial);
+  }
+
+  .bts-glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+
+  .bts-glow-accent {
+    box-shadow: var(--glow-accent);
+  }
+
+  .bts-text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bts-border-gradient {
+    border: 2px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+                var(--gradient-primary) border-box;
+  }
+
+  .bts-hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bts-hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-primary), 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  .bts-glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .bts-glass {
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .bts-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 107, 53, 0.1),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
   /* Preloader animations */
   @keyframes float {
     0%, 100% {

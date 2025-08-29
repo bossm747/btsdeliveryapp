@@ -3,8 +3,9 @@ import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function Footer() {
   return (
-    <footer className="bg-secondary text-white py-12" data-testid="footer">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="bts-gradient-secondary text-white py-12 relative overflow-hidden" data-testid="footer">
+      <div className="absolute inset-0 bts-shimmer opacity-10"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid md:grid-cols-4 gap-8">
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
@@ -13,7 +14,7 @@ export default function Footer() {
                 alt="BTS Delivery Logo" 
                 className="w-10 h-10 object-contain rounded-full bg-white p-0.5"
               />
-              <span className="font-bold text-xl">BTS Delivery</span>
+              <span className="font-bold text-xl text-[#FFD23F]">BTS Delivery</span>
             </div>
             <p className="text-white/80" data-testid="footer-description">
               Bringing the best of Batangas to your doorstep with reliable, fast delivery service.

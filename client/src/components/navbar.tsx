@@ -28,7 +28,7 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 sticky-header border-b border-border" data-testid="navbar">
+    <nav className="sticky top-0 z-50 bts-glass border-b border-border/50" data-testid="navbar">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link href="/" className="flex items-center space-x-2" data-testid="logo-link">
@@ -37,7 +37,7 @@ export default function Navbar() {
               alt="BTS Delivery Logo" 
               className="w-10 h-10 object-contain rounded-full bg-white p-0.5"
             />
-            <span className="font-bold text-xl text-foreground">BTS Delivery</span>
+            <span className="font-bold text-xl bts-text-gradient">BTS Delivery</span>
           </Link>
           
           <div className="hidden md:flex items-center space-x-6">
@@ -45,7 +45,7 @@ export default function Navbar() {
               <Link
                 key={item.label}
                 href={item.href}
-                className="text-foreground hover:text-primary transition-colors"
+                className="text-foreground hover:text-primary transition-colors bts-hover-lift"
                 data-testid={`nav-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 {item.label}
@@ -72,7 +72,7 @@ export default function Navbar() {
               )}
             </Button>
             
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="login-button">
+            <Button className="bts-gradient-primary text-white hover:opacity-90 bts-glow-primary" data-testid="login-button">
               Mag-Login
             </Button>
           </div>

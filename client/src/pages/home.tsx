@@ -145,8 +145,8 @@ export default function Home() {
           <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
             {services.map((service) => (
               <Link key={service.path} href={service.path}>
-                <div className="flex flex-col items-center p-3 rounded-xl hover:shadow-md transition-shadow bg-white">
-                  <div className={`w-14 h-14 rounded-xl ${service.color} flex items-center justify-center mb-2`}>
+                <div className="flex flex-col items-center p-3 rounded-xl bts-hover-lift transition-all bg-white bts-border-gradient shadow-lg">
+                  <div className="w-14 h-14 rounded-xl bts-gradient-primary flex items-center justify-center mb-2 bts-glow-primary">
                     <span className="text-2xl">{service.icon}</span>
                   </div>
                   <span className="text-xs font-medium text-gray-700">{service.name}</span>
@@ -162,7 +162,7 @@ export default function Home() {
             {promos.map((promo, index) => (
               <div
                 key={index}
-                className={`min-w-[280px] p-4 rounded-xl bg-gradient-to-r ${promo.color} text-white`}
+                className="min-w-[280px] p-4 rounded-xl bts-gradient-primary text-white bts-glow-primary bts-hover-lift"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -183,9 +183,9 @@ export default function Home() {
             {categories.map((category) => (
               <button
                 key={category.name}
-                className={`flex flex-col items-center min-w-[70px] p-3 rounded-xl transition-colors ${
-                  category.active ? 'bg-orange-100 border-orange-300' : 'bg-white'
-                } border`}
+                className={`flex flex-col items-center min-w-[70px] p-3 rounded-xl transition-all bts-hover-lift ${
+                  category.active ? 'bts-gradient-primary text-white bts-glow-primary' : 'bg-white border'
+                }`}
                 data-testid={`category-${category.name.toLowerCase()}`}
               >
                 <span className="text-2xl mb-1">{category.emoji}</span>
@@ -209,7 +209,7 @@ export default function Home() {
             </Link>
           </div>
           
-          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 border border-orange-100">
+          <div className="bts-glass rounded-xl p-4 bts-border-gradient bts-shimmer">
             <p className="text-sm text-gray-700 mb-2">Powered by Innovatehub AI "Pareng Boyong"</p>
             <div className="space-y-2">
               <div className="flex items-center justify-between p-2 bg-white rounded-lg">
