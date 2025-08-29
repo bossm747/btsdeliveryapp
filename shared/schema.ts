@@ -464,6 +464,163 @@ export const btsUndeclaredBookingsRelations = relations(btsUndeclaredBookings, (
   rider: one(btsRiders, { fields: [btsUndeclaredBookings.riderId], references: [btsRiders.id] }),
 }));
 
+// ==================== ADVANCED RIDER TRACKING SYSTEM ====================
+
+// Real-time rider location tracking with history
+export const riderLocationHistory = pgTable("rider_location_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
+  accuracy: decimal("accuracy", { precision: 8, scale: 2 }), // GPS accuracy in meters
+  speed: decimal("speed", { precision: 6, scale: 2 }), // km/h
+  heading: decimal("heading", { precision: 5, scale: 2 }), // degrees
+  altitude: decimal("altitude", { precision: 8, scale: 2 }), // meters
+  timestamp: timestamp("timestamp").defaultNow(),
+  batteryLevel: integer("battery_level"), // percentage
+  isOnline: boolean("is_online").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Rider work sessions for tracking active periods
+export const riderSessions = pgTable("rider_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  startTime: timestamp("start_time").defaultNow(),
+  endTime: timestamp("end_time"),
+  startLocation: jsonb("start_location"), // {lat, lng, address}
+  endLocation: jsonb("end_location"), // {lat, lng, address}
+  totalDistance: decimal("total_distance", { precision: 10, scale: 2 }).default("0"), // km
+  totalOrders: integer("total_orders").default(0),
+  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("active"), // active, paused, ended
+  deviceInfo: jsonb("device_info"), // device type, app version
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Order assignment tracking with advanced algorithms
+export const orderAssignments = pgTable("order_assignments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  riderId: uuid("rider_id").references(() => riders.id),
+  assignedBy: varchar("assigned_by", { length: 20 }).default("system"), // system, manual, rider_accepted
+  assignmentTime: timestamp("assignment_time").defaultNow(),
+  acceptedTime: timestamp("accepted_time"),
+  rejectedTime: timestamp("rejected_time"),
+  status: varchar("status", { length: 20 }).default("pending"), // pending, accepted, rejected, cancelled, completed
+  riderDistance: decimal("rider_distance", { precision: 8, scale: 2 }), // km from restaurant
+  estimatedPickupTime: timestamp("estimated_pickup_time"),
+  actualPickupTime: timestamp("actual_pickup_time"),
+  estimatedDeliveryTime: timestamp("estimated_delivery_time"),
+  actualDeliveryTime: timestamp("actual_delivery_time"),
+  rejectionReason: varchar("rejection_reason", { length: 100 }),
+  priority: integer("priority").default(1), // 1=highest, 5=lowest
+  assignmentScore: decimal("assignment_score", { precision: 5, scale: 2 }), // algorithm score
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Real-time delivery tracking
+export const deliveryTracking = pgTable("delivery_tracking", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  currentStatus: varchar("current_status", { length: 20 }).notNull(),
+  currentLocation: jsonb("current_location").notNull(), // {lat, lng}
+  restaurantLocation: jsonb("restaurant_location").notNull(),
+  deliveryLocation: jsonb("delivery_location").notNull(),
+  routeToRestaurant: jsonb("route_to_restaurant"), // Google Maps route data
+  routeToCustomer: jsonb("route_to_customer"), // Google Maps route data
+  estimatedArrivalRestaurant: timestamp("estimated_arrival_restaurant"),
+  estimatedArrivalCustomer: timestamp("estimated_arrival_customer"),
+  distanceToRestaurant: decimal("distance_to_restaurant", { precision: 8, scale: 2 }),
+  distanceToCustomer: decimal("distance_to_customer", { precision: 8, scale: 2 }),
+  totalTravelTime: integer("total_travel_time"), // minutes
+  lastLocationUpdate: timestamp("last_location_update").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Rider performance analytics
+export const riderPerformanceMetrics = pgTable("rider_performance_metrics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  date: timestamp("date").notNull(),
+  onlineHours: decimal("online_hours", { precision: 4, scale: 2 }).default("0"),
+  activeHours: decimal("active_hours", { precision: 4, scale: 2 }).default("0"),
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  cancelledOrders: integer("cancelled_orders").default(0),
+  rejectedOrders: integer("rejected_orders").default(0),
+  averageDeliveryTime: decimal("average_delivery_time", { precision: 5, scale: 2 }), // minutes
+  totalDistance: decimal("total_distance", { precision: 10, scale: 2 }).default("0"), // km
+  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
+  customerRatings: decimal("customer_ratings", { precision: 3, scale: 2 }),
+  onTimePercentage: decimal("on_time_percentage", { precision: 5, scale: 2 }),
+  acceptanceRate: decimal("acceptance_rate", { precision: 5, scale: 2 }),
+  completionRate: decimal("completion_rate", { precision: 5, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Geofencing zones for service areas
+export const serviceZones = pgTable("service_zones", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  province: varchar("province", { length: 100 }).notNull(),
+  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon
+  isActive: boolean("is_active").default(true),
+  deliveryFee: decimal("delivery_fee", { precision: 8, scale: 2 }).default("0"),
+  minimumOrder: decimal("minimum_order", { precision: 8, scale: 2 }).default("0"),
+  maxDeliveryRadius: decimal("max_delivery_radius", { precision: 6, scale: 2 }).default("10"), // km
+  peakHours: jsonb("peak_hours"), // {start: "17:00", end: "21:00"}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Advanced Relations
+export const riderLocationHistoryRelations = relations(riderLocationHistory, ({ one }) => ({
+  rider: one(riders, { fields: [riderLocationHistory.riderId], references: [riders.id] }),
+}));
+
+export const riderSessionsRelations = relations(riderSessions, ({ one }) => ({
+  rider: one(riders, { fields: [riderSessions.riderId], references: [riders.id] }),
+}));
+
+export const orderAssignmentsRelations = relations(orderAssignments, ({ one }) => ({
+  order: one(orders, { fields: [orderAssignments.orderId], references: [orders.id] }),
+  rider: one(riders, { fields: [orderAssignments.riderId], references: [riders.id] }),
+}));
+
+export const deliveryTrackingRelations = relations(deliveryTracking, ({ one }) => ({
+  order: one(orders, { fields: [deliveryTracking.orderId], references: [orders.id] }),
+  rider: one(riders, { fields: [deliveryTracking.riderId], references: [riders.id] }),
+}));
+
+export const riderPerformanceMetricsRelations = relations(riderPerformanceMetrics, ({ one }) => ({
+  rider: one(riders, { fields: [riderPerformanceMetrics.riderId], references: [riders.id] }),
+}));
+
+// Advanced Tracking Types
+export const insertRiderLocationHistorySchema = createInsertSchema(riderLocationHistory);
+export const insertRiderSessionSchema = createInsertSchema(riderSessions);
+export const insertOrderAssignmentSchema = createInsertSchema(orderAssignments);
+export const insertDeliveryTrackingSchema = createInsertSchema(deliveryTracking);
+export const insertRiderPerformanceMetricsSchema = createInsertSchema(riderPerformanceMetrics);
+export const insertServiceZoneSchema = createInsertSchema(serviceZones);
+
+export type RiderLocationHistory = typeof riderLocationHistory.$inferSelect;
+export type InsertRiderLocationHistory = z.infer<typeof insertRiderLocationHistorySchema>;
+export type RiderSession = typeof riderSessions.$inferSelect;
+export type InsertRiderSession = z.infer<typeof insertRiderSessionSchema>;
+export type OrderAssignment = typeof orderAssignments.$inferSelect;
+export type InsertOrderAssignment = z.infer<typeof insertOrderAssignmentSchema>;
+export type DeliveryTracking = typeof deliveryTracking.$inferSelect;
+export type InsertDeliveryTracking = z.infer<typeof insertDeliveryTrackingSchema>;
+export type RiderPerformanceMetrics = typeof riderPerformanceMetrics.$inferSelect;
+export type InsertRiderPerformanceMetrics = z.infer<typeof insertRiderPerformanceMetricsSchema>;
+export type ServiceZone = typeof serviceZones.$inferSelect;
+export type InsertServiceZone = z.infer<typeof insertServiceZoneSchema>;
+
 // BTS Zod schemas for validation
 export const insertBtsRiderSchema = createInsertSchema(btsRiders);
 export const insertBtsSalesRemittanceSchema = createInsertSchema(btsSalesRemittance);

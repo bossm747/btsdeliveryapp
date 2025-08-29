@@ -19,6 +19,7 @@ import Pabayad from "@/pages/pabayad";
 import Parcel from "@/pages/parcel";
 import RiderDashboard from "@/pages/rider-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import AdminRiders from "@/pages/admin-riders";
 import VendorDashboard from "@/pages/vendor-dashboard";
 import BtsDashboard from "@/pages/admin/bts-dashboard";
 import MapTrackingDemo from "@/pages/map-tracking-demo";
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/parcel" component={Parcel} />
       <Route path="/rider-dashboard" component={RiderDashboard} />
       <Route path="/admin-dashboard" component={AdminDashboard} />
+      <Route path="/admin-riders" component={AdminRiders} />
       <Route path="/vendor-dashboard" component={VendorDashboard} />
       <Route path="/bts-dashboard" component={BtsDashboard} />
       <Route path="/map-tracking-demo" component={MapTrackingDemo} />

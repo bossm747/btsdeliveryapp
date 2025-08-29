@@ -7,6 +7,11 @@ import {
   orderStatusHistory, 
   riders, 
   reviews,
+  riderLocationHistory,
+  riderSessions,
+  orderAssignments,
+  deliveryTracking,
+  riderPerformanceMetrics,
   type User, 
   type InsertUser,
   type Restaurant,
@@ -21,7 +26,17 @@ import {
   type Rider,
   type InsertRider,
   type Review,
-  type InsertReview
+  type InsertReview,
+  type RiderLocationHistory,
+  type InsertRiderLocationHistory,
+  type RiderSession,
+  type InsertRiderSession,
+  type OrderAssignment,
+  type InsertOrderAssignment,
+  type DeliveryTracking,
+  type InsertDeliveryTracking,
+  type RiderPerformanceMetrics,
+  type InsertRiderPerformanceMetrics
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -54,6 +69,7 @@ export interface IStorage {
   getOrdersByRestaurant(restaurantId: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: string, status: string, notes?: string): Promise<Order | undefined>;
+  updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
 
   // Rider operations
   getRiders(): Promise<Rider[]>;
@@ -75,6 +91,27 @@ export interface IStorage {
   createBtsAttendance(attendance: any): Promise<any>;
   getBtsIncentives(): Promise<any[]>;
   createBtsIncentive(incentive: any): Promise<any>;
+
+  // Advanced Rider Tracking Operations
+  createRiderLocationHistory(location: InsertRiderLocationHistory): Promise<RiderLocationHistory>;
+  getRiderCurrentLocation(riderId: string): Promise<RiderLocationHistory | undefined>;
+  getRiderLocationHistory(riderId: string, hours: number): Promise<RiderLocationHistory[]>;
+  updateRiderStatus(riderId: string, updates: { isOnline?: boolean }): Promise<Rider | undefined>;
+  
+  createRiderSession(session: InsertRiderSession): Promise<RiderSession>;
+  endRiderSession(riderId: string, endData: any): Promise<RiderSession | undefined>;
+  
+  getAvailableRiders(lat: number, lng: number, radiusKm: number): Promise<Rider[]>;
+  getOnlineRiders(): Promise<Rider[]>;
+  
+  createOrderAssignment(assignment: InsertOrderAssignment): Promise<OrderAssignment>;
+  updateOrderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<OrderAssignment | undefined>;
+  
+  createDeliveryTracking(tracking: InsertDeliveryTracking): Promise<DeliveryTracking>;
+  updateDeliveryTracking(orderId: string, updates: any): Promise<DeliveryTracking | undefined>;
+  getDeliveryTracking(orderId: string): Promise<DeliveryTracking | undefined>;
+  
+  getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -220,6 +257,14 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
+  async updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined> {
+    const [order] = await db.update(orders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning();
+    return order;
+  }
+
   // Rider operations
   async getRiders(): Promise<Rider[]> {
     return await db.select().from(riders).orderBy(riders.isOnline, riders.rating);
@@ -333,6 +378,143 @@ export class DatabaseStorage implements IStorage {
       RETURNING *
     `);
     return result.rows[0];
+  }
+
+  // Advanced Rider Tracking Operations Implementation
+  async createRiderLocationHistory(location: InsertRiderLocationHistory): Promise<RiderLocationHistory> {
+    const [record] = await db.insert(riderLocationHistory).values(location).returning();
+    return record;
+  }
+
+  async getRiderCurrentLocation(riderId: string): Promise<RiderLocationHistory | undefined> {
+    const [location] = await db.select().from(riderLocationHistory)
+      .where(eq(riderLocationHistory.riderId, riderId))
+      .orderBy(desc(riderLocationHistory.timestamp))
+      .limit(1);
+    return location;
+  }
+
+  async getRiderLocationHistory(riderId: string, hours: number): Promise<RiderLocationHistory[]> {
+    const hoursAgo = new Date(Date.now() - hours * 60 * 60 * 1000);
+    return await db.select().from(riderLocationHistory)
+      .where(and(
+        eq(riderLocationHistory.riderId, riderId),
+        sql`${riderLocationHistory.timestamp} >= ${hoursAgo}`
+      ))
+      .orderBy(desc(riderLocationHistory.timestamp));
+  }
+
+  async updateRiderStatus(riderId: string, updates: { isOnline?: boolean }): Promise<Rider | undefined> {
+    const [rider] = await db.update(riders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(riders.id, riderId))
+      .returning();
+    return rider;
+  }
+
+  async createRiderSession(session: InsertRiderSession): Promise<RiderSession> {
+    const [record] = await db.insert(riderSessions).values(session).returning();
+    return record;
+  }
+
+  async endRiderSession(riderId: string, endData: any): Promise<RiderSession | undefined> {
+    const [session] = await db.update(riderSessions)
+      .set({ 
+        endTime: new Date(),
+        totalEarnings: endData.totalEarnings,
+        totalOrders: endData.totalOrders,
+        totalDistance: endData.totalDistance,
+        status: 'ended'
+      })
+      .where(and(
+        eq(riderSessions.riderId, riderId),
+        sql`${riderSessions.endTime} IS NULL`
+      ))
+      .returning();
+    return session;
+  }
+
+  async getAvailableRiders(lat: number, lng: number, radiusKm: number): Promise<Rider[]> {
+    // Get riders that are online and have recent location data within radius
+    const result = await db.execute(sql`
+      SELECT DISTINCT r.*
+      FROM riders r
+      JOIN rider_location_history rlh ON r.id = rlh.rider_id
+      WHERE r.is_online = true
+        AND r.status = 'available'
+        AND rlh.timestamp >= NOW() - INTERVAL '10 minutes'
+        AND (6371 * acos(cos(radians(${lat})) * cos(radians(CAST(rlh.latitude AS DECIMAL))) * cos(radians(CAST(rlh.longitude AS DECIMAL)) - radians(${lng})) + sin(radians(${lat})) * sin(radians(CAST(rlh.latitude AS DECIMAL))))) <= ${radiusKm}
+      ORDER BY r.rating DESC
+    `);
+    return result.rows as Rider[];
+  }
+
+  async getOnlineRiders(): Promise<Rider[]> {
+    return await db.select().from(riders)
+      .where(eq(riders.isOnline, true))
+      .orderBy(desc(riders.rating));
+  }
+
+  async createOrderAssignment(assignment: InsertOrderAssignment): Promise<OrderAssignment> {
+    const [record] = await db.insert(orderAssignments).values(assignment).returning();
+    return record;
+  }
+
+  async updateOrderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<OrderAssignment | undefined> {
+    const updateData: any = { 
+      status,
+      ...(rejectionReason && { rejectionReason }),
+    };
+    
+    if (status === 'accepted') {
+      updateData.acceptedTime = new Date();
+    } else if (status === 'rejected') {
+      updateData.rejectedTime = new Date();
+    }
+    
+    const [assignment] = await db.update(orderAssignments)
+      .set(updateData)
+      .where(eq(orderAssignments.id, assignmentId))
+      .returning();
+    return assignment;
+  }
+
+  async createDeliveryTracking(tracking: InsertDeliveryTracking): Promise<DeliveryTracking> {
+    const [record] = await db.insert(deliveryTracking).values(tracking).returning();
+    return record;
+  }
+
+  async updateDeliveryTracking(orderId: string, updates: any): Promise<DeliveryTracking | undefined> {
+    const [tracking] = await db.update(deliveryTracking)
+      .set({ 
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(deliveryTracking.orderId, orderId))
+      .returning();
+    return tracking;
+  }
+
+  async getDeliveryTracking(orderId: string): Promise<DeliveryTracking | undefined> {
+    const [tracking] = await db.select().from(deliveryTracking)
+      .where(eq(deliveryTracking.orderId, orderId));
+    return tracking;
+  }
+
+  async getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]> {
+    const whereConditions = [eq(riderPerformanceMetrics.riderId, riderId)];
+    
+    if (startDate) {
+      whereConditions.push(sql`${riderPerformanceMetrics.date} >= ${startDate}`);
+    }
+    
+    if (endDate) {
+      whereConditions.push(sql`${riderPerformanceMetrics.date} <= ${endDate}`);
+    }
+
+    return await db.select().from(riderPerformanceMetrics)
+      .where(and(...whereConditions))
+      .orderBy(desc(riderPerformanceMetrics.date));
   }
 }
 

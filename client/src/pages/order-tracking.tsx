@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import DeliveryLiveTracking from "@/components/delivery-live-tracking";
+import RealTimeTracking from "@/components/real-time-tracking";
 import type { Order } from "@shared/schema";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
@@ -91,10 +92,7 @@ export default function OrderTracking() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Real-Time Delivery Tracking */}
           <div className="lg:col-span-2">
-            <DeliveryLiveTracking
-              orderId={order.id}
-              userRole="customer"
-            />
+            <RealTimeTracking orderId={order.id} />
           </div>
 
           {/* Order Details */}

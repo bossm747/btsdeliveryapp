@@ -2,7 +2,21 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertRestaurantSchema, insertMenuCategorySchema, insertMenuItemSchema, insertOrderSchema, insertUserSchema } from "@shared/schema";
+import { 
+  insertRestaurantSchema, 
+  insertMenuCategorySchema, 
+  insertMenuItemSchema, 
+  insertOrderSchema, 
+  insertUserSchema,
+  insertRiderLocationHistorySchema,
+  insertRiderSessionSchema,
+  insertOrderAssignmentSchema,
+  insertDeliveryTrackingSchema,
+  insertRiderPerformanceMetricsSchema,
+  type RiderLocationHistory,
+  type DeliveryTracking,
+  type OrderAssignment
+} from "@shared/schema";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import * as geminiAI from "./services/gemini";
@@ -235,6 +249,258 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching rider:", error);
       res.status(500).json({ message: "Failed to fetch rider" });
+    }
+  });
+
+  // ==================== ADVANCED RIDER TRACKING ENDPOINTS ====================
+  
+  // Real-time location updates
+  app.post("/api/riders/:riderId/location", async (req, res) => {
+    try {
+      const locationData = insertRiderLocationHistorySchema.parse({
+        riderId: req.params.riderId,
+        ...req.body
+      });
+      const location = await storage.createRiderLocationHistory(locationData);
+      
+      // Broadcast location update via WebSocket
+      broadcastToSubscribers('rider_location', {
+        riderId: req.params.riderId,
+        location: {
+          lat: parseFloat(location.latitude),
+          lng: parseFloat(location.longitude),
+          timestamp: location.timestamp,
+          speed: location.speed,
+          heading: location.heading
+        }
+      });
+      
+      res.status(201).json(location);
+    } catch (error) {
+      console.error("Error updating rider location:", error);
+      res.status(400).json({ message: "Invalid location data" });
+    }
+  });
+
+  // Get rider's current location
+  app.get("/api/riders/:riderId/location/current", async (req, res) => {
+    try {
+      const location = await storage.getRiderCurrentLocation(req.params.riderId);
+      if (!location) {
+        return res.status(404).json({ message: "No location data found" });
+      }
+      res.json(location);
+    } catch (error) {
+      console.error("Error fetching current location:", error);
+      res.status(500).json({ message: "Failed to fetch current location" });
+    }
+  });
+
+  // Get rider location history
+  app.get("/api/riders/:riderId/location/history", async (req, res) => {
+    try {
+      const hours = parseInt(req.query.hours as string) || 24;
+      const history = await storage.getRiderLocationHistory(req.params.riderId, hours);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching location history:", error);
+      res.status(500).json({ message: "Failed to fetch location history" });
+    }
+  });
+
+  // Start rider session
+  app.post("/api/riders/:riderId/session/start", async (req, res) => {
+    try {
+      const sessionData = insertRiderSessionSchema.parse({
+        riderId: req.params.riderId,
+        ...req.body
+      });
+      const session = await storage.createRiderSession(sessionData);
+      
+      // Update rider online status
+      await storage.updateRiderStatus(req.params.riderId, { isOnline: true });
+      
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Error starting rider session:", error);
+      res.status(400).json({ message: "Invalid session data" });
+    }
+  });
+
+  // End rider session
+  app.patch("/api/riders/:riderId/session/end", async (req, res) => {
+    try {
+      const session = await storage.endRiderSession(req.params.riderId, req.body);
+      if (!session) {
+        return res.status(404).json({ message: "No active session found" });
+      }
+      
+      // Update rider offline status
+      await storage.updateRiderStatus(req.params.riderId, { isOnline: false });
+      
+      res.json(session);
+    } catch (error) {
+      console.error("Error ending rider session:", error);
+      res.status(500).json({ message: "Failed to end session" });
+    }
+  });
+
+  // Get available riders for order assignment
+  app.get("/api/orders/:orderId/available-riders", async (req, res) => {
+    try {
+      const { lat, lng } = req.query;
+      if (!lat || !lng) {
+        return res.status(400).json({ message: "Location coordinates required" });
+      }
+      
+      const availableRiders = await storage.getAvailableRiders(
+        parseFloat(lat as string),
+        parseFloat(lng as string),
+        10 // 10km radius
+      );
+      
+      res.json(availableRiders);
+    } catch (error) {
+      console.error("Error fetching available riders:", error);
+      res.status(500).json({ message: "Failed to fetch available riders" });
+    }
+  });
+
+  // Create order assignment
+  app.post("/api/orders/:orderId/assign", async (req, res) => {
+    try {
+      const assignmentData = insertOrderAssignmentSchema.parse({
+        orderId: req.params.orderId,
+        ...req.body
+      });
+      
+      const assignment = await storage.createOrderAssignment(assignmentData);
+      
+      // Notify rider via WebSocket
+      if (assignment.riderId) {
+        broadcastToSubscribers('order_assignment', {
+          riderId: assignment.riderId,
+          orderId: assignment.orderId,
+          assignmentId: assignment.id,
+          priority: assignment.priority
+        });
+      }
+      
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error creating order assignment:", error);
+      res.status(400).json({ message: "Invalid assignment data" });
+    }
+  });
+
+  // Accept/Reject order assignment
+  app.patch("/api/assignments/:assignmentId/respond", async (req, res) => {
+    try {
+      const { status, rejectionReason } = req.body;
+      
+      const assignment = await storage.updateOrderAssignmentStatus(
+        req.params.assignmentId,
+        status,
+        rejectionReason
+      );
+      
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Broadcast status update
+      broadcastToSubscribers('assignment_update', {
+        assignmentId: assignment.id,
+        orderId: assignment.orderId,
+        riderId: assignment.riderId,
+        status: assignment.status
+      });
+      
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error updating assignment:", error);
+      res.status(500).json({ message: "Failed to update assignment" });
+    }
+  });
+
+  // Create delivery tracking
+  app.post("/api/deliveries/:orderId/tracking", async (req, res) => {
+    try {
+      const trackingData = insertDeliveryTrackingSchema.parse({
+        orderId: req.params.orderId,
+        ...req.body
+      });
+      
+      const tracking = await storage.createDeliveryTracking(trackingData);
+      
+      res.status(201).json(tracking);
+    } catch (error) {
+      console.error("Error creating delivery tracking:", error);
+      res.status(400).json({ message: "Invalid tracking data" });
+    }
+  });
+
+  // Update delivery tracking
+  app.patch("/api/deliveries/:orderId/tracking", async (req, res) => {
+    try {
+      const tracking = await storage.updateDeliveryTracking(req.params.orderId, req.body);
+      if (!tracking) {
+        return res.status(404).json({ message: "Delivery tracking not found" });
+      }
+      
+      // Broadcast tracking update to customer
+      broadcastToSubscribers('delivery_update', {
+        orderId: tracking.orderId,
+        currentLocation: tracking.currentLocation,
+        currentStatus: tracking.currentStatus,
+        estimatedArrival: tracking.estimatedArrivalCustomer
+      });
+      
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error updating delivery tracking:", error);
+      res.status(500).json({ message: "Failed to update delivery tracking" });
+    }
+  });
+
+  // Get delivery tracking for customer
+  app.get("/api/deliveries/:orderId/tracking", async (req, res) => {
+    try {
+      const tracking = await storage.getDeliveryTracking(req.params.orderId);
+      if (!tracking) {
+        return res.status(404).json({ message: "Delivery tracking not found" });
+      }
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error fetching delivery tracking:", error);
+      res.status(500).json({ message: "Failed to fetch delivery tracking" });
+    }
+  });
+
+  // Get rider performance metrics
+  app.get("/api/riders/:riderId/performance", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const metrics = await storage.getRiderPerformanceMetrics(
+        req.params.riderId,
+        startDate as string,
+        endDate as string
+      );
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching rider performance:", error);
+      res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
+  // Get all online riders for admin dashboard
+  app.get("/api/admin/riders/online", async (req, res) => {
+    try {
+      const onlineRiders = await storage.getOnlineRiders();
+      res.json(onlineRiders);
+    } catch (error) {
+      console.error("Error fetching online riders:", error);
+      res.status(500).json({ message: "Failed to fetch online riders" });
     }
   });
 
@@ -1602,6 +1868,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (!targetUsers) {
           client.send(message);
         }
+      }
+    });
+  };
+
+  // Enhanced broadcast for subscription-based notifications
+  const broadcastToSubscribers = (event: string, data: any) => {
+    const message = JSON.stringify({
+      type: event,
+      data: data,
+      timestamp: new Date().toISOString()
+    });
+    
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && client.subscriptions?.has(event)) {
+        client.send(message);
       }
     });
   };
