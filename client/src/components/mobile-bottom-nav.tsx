@@ -1,14 +1,155 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Search, ShoppingBag, User, MapPin, Truck } from "lucide-react";
+import { 
+  Home, Search, ShoppingBag, User, MapPin, Truck, 
+  Navigation, Package, BarChart3, Bell, Settings 
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-// Cart context will be implemented later
+import { useCart } from "@/hooks/use-cart";
+
+interface NavItem {
+  icon: any;
+  label: string;
+  path: string;
+  active: boolean;
+  badge?: number | null;
+  tabAction?: string;
+}
 
 export default function MobileBottomNav() {
   const [location] = useLocation();
-  // Mock cart data for now
-  const cartItemCount = 0;
+  const { getTotalItems } = useCart();
+  const cartItemCount = getTotalItems();
 
-  const navItems = [
+  // Determine user context based on current route
+  const isRiderDashboard = location.includes("/rider-dashboard");
+  const isAdminDashboard = location.includes("/admin-dashboard") || location.includes("/admin-riders") || location.includes("/bts-dashboard");
+  const isVendorDashboard = location.includes("/vendor-dashboard");
+
+  // Track active rider tab
+  const [activeRiderTab, setActiveRiderTab] = useState("tracking");
+
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      setActiveRiderTab(event.detail.tab);
+    };
+
+    window.addEventListener('riderTabChange', handleTabChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('riderTabChange', handleTabChange as EventListener);
+    };
+  }, []);
+
+  // Rider navigation items
+  const riderNavItems: NavItem[] = [
+    {
+      icon: Navigation,
+      label: "Live Map",
+      path: "/rider-dashboard",
+      active: activeRiderTab === "tracking",
+      tabAction: "tracking"
+    },
+    {
+      icon: Package,
+      label: "Deliveries",
+      path: "/rider-dashboard",
+      active: activeRiderTab === "deliveries",
+      tabAction: "deliveries"
+    },
+    {
+      icon: BarChart3,
+      label: "Earnings",
+      path: "/rider-dashboard",
+      active: activeRiderTab === "earnings",
+      tabAction: "earnings"
+    },
+    {
+      icon: Bell,
+      label: "Notifications",
+      path: "/rider-dashboard",
+      active: activeRiderTab === "notifications",
+      tabAction: "notifications"
+    },
+    {
+      icon: User,
+      label: "Profile",
+      path: "/rider-dashboard",
+      active: activeRiderTab === "profile",
+      tabAction: "profile"
+    }
+  ];
+
+  // Admin navigation items
+  const adminNavItems: NavItem[] = [
+    {
+      icon: BarChart3,
+      label: "Dashboard",
+      path: "/admin-dashboard",
+      active: location === "/admin-dashboard"
+    },
+    {
+      icon: Truck,
+      label: "Riders",
+      path: "/admin-riders",
+      active: location === "/admin-riders"
+    },
+    {
+      icon: Package,
+      label: "Orders",
+      path: "/admin-dashboard",
+      active: false
+    },
+    {
+      icon: MapPin,
+      label: "Tracking",
+      path: "/bts-dashboard",
+      active: location === "/bts-dashboard"
+    },
+    {
+      icon: Settings,
+      label: "Settings",
+      path: "/admin-dashboard",
+      active: false
+    }
+  ];
+
+  // Vendor navigation items
+  const vendorNavItems: NavItem[] = [
+    {
+      icon: Home,
+      label: "Dashboard",
+      path: "/vendor-dashboard",
+      active: location === "/vendor-dashboard"
+    },
+    {
+      icon: Package,
+      label: "Orders",
+      path: "/vendor-dashboard",
+      active: false
+    },
+    {
+      icon: Search,
+      label: "Menu",
+      path: "/vendor-dashboard",
+      active: false
+    },
+    {
+      icon: BarChart3,
+      label: "Analytics",
+      path: "/vendor-dashboard",
+      active: false
+    },
+    {
+      icon: Settings,
+      label: "Settings",
+      path: "/vendor-dashboard",
+      active: false
+    }
+  ];
+
+  // Default customer navigation items
+  const customerNavItems: NavItem[] = [
     {
       icon: Home,
       label: "Home",
@@ -30,9 +171,9 @@ export default function MobileBottomNav() {
     },
     {
       icon: MapPin,
-      label: "Track",
-      path: "/track-order",
-      active: location === "/track-order"
+      label: "Orders",
+      path: "/customer-orders",
+      active: location === "/customer-orders" || location.includes("/order/")
     },
     {
       icon: User,
@@ -41,6 +182,16 @@ export default function MobileBottomNav() {
       active: location === "/profile"
     }
   ];
+
+  // Select appropriate navigation items based on context
+  let navItems = customerNavItems;
+  if (isRiderDashboard) {
+    navItems = riderNavItems;
+  } else if (isAdminDashboard) {
+    navItems = adminNavItems;
+  } else if (isVendorDashboard) {
+    navItems = vendorNavItems;
+  }
 
   return (
     <div className="mobile-bottom-nav-container">
@@ -54,13 +205,28 @@ export default function MobileBottomNav() {
       <nav className="relative z-10 flex items-center justify-around px-2 py-2 safe-area-pb mobile-no-select">
         {navItems.map((item, index) => {
           const IconComponent = item.icon;
+          
+          const handleClick = (e: React.MouseEvent) => {
+            if (item.tabAction && isRiderDashboard) {
+              e.preventDefault();
+              // Trigger tab change event for rider dashboard
+              const tabEvent = new CustomEvent('riderTabChange', { 
+                detail: { tab: item.tabAction } 
+              });
+              window.dispatchEvent(tabEvent);
+            }
+          };
+          
           return (
-            <Link key={item.path} href={item.path}>
-              <div className={`relative flex flex-col items-center p-3 rounded-2xl transition-all duration-200 min-w-[64px] touch-manipulation ${
-                item.active 
-                  ? 'bg-gradient-to-b from-[#FFD23F]/30 to-[#FF6B35]/20 shadow-lg scale-105 border border-[#FFD23F]/40' 
-                  : 'hover:bg-[#FFD23F]/10 active:scale-95 active:bg-[#FF6B35]/15'
-              }`}>
+            <Link key={item.path + (item.tabAction || '')} href={item.path}>
+              <div 
+                className={`relative flex flex-col items-center p-3 rounded-2xl transition-all duration-200 min-w-[64px] touch-manipulation ${
+                  item.active 
+                    ? 'bg-gradient-to-b from-[#FFD23F]/30 to-[#FF6B35]/20 shadow-lg scale-105 border border-[#FFD23F]/40' 
+                    : 'hover:bg-[#FFD23F]/10 active:scale-95 active:bg-[#FF6B35]/15'
+                }`}
+                onClick={handleClick}
+              >
                 
                 {/* Icon container with glow effect */}
                 <div className={`relative p-2 rounded-xl transition-all duration-300 ${

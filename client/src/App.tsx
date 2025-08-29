@@ -4,7 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { CartProvider } from "@/hooks/use-cart";
+// Cart is now managed by zustand store, no provider needed
 import { LanguageProvider } from "@/contexts/language-context";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
@@ -14,6 +14,7 @@ import Restaurants from "@/pages/restaurants";
 import RestaurantDetail from "@/pages/restaurant-detail";
 import Cart from "@/pages/cart";
 import OrderTracking from "@/pages/order-tracking";
+import CustomerOrders from "@/pages/customer-orders";
 import Pabili from "@/pages/pabili";
 import Pabayad from "@/pages/pabayad";
 import Parcel from "@/pages/parcel";
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/restaurant/:id" component={RestaurantDetail} />
       <Route path="/cart" component={Cart} />
       <Route path="/order/:id" component={OrderTracking} />
+      <Route path="/customer-orders" component={CustomerOrders} />
       <Route path="/pabili" component={Pabili} />
       <Route path="/pabayad" component={Pabayad} />
       <Route path="/parcel" component={Parcel} />
@@ -92,23 +94,21 @@ function App() {
     <div className={`fade-in-content ${showContent ? 'visible' : ''}`}>
       <QueryClientProvider client={queryClient}>
         <LanguageProvider>
-          <CartProvider>
-            <TooltipProvider>
-              <div className="min-h-screen flex flex-col relative">
-                <Navbar />
-                <main className="flex-1 pb-safe-bottom md:pb-0 min-h-screen">
-                  <Router />
-                </main>
-                {/* Hide footer on mobile, show desktop footer */}
-                <div className="hidden md:block">
-                  <Footer />
-                </div>
-                {/* Mobile bottom navigation - positioned outside main container */}
-                <MobileBottomNav />
+          <TooltipProvider>
+            <div className="min-h-screen flex flex-col relative">
+              <Navbar />
+              <main className="flex-1 pb-safe-bottom md:pb-0 min-h-screen">
+                <Router />
+              </main>
+              {/* Hide footer on mobile, show desktop footer */}
+              <div className="hidden md:block">
+                <Footer />
               </div>
-              <Toaster />
-            </TooltipProvider>
-          </CartProvider>
+              {/* Mobile bottom navigation - positioned outside main container */}
+              <MobileBottomNav />
+            </div>
+            <Toaster />
+          </TooltipProvider>
         </LanguageProvider>
       </QueryClientProvider>
     </div>

@@ -19,10 +19,23 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 export default function RiderDashboard() {
   const { toast } = useToast();
   const [isOnline, setIsOnline] = useState(false);
-  const [activeTab, setActiveTab] = useState("map");
+  const [activeTab, setActiveTab] = useState("tracking");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Listen for mobile navigation tab changes
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      setActiveTab(event.detail.tab);
+    };
+
+    window.addEventListener('riderTabChange', handleTabChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('riderTabChange', handleTabChange as EventListener);
+    };
+  }, []);
 
   // Fetch rider data
   const { data: riderData } = useQuery({
