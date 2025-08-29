@@ -94,7 +94,7 @@ function App() {
         <LanguageProvider>
           <CartProvider>
             <TooltipProvider>
-              <div className="min-h-screen flex flex-col">
+              <div className="min-h-screen flex flex-col relative">
                 <Navbar />
                 <main className="flex-1 pb-safe-bottom md:pb-0 min-h-screen">
                   <Router />
@@ -103,9 +103,11 @@ function App() {
                 <div className="hidden md:block">
                   <Footer />
                 </div>
+                {/* Mobile bottom navigation - only on mobile */}
+                <div className="md:hidden">
+                  <MobileBottomNav />
+                </div>
               </div>
-              {/* Mobile bottom navigation - only on mobile */}
-              <MobileBottomNav />
               <Toaster />
             </TooltipProvider>
           </CartProvider>
