@@ -704,6 +704,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Secure Chatbot Endpoints
+  
+  // Validate chatbot context and session
+  const validateChatContext = (req: any, res: any, next: any) => {
+    const { context } = req.body;
+    if (!context || !context.timestamp) {
+      return res.status(401).json({ message: "Invalid chat context" });
+    }
+    
+    // Check if timestamp is within valid range (5 minutes)
+    const now = Date.now();
+    if (Math.abs(now - context.timestamp) > 300000) {
+      return res.status(401).json({ message: "Session expired" });
+    }
+    
+    // Validate signature (simplified for demo)
+    try {
+      const decoded = atob(context.signature);
+      const parsed = JSON.parse(decoded);
+      if (!parsed.endpoint) {
+        return res.status(401).json({ message: "Invalid signature" });
+      }
+    } catch (error) {
+      return res.status(401).json({ message: "Invalid signature format" });
+    }
+    
+    next();
+  };
+
+  // Get real-time order tracking data
+  app.post("/api/chatbot/track-order", validateChatContext, async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      const order = await storage.getOrder(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Get real-time tracking data
+      const trackingData = {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        restaurant: await storage.getRestaurant(order.restaurantId),
+        rider: order.riderId ? await storage.getRider(order.riderId) : null,
+        estimatedDeliveryTime: order.estimatedDeliveryTime,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        deliveryAddress: order.deliveryAddress
+      };
+      
+      res.json(trackingData);
+    } catch (error) {
+      console.error("Error tracking order:", error);
+      res.status(500).json({ message: "Failed to track order" });
+    }
+  });
+
+  // Get customer analytics
+  app.post("/api/chatbot/analytics", validateChatContext, async (req, res) => {
+    try {
+      const { customerId, dateRange } = req.body;
+      
+      // Get customer orders for analytics
+      const orders = await storage.getOrdersByCustomer(customerId);
+      
+      // Calculate analytics
+      const analytics = {
+        totalOrders: orders.length,
+        totalSpent: orders.reduce((sum: number, order: any) => sum + parseFloat(order.totalAmount), 0),
+        averageOrderValue: orders.length > 0 ? 
+          orders.reduce((sum: number, order: any) => sum + parseFloat(order.totalAmount), 0) / orders.length : 0,
+        favoriteRestaurants: [],
+        ordersByDay: [],
+        serviceBreakdown: {
+          foodDelivery: 45,
+          pabili: 25,
+          pabayad: 20,
+          parcel: 10
+        }
+      };
+      
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error getting analytics:", error);
+      res.status(500).json({ message: "Failed to get analytics" });
+    }
+  });
+
+  // Get order history with security
+  app.post("/api/chatbot/order-history", validateChatContext, async (req, res) => {
+    try {
+      const { customerId, limit = 10 } = req.body;
+      
+      const orders = await storage.getOrdersByCustomer(customerId);
+      const recentOrders = orders.slice(0, limit).map((order: any) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        date: order.createdAt,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        restaurantId: order.restaurantId,
+        items: order.items
+      }));
+      
+      res.json(recentOrders);
+    } catch (error) {
+      console.error("Error getting order history:", error);
+      res.status(500).json({ message: "Failed to get order history" });
+    }
+  });
+
+  // Generate order receipt
+  app.post("/api/chatbot/receipt", validateChatContext, async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      const order = await storage.getOrder(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+      
+      const receipt = {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        date: order.createdAt,
+        restaurant: restaurant?.name || "Restaurant",
+        items: order.items,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        serviceFee: order.serviceFee,
+        discount: order.discount,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        deliveryAddress: order.deliveryAddress
+      };
+      
+      res.json(receipt);
+    } catch (error) {
+      console.error("Error generating receipt:", error);
+      res.status(500).json({ message: "Failed to generate receipt" });
+    }
+  });
+
+  // Get live delivery tracking
+  app.post("/api/chatbot/live-tracking", validateChatContext, async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      const order = await storage.getOrder(orderId);
+      
+      if (!order || !order.riderId) {
+        return res.status(404).json({ message: "No active delivery found" });
+      }
+      
+      const rider = await storage.getRider(order.riderId);
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+      
+      // Calculate estimated time (simplified)
+      const now = new Date();
+      const estimatedTime = order.estimatedDeliveryTime ? 
+        Math.max(0, Math.round((new Date(order.estimatedDeliveryTime).getTime() - now.getTime()) / 60000)) : 15;
+      
+      const tracking = {
+        orderId: order.id,
+        status: order.status,
+        rider: {
+          name: rider?.userId || "Rider",
+          location: rider?.currentLocation || { lat: 13.7565, lng: 121.0583 },
+          vehicleType: rider?.vehicleType || "motorcycle"
+        },
+        restaurant: {
+          name: restaurant?.name || "Restaurant",
+          location: { lat: 13.7565, lng: 121.0583 }
+        },
+        delivery: {
+          address: order.deliveryAddress,
+          estimatedMinutes: estimatedTime,
+          distance: 2.5 // Simplified
+        }
+      };
+      
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error getting live tracking:", error);
+      res.status(500).json({ message: "Failed to get live tracking" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

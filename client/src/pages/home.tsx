@@ -2,7 +2,7 @@ import HeroSection from "@/components/hero-section";
 import ServiceCards from "@/components/service-cards";
 import RestaurantCard from "@/components/restaurant-card";
 import AIRecommendations from "@/components/ai-recommendations";
-import AIChatbot from "@/components/ai-chatbot";
+import AdvancedChatbot from "@/components/advanced-chatbot";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Star, Download, Users, Bike, Sparkles } from "lucide-react";
 import { Link } from "wouter";
@@ -237,8 +237,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* AI Chatbot - Floating on all pages */}
-      <AIChatbot />
+      {/* Advanced AI Chatbot - Floating on all pages */}
+      <AdvancedChatbot />
     </div>
   );
 }
