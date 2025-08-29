@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function Footer() {
   return (
@@ -7,9 +8,11 @@ export default function Footer() {
         <div className="grid md:grid-cols-4 gap-8">
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">BTS</span>
-              </div>
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-10 h-10 object-contain rounded-full bg-white p-0.5"
+              />
               <span className="font-bold text-xl">BTS Delivery</span>
             </div>
             <p className="text-white/80" data-testid="footer-description">
