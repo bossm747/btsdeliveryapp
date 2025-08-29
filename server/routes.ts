@@ -759,6 +759,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== BTS OPERATIONAL API ENDPOINTS ====================
+  
+  // BTS Riders endpoints
+  app.get("/api/bts/riders", async (req, res) => {
+    try {
+      const riders = await storage.getBtsRiders();
+      res.json(riders);
+    } catch (error) {
+      console.error("Error fetching BTS riders:", error);
+      res.status(500).json({ message: "Failed to fetch riders" });
+    }
+  });
+
+  app.post("/api/bts/riders", async (req, res) => {
+    try {
+      const rider = await storage.createBtsRider(req.body);
+      res.json(rider);
+    } catch (error) {
+      console.error("Error creating BTS rider:", error);
+      res.status(400).json({ message: "Invalid rider data" });
+    }
+  });
+
+  // BTS Sales Remittance endpoints
+  app.get("/api/bts/sales-remittance", async (req, res) => {
+    try {
+      const salesData = await storage.getBtsSalesRemittance();
+      res.json(salesData);
+    } catch (error) {
+      console.error("Error fetching BTS sales remittance:", error);
+      res.status(500).json({ message: "Failed to fetch sales data" });
+    }
+  });
+
+  app.post("/api/bts/sales-remittance", async (req, res) => {
+    try {
+      const sale = await storage.createBtsSalesRemittance(req.body);
+      res.json(sale);
+    } catch (error) {
+      console.error("Error creating BTS sales remittance:", error);
+      res.status(400).json({ message: "Invalid sales data" });
+    }
+  });
+
+  // BTS Attendance endpoints
+  app.get("/api/bts/attendance", async (req, res) => {
+    try {
+      const attendanceData = await storage.getBtsAttendance();
+      res.json(attendanceData);
+    } catch (error) {
+      console.error("Error fetching BTS attendance:", error);
+      res.status(500).json({ message: "Failed to fetch attendance data" });
+    }
+  });
+
+  app.post("/api/bts/attendance", async (req, res) => {
+    try {
+      const attendance = await storage.createBtsAttendance(req.body);
+      res.json(attendance);
+    } catch (error) {
+      console.error("Error creating BTS attendance:", error);
+      res.status(400).json({ message: "Invalid attendance data" });
+    }
+  });
+
+  // BTS Incentives endpoints
+  app.get("/api/bts/incentives", async (req, res) => {
+    try {
+      const incentivesData = await storage.getBtsIncentives();
+      res.json(incentivesData);
+    } catch (error) {
+      console.error("Error fetching BTS incentives:", error);
+      res.status(500).json({ message: "Failed to fetch incentives data" });
+    }
+  });
+
+  app.post("/api/bts/incentives", async (req, res) => {
+    try {
+      const incentive = await storage.createBtsIncentive(req.body);
+      res.json(incentive);
+    } catch (error) {
+      console.error("Error creating BTS incentive:", error);
+      res.status(400).json({ message: "Invalid incentive data" });
+    }
+  });
+
   // Customer support chatbot
   app.post("/api/ai/chat-support", async (req, res) => {
     try {

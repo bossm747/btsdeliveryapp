@@ -65,6 +65,16 @@ export interface IStorage {
   // Review operations
   getReviewsByRestaurant(restaurantId: string): Promise<Review[]>;
   createReview(review: InsertReview): Promise<Review>;
+
+  // BTS Operations
+  getBtsRiders(): Promise<any[]>;
+  createBtsRider(rider: any): Promise<any>;
+  getBtsSalesRemittance(): Promise<any[]>;
+  createBtsSalesRemittance(sale: any): Promise<any>;
+  getBtsAttendance(): Promise<any[]>;
+  createBtsAttendance(attendance: any): Promise<any>;
+  getBtsIncentives(): Promise<any[]>;
+  createBtsIncentive(incentive: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -248,6 +258,81 @@ export class DatabaseStorage implements IStorage {
   async createReview(insertReview: InsertReview): Promise<Review> {
     const [review] = await db.insert(reviews).values(insertReview).returning();
     return review;
+  }
+
+  // BTS Operations implementation
+  async getBtsRiders(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT * FROM bts_riders ORDER BY rider_name ASC
+    `);
+    return result.rows;
+  }
+
+  async createBtsRider(rider: any): Promise<any> {
+    const result = await db.execute(sql`
+      INSERT INTO bts_riders (rider_name, rider_code, phone_number, email, vehicle_type, commission_rate, base_salary)
+      VALUES (${rider.riderName}, ${rider.riderCode}, ${rider.phoneNumber}, ${rider.email}, ${rider.vehicleType}, ${rider.commissionRate}, ${rider.baseSalary})
+      RETURNING *
+    `);
+    return result.rows[0];
+  }
+
+  async getBtsSalesRemittance(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT sr.*, r.rider_name 
+      FROM bts_sales_remittance sr
+      JOIN bts_riders r ON sr.rider_id = r.id
+      ORDER BY sr.remit_date DESC
+    `);
+    return result.rows;
+  }
+
+  async createBtsSalesRemittance(sale: any): Promise<any> {
+    const result = await db.execute(sql`
+      INSERT INTO bts_sales_remittance (rider_id, remit_date, daily_sales, commission_amount, remitted_amount, balance, week_period, reference_number)
+      VALUES (${sale.riderId}, ${sale.remitDate}, ${sale.dailySales}, ${sale.commissionAmount}, ${sale.remittedAmount}, ${sale.balance}, ${sale.weekPeriod}, ${sale.referenceNumber})
+      RETURNING *
+    `);
+    return result.rows[0];
+  }
+
+  async getBtsAttendance(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT a.*, r.rider_name 
+      FROM bts_attendance a
+      JOIN bts_riders r ON a.employee_id = r.id
+      WHERE a.employee_type = 'rider'
+      ORDER BY a.attendance_date DESC
+    `);
+    return result.rows;
+  }
+
+  async createBtsAttendance(attendance: any): Promise<any> {
+    const result = await db.execute(sql`
+      INSERT INTO bts_attendance (employee_id, employee_type, attendance_date, shift_type, hours_worked, overtime_hours, check_in_time, check_out_time)
+      VALUES (${attendance.employeeId}, ${attendance.employeeType}, ${attendance.attendanceDate}, ${attendance.shiftType}, ${attendance.hoursWorked}, ${attendance.overtimeHours}, ${attendance.checkInTime}, ${attendance.checkOutTime})
+      RETURNING *
+    `);
+    return result.rows[0];
+  }
+
+  async getBtsIncentives(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT i.*, r.rider_name 
+      FROM bts_incentives i
+      JOIN bts_riders r ON i.rider_id = r.id
+      ORDER BY i.incentive_period DESC
+    `);
+    return result.rows;
+  }
+
+  async createBtsIncentive(incentive: any): Promise<any> {
+    const result = await db.execute(sql`
+      INSERT INTO bts_incentives (rider_id, incentive_period, sales_target, sales_achieved, target_percentage, incentive_amount, raffle_entries, raffle_won, raffle_prize)
+      VALUES (${incentive.riderId}, ${incentive.incentivePeriod}, ${incentive.salesTarget}, ${incentive.salesAchieved}, ${incentive.targetPercentage}, ${incentive.incentiveAmount}, ${incentive.raffleEntries}, ${incentive.raffleWon}, ${incentive.rafflePrize})
+      RETURNING *
+    `);
+    return result.rows[0];
   }
 }
 

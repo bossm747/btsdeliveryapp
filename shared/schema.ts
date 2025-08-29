@@ -190,14 +190,14 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   rider: one(users, { fields: [reviews.riderId], references: [users.id] }),
 }));
 
-// Zod schemas for validation
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertRestaurantSchema = createInsertSchema(restaurants).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit({ id: true, createdAt: true });
-export const insertMenuItemSchema = createInsertSchema(menuItems).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertRiderSchema = createInsertSchema(riders).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
+// Zod schemas for validation  
+export const insertUserSchema = createInsertSchema(users);
+export const insertRestaurantSchema = createInsertSchema(restaurants);
+export const insertMenuCategorySchema = createInsertSchema(menuCategories);
+export const insertMenuItemSchema = createInsertSchema(menuItems);
+export const insertOrderSchema = createInsertSchema(orders);
+export const insertRiderSchema = createInsertSchema(riders);
+export const insertReviewSchema = createInsertSchema(reviews);
 
 // TypeScript types
 export type User = typeof users.$inferSelect;
@@ -269,10 +269,10 @@ export const redemptions = pgTable("redemptions", {
 });
 
 // Loyalty Types
-export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions).omit({ id: true, createdAt: true });
-export const insertRewardSchema = createInsertSchema(rewards).omit({ id: true, createdAt: true });
-export const insertRedemptionSchema = createInsertSchema(redemptions).omit({ id: true, createdAt: true });
+export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
+export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions);
+export const insertRewardSchema = createInsertSchema(rewards);
+export const insertRedemptionSchema = createInsertSchema(redemptions);
 
 export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
 export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
@@ -282,3 +282,212 @@ export type Reward = typeof rewards.$inferSelect;
 export type InsertReward = z.infer<typeof insertRewardSchema>;
 export type Redemption = typeof redemptions.$inferSelect;
 export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
+
+// ==================== BTS OPERATIONAL SYSTEM TABLES ====================
+// These tables are based on actual BTS Excel spreadsheet data analysis
+
+// BTS Riders table - Comprehensive rider management with attendance and performance tracking
+export const btsRiders = pgTable("bts_riders", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid("user_id").references(() => users.id), // Link to main users table
+  riderName: varchar("rider_name", { length: 100 }).notNull(),
+  riderCode: varchar("rider_code", { length: 20 }).unique().notNull(),
+  phoneNumber: varchar("phone_number", { length: 20 }),
+  email: varchar("email", { length: 255 }),
+  status: varchar("status", { length: 20 }).notNull().default("active"), // active, inactive, suspended
+  hireDate: timestamp("hire_date"),
+  vehicleType: varchar("vehicle_type", { length: 50 }),
+  licenseNumber: varchar("license_number", { length: 50 }),
+  emergencyContact: varchar("emergency_contact", { length: 100 }),
+  emergencyPhone: varchar("emergency_phone", { length: 20 }),
+  baseSalary: decimal("base_salary", { precision: 10, scale: 2 }),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }).default("0.02"), // 2% from BTS data
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// BTS Sales Remittance - Daily sales tracking and remittance management with late payment tracking
+export const btsSalesRemittance = pgTable("bts_sales_remittance", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  riderId: integer("rider_id").references(() => btsRiders.id).notNull(),
+  remitDate: timestamp("remit_date").notNull(),
+  dailySales: decimal("daily_sales", { precision: 10, scale: 2 }).default("0"),
+  commissionAmount: decimal("commission_amount", { precision: 10, scale: 2 }).default("0"),
+  remittedAmount: decimal("remitted_amount", { precision: 10, scale: 2 }).default("0"),
+  balance: decimal("balance", { precision: 10, scale: 2 }).default("0"),
+  isLate: boolean("is_late").default(false),
+  lateDays: integer("late_days").default(0),
+  referenceNumber: varchar("reference_number", { length: 50 }),
+  paymentMethod: varchar("payment_method", { length: 30 }),
+  remarks: text("remarks"),
+  weekPeriod: varchar("week_period", { length: 20 }), // "jan 4-jan 10" format from BTS data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// BTS Late Remittance - Track late payments and penalties
+export const btsLateRemittance = pgTable("bts_late_remittance", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  riderId: integer("rider_id").references(() => btsRiders.id).notNull(),
+  originalRemitId: integer("original_remit_id").references(() => btsSalesRemittance.id).notNull(),
+  lateAmount: decimal("late_amount", { precision: 10, scale: 2 }).notNull(),
+  penaltyAmount: decimal("penalty_amount", { precision: 10, scale: 2 }).default("0"),
+  daysLate: integer("days_late").notNull(),
+  paidDate: timestamp("paid_date"),
+  referenceNumber: varchar("reference_number", { length: 50 }),
+  status: varchar("status", { length: 20 }).default("pending"), // pending, resolved, escalated
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Attendance - Daily attendance tracking for all staff including riders and admins
+export const btsAttendance = pgTable("bts_attendance", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  employeeId: integer("employee_id").notNull(), // Can reference bts_riders.id or admin staff
+  employeeType: varchar("employee_type", { length: 20 }).notNull(), // 'rider' or 'admin'
+  attendanceDate: timestamp("attendance_date").notNull(),
+  shiftType: varchar("shift_type", { length: 20 }), // 'OPENING', 'CLOSING', 'HALFDAY', 'OTC', etc.
+  hoursWorked: decimal("hours_worked", { precision: 4, scale: 2 }).default("0"),
+  overtimeHours: decimal("overtime_hours", { precision: 4, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("present"), // present, absent, late, overtime
+  checkInTime: varchar("check_in_time", { length: 10 }), // time format
+  checkOutTime: varchar("check_out_time", { length: 10 }),
+  breakHours: decimal("break_hours", { precision: 4, scale: 2 }).default("0"),
+  notes: text("notes"),
+  approvedBy: integer("approved_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Payroll - Payroll calculation based on attendance and sales performance
+export const btsPayroll = pgTable("bts_payroll", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  employeeId: integer("employee_id").notNull(),
+  employeeType: varchar("employee_type", { length: 20 }).notNull(),
+  payPeriodStart: timestamp("pay_period_start").notNull(),
+  payPeriodEnd: timestamp("pay_period_end").notNull(),
+  regularHours: decimal("regular_hours", { precision: 6, scale: 2 }).default("0"),
+  overtimeHours: decimal("overtime_hours", { precision: 6, scale: 2 }).default("0"),
+  basePay: decimal("base_pay", { precision: 10, scale: 2 }).default("0"),
+  overtimePay: decimal("overtime_pay", { precision: 10, scale: 2 }).default("0"),
+  commissionEarnings: decimal("commission_earnings", { precision: 10, scale: 2 }).default("0"),
+  incentiveEarnings: decimal("incentive_earnings", { precision: 10, scale: 2 }).default("0"),
+  deductions: decimal("deductions", { precision: 10, scale: 2 }).default("0"),
+  netPay: decimal("net_pay", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("pending"), // pending, paid, cancelled
+  paidDate: timestamp("paid_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Incentives - Performance-based incentives and raffle system for riders
+export const btsIncentives = pgTable("bts_incentives", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  riderId: integer("rider_id").references(() => btsRiders.id).notNull(),
+  incentivePeriod: varchar("incentive_period", { length: 30 }).notNull(), // 'JAN 1- JAN 15' format from BTS data
+  performanceScore: decimal("performance_score", { precision: 8, scale: 2 }).default("0"),
+  salesTarget: decimal("sales_target", { precision: 10, scale: 2 }).default("0"),
+  salesAchieved: decimal("sales_achieved", { precision: 10, scale: 2 }).default("0"),
+  targetPercentage: decimal("target_percentage", { precision: 5, scale: 2 }).default("0"),
+  incentiveAmount: decimal("incentive_amount", { precision: 10, scale: 2 }).default("0"),
+  raffleEntries: integer("raffle_entries").default(0),
+  raffleWon: boolean("raffle_won").default(false),
+  rafflePrize: varchar("raffle_prize", { length: 100 }),
+  bonusAmount: decimal("bonus_amount", { precision: 10, scale: 2 }).default("0"),
+  paymentStatus: varchar("payment_status", { length: 20 }).default("pending"), // pending, paid, cancelled
+  paidDate: timestamp("paid_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Audit Reports - Comprehensive audit trail and reporting system
+export const btsAuditReports = pgTable("bts_audit_reports", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  reportType: varchar("report_type", { length: 50 }).notNull(), // 'MONTHLY_AUDIT', 'UNDECLARED_BOOKING', 'CLOSING_REPORT'
+  reportPeriod: varchar("report_period", { length: 30 }).notNull(),
+  riderId: integer("rider_id").references(() => btsRiders.id),
+  totalSales: decimal("total_sales", { precision: 12, scale: 2 }).default("0"),
+  declaredSales: decimal("declared_sales", { precision: 12, scale: 2 }).default("0"),
+  undeclaredSales: decimal("undeclared_sales", { precision: 12, scale: 2 }).default("0"),
+  discrepancyAmount: decimal("discrepancy_amount", { precision: 12, scale: 2 }).default("0"),
+  auditStatus: varchar("audit_status", { length: 20 }).default("pending"), // pending, resolved, escalated
+  auditNotes: text("audit_notes"),
+  auditedBy: integer("audited_by"),
+  auditDate: timestamp("audit_date").notNull(),
+  resolutionDate: timestamp("resolution_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Undeclared Bookings - Track undeclared or missing booking records
+export const btsUndeclaredBookings = pgTable("bts_undeclared_bookings", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  riderId: integer("rider_id").references(() => btsRiders.id).notNull(),
+  bookingDate: timestamp("booking_date").notNull(),
+  estimatedAmount: decimal("estimated_amount", { precision: 10, scale: 2 }),
+  actualAmount: decimal("actual_amount", { precision: 10, scale: 2 }),
+  discrepancyReason: varchar("discrepancy_reason", { length: 100 }),
+  status: varchar("status", { length: 20 }).default("flagged"), // flagged, explained, resolved
+  explanation: text("explanation"),
+  resolvedBy: integer("resolved_by"),
+  resolvedDate: timestamp("resolved_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BTS Relations  
+export const btsRidersRelations = relations(btsRiders, ({ one, many }) => ({
+  user: one(users, { fields: [btsRiders.userId], references: [users.id] }),
+  salesRemittances: many(btsSalesRemittance),
+  lateRemittances: many(btsLateRemittance), 
+  incentives: many(btsIncentives),
+  auditReports: many(btsAuditReports),
+  undeclaredBookings: many(btsUndeclaredBookings),
+}));
+
+export const btsSalesRemittanceRelations = relations(btsSalesRemittance, ({ one, many }) => ({
+  rider: one(btsRiders, { fields: [btsSalesRemittance.riderId], references: [btsRiders.id] }),
+  lateRemittances: many(btsLateRemittance),
+}));
+
+export const btsLateRemittanceRelations = relations(btsLateRemittance, ({ one }) => ({
+  rider: one(btsRiders, { fields: [btsLateRemittance.riderId], references: [btsRiders.id] }),
+  originalRemit: one(btsSalesRemittance, { fields: [btsLateRemittance.originalRemitId], references: [btsSalesRemittance.id] }),
+}));
+
+// Attendance can link to different employee types, so we'll skip direct relation for now
+
+export const btsIncentivesRelations = relations(btsIncentives, ({ one }) => ({
+  rider: one(btsRiders, { fields: [btsIncentives.riderId], references: [btsRiders.id] }),
+}));
+
+export const btsAuditReportsRelations = relations(btsAuditReports, ({ one }) => ({
+  rider: one(btsRiders, { fields: [btsAuditReports.riderId], references: [btsRiders.id] }),
+}));
+
+export const btsUndeclaredBookingsRelations = relations(btsUndeclaredBookings, ({ one }) => ({
+  rider: one(btsRiders, { fields: [btsUndeclaredBookings.riderId], references: [btsRiders.id] }),
+}));
+
+// BTS Zod schemas for validation
+export const insertBtsRiderSchema = createInsertSchema(btsRiders);
+export const insertBtsSalesRemittanceSchema = createInsertSchema(btsSalesRemittance);
+export const insertBtsLateRemittanceSchema = createInsertSchema(btsLateRemittance);
+export const insertBtsAttendanceSchema = createInsertSchema(btsAttendance);
+export const insertBtsPayrollSchema = createInsertSchema(btsPayroll);
+export const insertBtsIncentivesSchema = createInsertSchema(btsIncentives);
+export const insertBtsAuditReportsSchema = createInsertSchema(btsAuditReports);
+export const insertBtsUndeclaredBookingsSchema = createInsertSchema(btsUndeclaredBookings);
+
+// BTS TypeScript types
+export type BtsRider = typeof btsRiders.$inferSelect;
+export type InsertBtsRider = z.infer<typeof insertBtsRiderSchema>;
+export type BtsSalesRemittance = typeof btsSalesRemittance.$inferSelect;
+export type InsertBtsSalesRemittance = z.infer<typeof insertBtsSalesRemittanceSchema>;
+export type BtsLateRemittance = typeof btsLateRemittance.$inferSelect;
+export type InsertBtsLateRemittance = z.infer<typeof insertBtsLateRemittanceSchema>;
+export type BtsAttendance = typeof btsAttendance.$inferSelect;
+export type InsertBtsAttendance = z.infer<typeof insertBtsAttendanceSchema>;
+export type BtsPayroll = typeof btsPayroll.$inferSelect;
+export type InsertBtsPayroll = z.infer<typeof insertBtsPayrollSchema>;
+export type BtsIncentives = typeof btsIncentives.$inferSelect;
+export type InsertBtsIncentives = z.infer<typeof insertBtsIncentivesSchema>;
+export type BtsAuditReports = typeof btsAuditReports.$inferSelect;
+export type InsertBtsAuditReports = z.infer<typeof insertBtsAuditReportsSchema>;
+export type BtsUndeclaredBookings = typeof btsUndeclaredBookings.$inferSelect;
+export type InsertBtsUndeclaredBookings = z.infer<typeof insertBtsUndeclaredBookingsSchema>;
