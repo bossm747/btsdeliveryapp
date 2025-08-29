@@ -13,12 +13,12 @@ import Restaurants from "@/pages/restaurants";
 import RestaurantDetail from "@/pages/restaurant-detail";
 import Cart from "@/pages/cart";
 import OrderTracking from "@/pages/order-tracking";
-import VendorDashboard from "@/pages/vendor-dashboard";
 import Pabili from "@/pages/pabili";
 import Pabayad from "@/pages/pabayad";
 import Parcel from "@/pages/parcel";
 import RiderDashboard from "@/pages/rider-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import VendorDashboard from "@/pages/vendor-dashboard";
 import BtsDashboard from "@/pages/admin/bts-dashboard";
 import MapTrackingDemo from "@/pages/map-tracking-demo";
 import NotFound from "@/pages/not-found";
@@ -32,12 +32,12 @@ function Router() {
       <Route path="/restaurant/:id" component={RestaurantDetail} />
       <Route path="/cart" component={Cart} />
       <Route path="/order/:id" component={OrderTracking} />
-      <Route path="/vendor-dashboard" component={VendorDashboard} />
       <Route path="/pabili" component={Pabili} />
       <Route path="/pabayad" component={Pabayad} />
       <Route path="/parcel" component={Parcel} />
       <Route path="/rider-dashboard" component={RiderDashboard} />
       <Route path="/admin-dashboard" component={AdminDashboard} />
+      <Route path="/vendor-dashboard" component={VendorDashboard} />
       <Route path="/bts-dashboard" component={BtsDashboard} />
       <Route path="/map-tracking-demo" component={MapTrackingDemo} />
       <Route component={NotFound} />

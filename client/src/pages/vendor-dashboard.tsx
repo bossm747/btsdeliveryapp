@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   ShoppingBag, 
   DollarSign, 
@@ -16,20 +20,36 @@ import {
   XCircle,
   Eye,
   Plus,
-  Edit
+  Edit,
+  Package,
+  Store
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Order, Restaurant, MenuItem } from "@shared/schema";
+import FileUpload from "@/components/FileUpload";
+import type { Order, Restaurant, MenuItem, MenuCategory } from "@shared/schema";
 
-// Mock restaurant ID - in real app this would come from auth context
-const MOCK_RESTAURANT_ID = "restaurant-1";
+// Mock restaurant ID - using actual seeded restaurant UUID
+const MOCK_RESTAURANT_ID = "5e07adaf-324d-429e-9727-9a91da7774ce";
 
 export default function VendorDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
+  const [isAddMenuItemOpen, setIsAddMenuItemOpen] = useState(false);
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [newMenuItem, setNewMenuItem] = useState({
+    name: '',
+    description: '',
+    price: '',
+    category_id: '',
+    image_url: ''
+  });
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    description: ''
+  });
 
   // Fetch restaurant data
   const { data: restaurant, isLoading: restaurantLoading } = useQuery<Restaurant>({
@@ -49,6 +69,11 @@ export default function VendorDashboard() {
   // Fetch menu items
   const { data: menuItems, isLoading: menuLoading } = useQuery<MenuItem[]>({
     queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID, "menu"],
+  });
+
+  // Fetch categories
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<MenuCategory[]>({
+    queryKey: ["/api/vendor/categories"],
   });
 
   // Update order status mutation
@@ -122,6 +147,59 @@ export default function VendorDashboard() {
       itemId,
       updates: { isAvailable }
     });
+  };
+
+  // Create menu item mutation
+  const createMenuItemMutation = useMutation({
+    mutationFn: async (item: any) => {
+      const response = await apiRequest('POST', '/api/vendor/menu-items', item);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID, "menu"] });
+      setNewMenuItem({ name: '', description: '', price: '', category_id: '', image_url: '' });
+      setIsAddMenuItemOpen(false);
+      toast({ title: 'Success', description: 'Menu item created successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create menu item', variant: 'destructive' });
+    }
+  });
+
+  // Create category mutation
+  const createCategoryMutation = useMutation({
+    mutationFn: async (category: { name: string; description: string }) => {
+      const response = await apiRequest('POST', '/api/vendor/categories', category);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
+      setNewCategory({ name: '', description: '' });
+      setIsAddCategoryOpen(false);
+      toast({ title: 'Success', description: 'Category created successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create category', variant: 'destructive' });
+    }
+  });
+
+  const handleCreateMenuItem = () => {
+    if (newMenuItem.name.trim() && newMenuItem.price && newMenuItem.category_id) {
+      createMenuItemMutation.mutate({
+        ...newMenuItem,
+        price: parseFloat(newMenuItem.price),
+        restaurant_id: MOCK_RESTAURANT_ID
+      });
+    }
+  };
+
+  const handleCreateCategory = () => {
+    if (newCategory.name.trim()) {
+      createCategoryMutation.mutate({
+        ...newCategory,
+        restaurant_id: MOCK_RESTAURANT_ID
+      });
+    }
   };
 
   if (restaurantLoading || ordersLoading || menuLoading) {
@@ -407,10 +485,132 @@ export default function VendorDashboard() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Menu Items</CardTitle>
-                  <Button data-testid="add-menu-item-button">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Item
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" data-testid="add-category-button">
+                          <Store className="h-4 w-4 mr-1" />
+                          Add Category
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent data-testid="add-category-dialog">
+                        <DialogHeader>
+                          <DialogTitle>Add New Category</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="category-name">Category Name</Label>
+                            <Input
+                              id="category-name"
+                              value={newCategory.name}
+                              onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                              placeholder="Enter category name"
+                              data-testid="input-category-name"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="category-description">Description</Label>
+                            <Textarea
+                              id="category-description"
+                              value={newCategory.description}
+                              onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+                              placeholder="Describe your category"
+                              data-testid="input-category-description"
+                            />
+                          </div>
+                          <Button 
+                            onClick={handleCreateCategory}
+                            disabled={createCategoryMutation.isPending || !newCategory.name.trim()}
+                            className="w-full"
+                            data-testid="button-create-category"
+                          >
+                            Create Category
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={isAddMenuItemOpen} onOpenChange={setIsAddMenuItemOpen}>
+                      <DialogTrigger asChild>
+                        <Button data-testid="add-menu-item-button">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Item
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl" data-testid="add-menu-item-dialog">
+                        <DialogHeader>
+                          <DialogTitle>Add New Menu Item</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="item-name">Item Name</Label>
+                              <Input
+                                id="item-name"
+                                value={newMenuItem.name}
+                                onChange={(e) => setNewMenuItem({ ...newMenuItem, name: e.target.value })}
+                                placeholder="Enter item name"
+                                data-testid="input-menu-item-name"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="item-price">Price (₱)</Label>
+                              <Input
+                                id="item-price"
+                                type="number"
+                                step="0.01"
+                                value={newMenuItem.price}
+                                onChange={(e) => setNewMenuItem({ ...newMenuItem, price: e.target.value })}
+                                placeholder="0.00"
+                                data-testid="input-menu-item-price"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="item-description">Description</Label>
+                            <Textarea
+                              id="item-description"
+                              value={newMenuItem.description}
+                              onChange={(e) => setNewMenuItem({ ...newMenuItem, description: e.target.value })}
+                              placeholder="Describe your menu item"
+                              data-testid="input-menu-item-description"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="item-category">Category</Label>
+                            <select
+                              id="item-category"
+                              value={newMenuItem.category_id}
+                              onChange={(e) => setNewMenuItem({ ...newMenuItem, category_id: e.target.value })}
+                              className="w-full p-2 border rounded-md"
+                              data-testid="select-menu-item-category"
+                            >
+                              <option value="">Select a category</option>
+                              {categories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <FileUpload
+                            uploadType="restaurant"
+                            entityId={MOCK_RESTAURANT_ID}
+                            onUploadComplete={(filePath) => setNewMenuItem({ ...newMenuItem, image_url: filePath })}
+                            className="mt-4"
+                          />
+                          <Button 
+                            onClick={handleCreateMenuItem}
+                            disabled={createMenuItemMutation.isPending || !newMenuItem.name.trim() || !newMenuItem.price || !newMenuItem.category_id}
+                            className="w-full"
+                            data-testid="button-create-menu-item"
+                          >
+                            Create Menu Item
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">

@@ -760,6 +760,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== OBJECT STORAGE ENDPOINTS ====================
+  
+  // Object Storage Routes
+  app.post("/api/objects/upload", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // Serve private objects
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Serve public assets
+  app.get("/public-objects/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ==================== VENDOR API ENDPOINTS ====================
+  
+  // Vendor Categories endpoints
+  app.get("/api/vendor/categories", async (req, res) => {
+    try {
+      // In production, this would filter by vendor/restaurant ID from auth
+      const categories = await storage.getMenuCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching vendor categories:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.post("/api/vendor/categories", async (req, res) => {
+    try {
+      const categoryData = insertMenuCategorySchema.parse(req.body);
+      const category = await storage.createMenuCategory(categoryData);
+      res.json(category);
+    } catch (error) {
+      console.error("Error creating vendor category:", error);
+      res.status(400).json({ error: "Invalid category data" });
+    }
+  });
+
+  // Vendor Menu Items endpoints
+  app.get("/api/vendor/menu-items", async (req, res) => {
+    try {
+      // In production, this would filter by vendor/restaurant ID from auth
+      const menuItems = await storage.getMenuItems();
+      res.json(menuItems);
+    } catch (error) {
+      console.error("Error fetching vendor menu items:", error);
+      res.status(500).json({ error: "Failed to fetch menu items" });
+    }
+  });
+
+  app.post("/api/vendor/menu-items", async (req, res) => {
+    try {
+      const menuItemData = insertMenuItemSchema.parse(req.body);
+      const menuItem = await storage.createMenuItem(menuItemData);
+      res.json(menuItem);
+    } catch (error) {
+      console.error("Error creating vendor menu item:", error);
+      res.status(400).json({ error: "Invalid menu item data" });
+    }
+  });
+
+  // Vendor Orders endpoints
+  app.get("/api/vendor/orders", async (req, res) => {
+    try {
+      // In production, this would filter by vendor/restaurant ID from auth
+      const orders = await storage.getOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching vendor orders:", error);
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.patch("/api/vendor/orders/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status } = req.body;
+      const order = await storage.updateOrderStatus(parseInt(orderId), status);
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating vendor order:", error);
+      res.status(400).json({ error: "Failed to update order" });
+    }
+  });
+
+  // Vendor Restaurant endpoint
+  app.get("/api/vendor/restaurant", async (req, res) => {
+    try {
+      // In production, this would get the restaurant from auth context
+      const restaurants = await storage.getRestaurants();
+      const restaurant = restaurants.length > 0 ? restaurants[0] : null;
+      res.json(restaurant);
+    } catch (error) {
+      console.error("Error fetching vendor restaurant:", error);
+      res.status(500).json({ error: "Failed to fetch restaurant" });
+    }
+  });
+
   // ==================== BTS OPERATIONAL API ENDPOINTS ====================
   
   // BTS Riders endpoints
