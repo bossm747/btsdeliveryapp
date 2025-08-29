@@ -1,0 +1,736 @@
+# BTS Delivery Platform - Comprehensive Development Plan
+
+## 1. Project Overview & Description
+
+### Vision
+
+BTS Delivery is a comprehensive multi-service delivery platform that connects customers with local businesses and service providers, offering food delivery, shopping assistance (Pabili), bill payment services (Pabayad), and parcel delivery solutions.
+
+### Mission
+
+To provide a seamless, reliable, and efficient delivery ecosystem that empowers local businesses, provides flexible earning opportunities for riders, and offers convenient services to customers.
+
+### Key Features
+
+- **Multi-Service Platform**: Food delivery, Pabili (shopping service), Pabayad (bill payments), and Parcel delivery
+- **Real-time Tracking**: GPS-based order tracking and updates
+- **Multiple Payment Options**: Cash, E-wallets, and card payments
+- **Merchant Integration**: Partner dashboard and order management
+- **Rider Management**: Comprehensive rider onboarding and earnings tracking
+
+-----
+
+## 2. Product Requirements Document (PRD)
+
+### 2.1 Functional Requirements
+
+#### Customer App
+
+- **User Authentication**
+  - Email, mobile, and social login options
+  - Account verification and profile management
+  - Password recovery functionality
+- **Service Selection**
+  - Food Delivery: Restaurant browsing, menu selection, cart management
+  - Pabili: Item specification, store location input, custom requests
+  - Pabayad: Biller selection, account number input, amount specification
+  - Parcel: Address management, item details, special instructions
+- **Order Management**
+  - Order summary with itemized charges
+  - Promo code and discount application
+  - Order history and reordering functionality
+  - Real-time order tracking
+- **Payment Integration**
+  - Multiple payment gateway support
+  - Wallet integration (BTS Wallet, GCash, Maya)
+  - COD handling and verification
+
+#### Merchant Portal
+
+- **Order Management**
+  - Real-time order notifications
+  - Order acceptance/rejection workflow
+  - Inventory and menu management
+  - Sales analytics and reporting
+
+#### Rider App
+
+- **Job Management**
+  - Online/offline status toggle
+  - Job notifications and acceptance
+  - Navigation and route optimization
+  - Proof of pickup and delivery
+- **Earnings Tracking**
+  - Real-time earnings calculation
+  - Payment history and wallet management
+  - Performance metrics and ratings
+
+#### Admin Dashboard
+
+- **User Management**
+  - Customer, merchant, and rider administration
+  - Account verification and suspension
+  - Support ticket management
+- **Business Intelligence**
+  - Analytics and reporting
+  - Revenue tracking
+  - Performance monitoring
+
+### 2.2 Non-Functional Requirements
+
+- **Performance**: App load time < 3 seconds, API response time < 500ms
+- **Scalability**: Support for 100,000+ concurrent users
+- **Security**: End-to-end encryption, PCI DSS compliance for payments
+- **Availability**: 99.9% uptime with load balancing
+- **Mobile Compatibility**: iOS 12+, Android 8+ support
+
+-----
+
+## 3. System Architecture
+
+### 3.1 High-Level Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Customer App  │    │   Merchant App  │    │    Rider App    │
+│   (React Native)│    │   (Web Portal)  │    │ (React Native)  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │   API Gateway   │
+                    │  (Kong/AWS ALB) │
+                    └─────────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+    ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+    │  User Service   │ │ Order Service   │ │Payment Service  │
+    │   (Node.js)     │ │   (Node.js)     │ │   (Node.js)     │
+    └─────────────────┘ └─────────────────┘ └─────────────────┘
+              │                  │                  │
+    ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+    │Location Service │ │Notification Svc │ │Analytics Service│
+    │   (Node.js)     │ │   (Node.js)     │ │   (Python)      │
+    └─────────────────┘ └─────────────────┘ └─────────────────┘
+              │                  │                  │
+              └──────────────────┼──────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │   Databases     │
+                    │ PostgreSQL +    │
+                    │ Redis + MongoDB │
+                    └─────────────────┘
+```
+
+### 3.2 Microservices Architecture
+
+- **User Service**: Authentication, profile management, user roles
+- **Order Service**: Order creation, tracking, status management
+- **Payment Service**: Payment processing, wallet management, transactions
+- **Location Service**: GPS tracking, route optimization, geofencing
+- **Notification Service**: Push notifications, SMS, email alerts
+- **Merchant Service**: Partner management, inventory, menu handling
+- **Rider Service**: Rider management, job assignment, earnings calculation
+- **Analytics Service**: Data processing, reporting, business intelligence
+
+### 3.3 Technology Stack
+
+#### Frontend
+
+- **Mobile Apps**: React Native with TypeScript
+- **Web Portal**: React.js with TypeScript
+- **State Management**: Redux Toolkit
+- **UI Library**: React Native Elements / Material-UI
+
+#### Backend
+
+- **API Gateway**: Kong or AWS Application Load Balancer
+- **Microservices**: Node.js with Express.js
+- **Authentication**: JWT with refresh tokens
+- **Database**: PostgreSQL (primary), Redis (caching), MongoDB (analytics)
+- **Message Queue**: Redis Bull or AWS SQS
+- **File Storage**: AWS S3 or Cloudinary
+
+#### Infrastructure
+
+- **Cloud Platform**: AWS or Google Cloud Platform
+- **Containerization**: Docker with Kubernetes
+- **CI/CD**: GitHub Actions or GitLab CI
+- **Monitoring**: New Relic or DataDog
+- **Error Tracking**: Sentry
+
+-----
+
+## 4. Database Schema Design
+
+### 4.1 Core Entities
+
+#### Users Table
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    role ENUM('customer', 'merchant', 'rider', 'admin'),
+    status ENUM('active', 'inactive', 'suspended'),
+    email_verified BOOLEAN DEFAULT false,
+    phone_verified BOOLEAN DEFAULT false,
+    profile_image_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Orders Table
+
+```sql
+CREATE TABLE orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID REFERENCES users(id),
+    merchant_id UUID REFERENCES users(id),
+    rider_id UUID REFERENCES users(id),
+    service_type ENUM('food_delivery', 'pabili', 'pabayad', 'parcel'),
+    status ENUM('pending', 'accepted', 'preparing', 'ready', 'picked_up', 'in_transit', 'delivered', 'cancelled'),
+    pickup_address JSONB,
+    delivery_address JSONB,
+    items JSONB,
+    subtotal DECIMAL(10,2),
+    service_fee DECIMAL(10,2),
+    delivery_fee DECIMAL(10,2),
+    discount DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(10,2),
+    payment_method VARCHAR(50),
+    payment_status ENUM('pending', 'paid', 'failed', 'refunded'),
+    special_instructions TEXT,
+    estimated_delivery_time TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Merchants Table
+
+```sql
+CREATE TABLE merchants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    business_name VARCHAR(255) NOT NULL,
+    business_type ENUM('restaurant', 'store', 'service_provider'),
+    address JSONB,
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    operating_hours JSONB,
+    is_active BOOLEAN DEFAULT true,
+    rating DECIMAL(3,2) DEFAULT 0,
+    total_orders INTEGER DEFAULT 0,
+    documents JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Riders Table
+
+```sql
+CREATE TABLE riders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    vehicle_type ENUM('motorcycle', 'bicycle', 'car'),
+    license_number VARCHAR(50),
+    vehicle_plate VARCHAR(20),
+    is_online BOOLEAN DEFAULT false,
+    current_location POINT,
+    rating DECIMAL(3,2) DEFAULT 0,
+    total_deliveries INTEGER DEFAULT 0,
+    documents JSONB,
+    earnings_balance DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 4.2 Additional Tables
+
+- **order_tracking**: Real-time location and status updates
+- **payments**: Transaction records and payment details
+- **ratings_reviews**: Customer and rider feedback system
+- **promotions**: Discount codes and promotional campaigns
+- **notifications**: Push notification history and preferences
+
+-----
+
+## 5. API Design & Documentation
+
+### 5.1 Authentication Endpoints
+
+```javascript
+// User Registration
+POST /api/v1/auth/register
+{
+  "email": "user@example.com",
+  "phone": "+1234567890",
+  "password": "securePassword",
+  "firstName": "John",
+  "lastName": "Doe",
+  "role": "customer"
+}
+
+// Login
+POST /api/v1/auth/login
+{
+  "email": "user@example.com",
+  "password": "securePassword"
+}
+
+// Refresh Token
+POST /api/v1/auth/refresh
+{
+  "refreshToken": "jwt_refresh_token"
+}
+```
+
+### 5.2 Order Management Endpoints
+
+```javascript
+// Create Order
+POST /api/v1/orders
+{
+  "serviceType": "food_delivery",
+  "merchantId": "merchant_uuid",
+  "items": [...],
+  "pickupAddress": {...},
+  "deliveryAddress": {...},
+  "paymentMethod": "cash",
+  "specialInstructions": "Leave at door"
+}
+
+// Get Order Details
+GET /api/v1/orders/{orderId}
+
+// Update Order Status (Merchant/Rider)
+PATCH /api/v1/orders/{orderId}/status
+{
+  "status": "preparing",
+  "estimatedTime": "2024-01-01T12:00:00Z"
+}
+
+// Track Order
+GET /api/v1/orders/{orderId}/tracking
+```
+
+### 5.3 Real-time Updates
+
+```javascript
+// WebSocket Events
+- order_status_update
+- rider_location_update
+- new_order_notification
+- payment_confirmation
+```
+
+-----
+
+## 6. UI/UX Design & Wireframes
+
+### 6.1 Design Principles
+
+- **Simplicity**: Clean, intuitive interface with minimal cognitive load
+- **Consistency**: Unified design language across all platforms
+- **Accessibility**: WCAG 2.1 AA compliance with proper contrast and typography
+- **Mobile-First**: Responsive design optimized for mobile devices
+
+### 6.2 Color Palette
+
+- **Primary**: #2563EB (Blue)
+- **Secondary**: #059669 (Green)
+- **Accent**: #DC2626 (Red for alerts)
+- **Neutral**: #6B7280 (Gray)
+- **Background**: #F9FAFB (Light Gray)
+
+### 6.3 Typography
+
+- **Headings**: Inter Bold (20px, 18px, 16px)
+- **Body Text**: Inter Regular (14px)
+- **Captions**: Inter Medium (12px)
+
+### 6.4 Key Screen Wireframes
+
+#### Customer App Screens
+
+1. **Onboarding & Login**
+- Welcome carousel with value propositions
+- Login/Register with social options
+- Phone verification flow
+1. **Home Dashboard**
+- Service selection grid (4 main services)
+- Recent orders section
+- Promotional banners
+- Quick access to favorites
+1. **Food Delivery Flow**
+- Restaurant listing with filters
+- Menu browsing with categories
+- Item details and customization
+- Cart management and checkout
+1. **Order Tracking**
+- Real-time map with rider location
+- Status timeline with timestamps
+- Contact rider/merchant options
+- Delivery confirmation screen
+
+#### Merchant Portal Screens
+
+1. **Dashboard Overview**
+- Today’s orders and revenue
+- Performance metrics
+- Order status management
+1. **Order Management**
+- Incoming order notifications
+- Order details and preparation time
+- Batch processing capabilities
+
+#### Rider App Screens
+
+1. **Job Dashboard**
+- Online/offline toggle
+- Available jobs map view
+- Earnings summary
+1. **Job Details**
+- Pickup and delivery information
+- Navigation integration
+- Proof of delivery capture
+
+-----
+
+## 7. User Journey Mapping
+
+### 7.1 Customer Journey - Food Delivery
+
+```
+Awareness → Consideration → Purchase → Usage → Advocacy
+
+1. Awareness
+   - Marketing campaigns
+   - App store discovery
+   - Word-of-mouth referrals
+
+2. Consideration
+   - App download and registration
+   - Browse available restaurants
+   - Compare prices and reviews
+
+3. Purchase
+   - Select items and customize
+   - Apply promotions
+   - Choose payment method
+   - Place order
+
+4. Usage
+   - Track order in real-time
+   - Receive delivery
+   - Rate experience
+
+5. Advocacy
+   - Share positive experience
+   - Recommend to friends
+   - Become repeat customer
+```
+
+### 7.2 Pain Points & Solutions
+
+**Customer Pain Points**:
+
+- Long delivery times → Route optimization and rider incentives
+- Incorrect orders → Photo confirmation and quality checks
+- Limited payment options → Multiple payment gateway integration
+
+**Merchant Pain Points**:
+
+- Order management complexity → Intuitive dashboard design
+- Commission fees → Competitive pricing structure
+- Customer acquisition → Marketing support and promotions
+
+**Rider Pain Points**:
+
+- Low earnings → Dynamic pricing and surge rates
+- Inefficient routing → AI-powered route optimization
+- Limited support → 24/7 customer service
+
+-----
+
+## 8. Implementation Roadmap & Todo Checklist
+
+### Phase 1: Foundation (Months 1-2)
+
+- [ ] **Project Setup**
+  - [ ] Initialize repositories (customer app, merchant portal, rider app, backend)
+  - [ ] Set up development environment and CI/CD pipeline
+  - [ ] Configure cloud infrastructure (AWS/GCP setup)
+  - [ ] Implement basic monitoring and logging
+- [ ] **Core Backend Services**
+  - [ ] User authentication service
+  - [ ] Database schema implementation
+  - [ ] API gateway setup
+  - [ ] Basic CRUD operations for users, orders, merchants
+- [ ] **Customer App MVP**
+  - [ ] User registration and login
+  - [ ] Basic food delivery flow
+  - [ ] Order placement and tracking
+  - [ ] Payment integration (at least one method)
+
+### Phase 2: Core Features (Months 3-4)
+
+- [ ] **Complete Service Types**
+  - [ ] Pabili service implementation
+  - [ ] Pabayad service implementation
+  - [ ] Parcel delivery service
+  - [ ] Multi-service order handling
+- [ ] **Merchant Portal**
+  - [ ] Merchant onboarding flow
+  - [ ] Order management dashboard
+  - [ ] Menu and inventory management
+  - [ ] Analytics and reporting
+- [ ] **Rider App**
+  - [ ] Rider onboarding and verification
+  - [ ] Job assignment algorithm
+  - [ ] GPS tracking and navigation
+  - [ ] Earnings calculation and wallet
+
+### Phase 3: Advanced Features (Months 5-6)
+
+- [ ] **Real-time Features**
+  - [ ] WebSocket implementation for live updates
+  - [ ] Push notification system
+  - [ ] Real-time order tracking
+  - [ ] Live chat support
+- [ ] **Business Intelligence**
+  - [ ] Analytics dashboard
+  - [ ] Automated reporting
+  - [ ] Performance monitoring
+  - [ ] Data visualization
+- [ ] **Quality Assurance**
+  - [ ] Comprehensive testing (unit, integration, e2e)
+  - [ ] Security audit and penetration testing
+  - [ ] Performance optimization
+  - [ ] Load testing
+
+### Phase 4: Launch & Optimization (Months 7-8)
+
+- [ ] **Pre-launch**
+  - [ ] Beta testing with limited users
+  - [ ] Bug fixes and optimization
+  - [ ] App store submission
+  - [ ] Marketing materials preparation
+- [ ] **Launch**
+  - [ ] Gradual rollout strategy
+  - [ ] Customer support setup
+  - [ ] Performance monitoring
+  - [ ] Feedback collection and iteration
+
+-----
+
+## 9. Development Best Practices & Coding Standards
+
+### 9.1 Code Quality Standards
+
+#### JavaScript/TypeScript Rules
+
+```javascript
+// Use TypeScript for type safety
+interface Order {
+  id: string;
+  customerId: string;
+  status: OrderStatus;
+  items: OrderItem[];
+  totalAmount: number;
+}
+
+// Follow consistent naming conventions
+const getUserOrders = async (userId: string): Promise<Order[]> => {
+  // Implementation
+};
+
+// Use async/await over callbacks
+const processPayment = async (paymentData: PaymentData) => {
+  try {
+    const result = await paymentService.charge(paymentData);
+    return result;
+  } catch (error) {
+    logger.error('Payment processing failed', error);
+    throw error;
+  }
+};
+```
+
+#### API Design Principles
+
+- RESTful endpoints with clear resource naming
+- Consistent HTTP status codes
+- Proper error handling and validation
+- API versioning (v1, v2)
+- Comprehensive documentation with OpenAPI/Swagger
+
+#### Database Best Practices
+
+- Use UUIDs for primary keys
+- Implement proper indexing
+- Database migrations for schema changes
+- Connection pooling and query optimization
+- Regular backup strategies
+
+### 9.2 Security Guidelines
+
+- **Authentication**: JWT with short expiration + refresh tokens
+- **Authorization**: Role-based access control (RBAC)
+- **Data Validation**: Input sanitization and validation at API level
+- **Encryption**: TLS 1.3 for data in transit, AES-256 for sensitive data at rest
+- **Rate Limiting**: Implement API rate limiting to prevent abuse
+- **Logging**: Audit trails for sensitive operations
+
+### 9.3 Testing Strategy
+
+```javascript
+// Unit Testing Example (Jest)
+describe('Order Service', () => {
+  it('should calculate total amount correctly', () => {
+    const order = new Order();
+    order.addItem(new OrderItem('Pizza', 15.99, 2));
+    order.addServiceFee(2.50);
+    
+    expect(order.getTotalAmount()).toBe(34.48);
+  });
+});
+
+// Integration Testing
+describe('Order API', () => {
+  it('should create order successfully', async () => {
+    const response = await request(app)
+      .post('/api/v1/orders')
+      .send(mockOrderData)
+      .expect(201);
+      
+    expect(response.body.orderId).toBeDefined();
+  });
+});
+```
+
+### 9.4 Performance Optimization
+
+- **Caching Strategy**: Redis for session data, API responses
+- **Database Optimization**: Query optimization, proper indexing
+- **Image Optimization**: WebP format, lazy loading, CDN usage
+- **Code Splitting**: Dynamic imports for mobile apps
+- **API Optimization**: GraphQL for complex queries, pagination
+
+-----
+
+## 10. Research & Context Documentation
+
+### 10.1 Market Research
+
+#### Competitive Analysis
+
+**Direct Competitors**:
+
+- Grab (Philippines) - Multi-service platform
+- Foodpanda - Food delivery focus
+- LalaMove - Logistics and delivery
+
+**Competitive Advantages**:
+
+- Multi-service integration in single app
+- Local market focus with Filipino services (Pabili, Pabayad)
+- Competitive commission rates for merchants
+- AI-powered route optimization
+
+#### Target Market Segments
+
+1. **Primary**: Urban millennials and Gen Z (22-40 years)
+1. **Secondary**: Busy professionals and families
+1. **Geographic**: Metro Manila, Cebu, Davao (initial launch)
+
+### 10.2 Technology Research
+
+#### Mobile Development
+
+- **React Native**: Cross-platform development efficiency
+- **Native Modules**: Performance-critical features (GPS, camera)
+- **State Management**: Redux Toolkit for predictable state updates
+- **Offline Capability**: AsyncStorage and sync mechanisms
+
+#### Backend Architecture
+
+- **Microservices**: Scalability and maintenance benefits
+- **Event-Driven**: Asynchronous processing with message queues
+- **API Gateway**: Request routing, rate limiting, authentication
+- **Database Strategy**: PostgreSQL for transactions, Redis for caching
+
+#### Payment Integration
+
+- **Local Providers**: GCash, Maya, BPI, BDO
+- **International**: PayPal, Stripe (for future expansion)
+- **Security**: PCI DSS compliance requirements
+- **Fraud Prevention**: Machine learning-based detection
+
+### 10.3 Regulatory Compliance
+
+#### Data Privacy
+
+- Data Privacy Act of 2012 (Philippines)
+- GDPR compliance for international users
+- User consent mechanisms
+- Right to data deletion
+
+#### Business Registration
+
+- SEC registration requirements
+- BIR tax obligations
+- Local government permits
+- Insurance requirements for riders
+
+-----
+
+## 11. Success Metrics & KPIs
+
+### 11.1 Business Metrics
+
+- **Revenue Growth**: Monthly recurring revenue (MRR)
+- **Order Volume**: Orders per day/month
+- **Customer Acquisition Cost** (CAC)
+- **Customer Lifetime Value** (CLV)
+- **Market Share**: Percentage in target cities
+
+### 11.2 Operational Metrics
+
+- **Delivery Time**: Average time from order to delivery
+- **Order Accuracy**: Percentage of correct orders
+- **Customer Satisfaction**: App store ratings, NPS score
+- **Rider Efficiency**: Orders per hour, earnings per hour
+- **Platform Uptime**: 99.9% availability target
+
+### 11.3 User Engagement Metrics
+
+- **Daily/Monthly Active Users** (DAU/MAU)
+- **Session Duration**: Average time spent in app
+- **Retention Rates**: Day 1, Day 7, Day 30
+- **Conversion Funnel**: Registration to first order
+- **Repeat Order Rate**: Customer loyalty measurement
+
+-----
+
+## Conclusion
+
+This comprehensive plan provides a structured approach to building the BTS delivery platform. The modular architecture ensures scalability, while the detailed implementation roadmap provides clear milestones for development teams.
+
+Key success factors include:
+
+- Focus on user experience and simplicity
+- Robust backend architecture for scalability
+- Strong security and compliance measures
+- Data-driven decision making through analytics
+- Continuous iteration based on user feedback
+
+The platform’s multi-service approach differentiates it in the market while providing multiple revenue streams and enhanced customer value.
