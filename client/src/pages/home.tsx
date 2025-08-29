@@ -1,8 +1,10 @@
 import HeroSection from "@/components/hero-section";
 import ServiceCards from "@/components/service-cards";
 import RestaurantCard from "@/components/restaurant-card";
+import AIRecommendations from "@/components/ai-recommendations";
+import AIChatbot from "@/components/ai-chatbot";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Star, Download, Users, Bike } from "lucide-react";
+import { ArrowRight, Star, Download, Users, Bike, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +21,24 @@ export default function Home() {
     <div className="min-h-screen" data-testid="home-page">
       <HeroSection />
       <ServiceCards />
+      
+      {/* AI Recommendations Section */}
+      <section className="py-16 bg-gradient-to-br from-orange-50 to-yellow-50" data-testid="ai-recommendations-section">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Sparkles className="h-8 w-8 text-orange-500" />
+              <h2 className="text-4xl font-bold text-foreground">
+                AI-Powered Recommendations
+              </h2>
+            </div>
+            <p className="text-xl text-muted-foreground">
+              Personalized suggestions just for you, powered by Google Gemini AI
+            </p>
+          </div>
+          <AIRecommendations customerId="user-1" />
+        </div>
+      </section>
       
       {/* Featured Restaurants */}
       <section className="py-16 bg-background" data-testid="featured-restaurants-section">
@@ -216,6 +236,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* AI Chatbot - Floating on all pages */}
+      <AIChatbot />
     </div>
   );
 }

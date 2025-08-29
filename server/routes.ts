@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertRestaurantSchema, insertMenuCategorySchema, insertMenuItemSchema, insertOrderSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
+import * as geminiAI from "./services/gemini";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -584,6 +585,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(rider);
     } catch (error) {
       res.status(500).json({ message: "Failed to verify rider" });
+    }
+  });
+
+  // AI-Powered Endpoints
+  
+  // Get personalized recommendations for customer
+  app.post("/api/ai/recommendations", async (req, res) => {
+    try {
+      const { customerId, orderHistory, location } = req.body;
+      const recommendations = await geminiAI.getPersonalizedRecommendations({
+        customerId,
+        orderHistory,
+        currentTime: new Date(),
+        location
+      });
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).json({ message: "Failed to get recommendations" });
+    }
+  });
+
+  // Predict delivery time
+  app.post("/api/ai/predict-delivery", async (req, res) => {
+    try {
+      const { distance, orderItems, restaurantPrepTime, currentTraffic, weatherCondition, timeOfDay } = req.body;
+      const prediction = await geminiAI.predictDeliveryTime(
+        distance,
+        orderItems,
+        restaurantPrepTime || 20,
+        currentTraffic || "medium",
+        weatherCondition || "clear",
+        timeOfDay || new Date().toLocaleTimeString()
+      );
+      res.json(prediction);
+    } catch (error) {
+      console.error("Error predicting delivery time:", error);
+      res.status(500).json({ message: "Failed to predict delivery time" });
+    }
+  });
+
+  // Analyze review sentiment
+  app.post("/api/ai/analyze-sentiment", async (req, res) => {
+    try {
+      const { reviewText } = req.body;
+      const analysis = await geminiAI.analyzeReviewSentiment(reviewText);
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing sentiment:", error);
+      res.status(500).json({ message: "Failed to analyze sentiment" });
+    }
+  });
+
+  // Customer support chatbot
+  app.post("/api/ai/chat-support", async (req, res) => {
+    try {
+      const { query, orderId, orderStatus, customerName } = req.body;
+      const response = await geminiAI.processCustomerQuery(query, {
+        orderId,
+        orderStatus,
+        customerName
+      });
+      res.json(response);
+    } catch (error) {
+      console.error("Error processing chat:", error);
+      res.status(500).json({ message: "Failed to process chat query" });
+    }
+  });
+
+  // Optimize delivery route
+  app.post("/api/ai/optimize-route", async (req, res) => {
+    try {
+      const { pickupLocations, deliveryLocations, riderLocation } = req.body;
+      const optimizedRoute = await geminiAI.optimizeDeliveryRoute(
+        pickupLocations,
+        deliveryLocations,
+        riderLocation
+      );
+      res.json(optimizedRoute);
+    } catch (error) {
+      console.error("Error optimizing route:", error);
+      res.status(500).json({ message: "Failed to optimize route" });
+    }
+  });
+
+  // Predict demand forecast for restaurant
+  app.post("/api/ai/demand-forecast", async (req, res) => {
+    try {
+      const { restaurantId, historicalData, upcomingDays } = req.body;
+      const forecast = await geminiAI.predictDemandForecast(
+        restaurantId,
+        historicalData,
+        upcomingDays || 7
+      );
+      res.json(forecast);
+    } catch (error) {
+      console.error("Error forecasting demand:", error);
+      res.status(500).json({ message: "Failed to forecast demand" });
+    }
+  });
+
+  // Generate promotional content
+  app.post("/api/ai/generate-promo", async (req, res) => {
+    try {
+      const { restaurantName, cuisine, targetAudience, promoType, context } = req.body;
+      const promoContent = await geminiAI.generatePromoContent(
+        restaurantName,
+        cuisine,
+        targetAudience,
+        promoType,
+        context
+      );
+      res.json(promoContent);
+    } catch (error) {
+      console.error("Error generating promo:", error);
+      res.status(500).json({ message: "Failed to generate promo content" });
     }
   });
 
