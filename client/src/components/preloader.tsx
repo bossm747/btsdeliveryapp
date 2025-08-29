@@ -80,13 +80,13 @@ export default function Preloader({ onLoadComplete }: PreloaderProps) {
       
       setPhase("exit");
       
-      // Phase 3: Fast exit to right (0.3 seconds)
+      // Phase 3: Extended exit to right (1.2 seconds for visibility)
       await next({ 
         x: window.innerWidth + 300,
         scale: 0.6,
         opacity: 0,
         rotate: 720,
-        config: { duration: 300, easing: t => t * t } // Fast acceleration
+        config: { duration: 1200, easing: t => t * t * t } // Slower for visibility
       });
       
       setPhase("complete");

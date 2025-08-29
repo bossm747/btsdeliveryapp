@@ -53,7 +53,7 @@ function App() {
       if (showPreloader) {
         handleLoadComplete();
       }
-    }, 4000); // Maximum 4 seconds
+    }, 6000); // Maximum 6 seconds for extended animation
     
     // Skip preloader if already visited in this session
     const hasVisited = sessionStorage.getItem('hasVisited');

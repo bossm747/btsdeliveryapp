@@ -38,7 +38,7 @@ export default function MobileNav() {
                     "h-5 w-5 transition-transform",
                     isActive && "scale-110"
                   )} />
-                  {item.badge > 0 && (
+                  {item.badge && item.badge > 0 && (
                     <Badge 
                       className="absolute -top-2 -right-2 h-4 min-w-4 p-0 flex items-center justify-center text-[10px] bg-red-500 text-white"
                     >
