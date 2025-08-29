@@ -12,8 +12,12 @@ import {
   insertRiderAssignmentQueueSchema,
   insertRiderPerformanceMetricsSchema,
   type RiderLocationHistory,
-  type RiderAssignmentQueue
+  type RiderAssignmentQueue,
+  riders,
+  users
 } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
+import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import * as geminiAI from "./services/gemini";
@@ -754,19 +758,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Rider Routes
   app.get("/api/rider/profile", async (req, res) => {
     try {
-      // Mock rider profile for now
+      // Use raw connection to avoid schema issues
+      const result = await pool.query(`
+        SELECT 
+          r.id,
+          r.user_id,
+          r.vehicle_type,
+          r.license_number,
+          r.vehicle_plate,
+          r.is_online,
+          r.current_location,
+          r.rating,
+          r.total_deliveries,
+          r.earnings_balance,
+          r.is_verified,
+          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, 'Rider') as user_name
+        FROM riders r
+        INNER JOIN users u ON r.user_id = u.id
+        LIMIT 1
+      `);
+
+      if (!result.rows || result.rows.length === 0) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+
+      const rider = result.rows[0] as any;
+      
       const riderProfile = {
-        id: "rider-1",
-        name: "Juan Dela Cruz",
-        vehicleType: "motorcycle",
-        rating: 4.8,
-        totalDeliveries: 523,
-        earningsBalance: 2450.50,
-        isOnline: false,
-        isVerified: true
+        id: rider.id,
+        name: rider.user_name || "Juan Dela Cruz",
+        vehicleType: rider.vehicle_type,
+        licenseNumber: rider.license_number,
+        vehiclePlate: rider.vehicle_plate,
+        rating: parseFloat(rider.rating?.toString() || "0"),
+        totalDeliveries: rider.total_deliveries || 0,
+        earningsBalance: parseFloat(rider.earnings_balance?.toString() || "0"),
+        isOnline: rider.is_online || false,
+        isVerified: rider.is_verified || false,
+        currentLocation: rider.current_location
       };
+      
       res.json(riderProfile);
     } catch (error) {
+      console.error("Error fetching rider profile:", error);
       res.status(500).json({ message: "Failed to fetch rider profile" });
     }
   });
@@ -794,9 +828,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/rider/status", async (req, res) => {
     try {
       const { isOnline, currentLocation } = req.body;
-      // Update rider status
-      res.json({ success: true, isOnline });
+      
+      // Update the first available rider (in production, use proper authentication)
+      const [rider] = await db.select().from(riders).limit(1);
+      
+      if (!rider) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+
+      const updateData: any = { isOnline };
+      
+      if (currentLocation) {
+        updateData.currentLocation = currentLocation;
+      }
+
+      await db
+        .update(riders)
+        .set(updateData)
+        .where(eq(riders.id, rider.id));
+      
+      res.json({ success: true, isOnline, riderId: rider.id });
     } catch (error) {
+      console.error("Error updating rider status:", error);
       res.status(500).json({ message: "Failed to update status" });
     }
   });

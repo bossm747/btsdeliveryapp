@@ -86,7 +86,6 @@ export const riders = pgTable("riders", {
   vehiclePlate: varchar("vehicle_plate", { length: 20 }),
   isOnline: boolean("is_online").default(false),
   currentLocation: jsonb("current_location"), // {lat, lng, accuracy, timestamp}
-  lastLocationUpdate: timestamp("last_location_update"),
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   totalDeliveries: integer("total_deliveries").default(0),
   completedDeliveries: integer("completed_deliveries").default(0),
