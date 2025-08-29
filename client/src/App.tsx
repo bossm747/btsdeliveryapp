@@ -24,9 +24,10 @@ import Pabayad from "@/pages/pabayad";
 import Parcel from "@/pages/parcel";
 
 // Role-specific dashboards
+import CustomerDashboard from "@/pages/customer-dashboard";
 import RiderDashboard from "@/pages/rider-dashboard";
-import VendorDashboard from "@/pages/vendor-dashboard";
-import AdminDashboard from "@/pages/admin-dashboard";
+import VendorDashboard from "@/pages/vendor-dashboard-mobile";
+import AdminDashboard from "@/pages/admin-dashboard-mobile";
 
 // Customer layout components
 import Navbar from "@/components/navbar";
@@ -85,10 +86,12 @@ function Router() {
         )}
       </Route>
 
-      {/* Customer Dashboard - redirects to home */}
+      {/* Customer Dashboard */}
       <Route path="/customer-dashboard">
         <ProtectedRoute allowedRoles={["customer"]}>
-          <Redirect to="/home" />
+          <DashboardLayout>
+            <CustomerDashboard />
+          </DashboardLayout>
         </ProtectedRoute>
       </Route>
 

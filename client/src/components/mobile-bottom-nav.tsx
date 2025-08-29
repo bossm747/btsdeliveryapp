@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { 
-  Home, Search, ShoppingBag, User, MapPin, Truck, 
-  Navigation, Package, BarChart3, Bell, Settings 
+  Home, Search, ShoppingBag, User, Package
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/hooks/use-cart";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   icon: any;
@@ -13,154 +12,40 @@ interface NavItem {
   path: string;
   active: boolean;
   badge?: number | null;
-  tabAction?: string;
 }
 
 export default function MobileBottomNav() {
   const [location] = useLocation();
+  const { user } = useAuth();
   const { getTotalItems } = useCart();
   const cartItemCount = getTotalItems();
 
-  // Determine user context based on current route
-  const isRiderDashboard = location.includes("/rider-dashboard");
-  const isAdminDashboard = location.includes("/admin-dashboard") || location.includes("/admin-riders") || location.includes("/bts-dashboard");
-  const isVendorDashboard = location.includes("/vendor-dashboard");
+  // Don't show navigation on role-specific dashboards as they have their own
+  const isDashboardRoute = location.includes("/customer-dashboard") || 
+                          location.includes("/rider-dashboard") || 
+                          location.includes("/vendor-dashboard") || 
+                          location.includes("/admin-dashboard");
+  
+  if (isDashboardRoute) {
+    return null; // Role-specific dashboards handle their own navigation
+  }
 
-  // Track active rider tab - sync with rider dashboard default
-  const [activeRiderTab, setActiveRiderTab] = useState("map");
+  // Only show for customer routes
+  const isCustomerRoute = user?.role === "customer";
 
-  useEffect(() => {
-    const handleTabChange = (event: CustomEvent) => {
-      setActiveRiderTab(event.detail.tab);
-    };
-
-    window.addEventListener('riderTabChange', handleTabChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('riderTabChange', handleTabChange as EventListener);
-    };
-  }, []);
-
-  // Rider navigation items - mapped to match rider dashboard tabs
-  const riderNavItems: NavItem[] = [
-    {
-      icon: Navigation,
-      label: "Live Map",
-      path: "/rider-dashboard",
-      active: activeRiderTab === "map",
-      tabAction: "map"
-    },
-    {
-      icon: Package,
-      label: "Active",
-      path: "/rider-dashboard",
-      active: activeRiderTab === "active",
-      tabAction: "active"
-    },
-    {
-      icon: BarChart3,
-      label: "Earnings",
-      path: "/rider-dashboard",
-      active: activeRiderTab === "earnings",
-      tabAction: "earnings"
-    },
-    {
-      icon: Bell,
-      label: "Notifications",
-      path: "/rider-dashboard",
-      active: activeRiderTab === "notifications",
-      tabAction: "notifications"
-    },
-    {
-      icon: User,
-      label: "History",
-      path: "/rider-dashboard",
-      active: activeRiderTab === "history",
-      tabAction: "history"
-    }
-  ];
-
-  // Admin navigation items
-  const adminNavItems: NavItem[] = [
-    {
-      icon: BarChart3,
-      label: "Dashboard",
-      path: "/admin-dashboard",
-      active: location === "/admin-dashboard"
-    },
-    {
-      icon: Truck,
-      label: "Riders",
-      path: "/admin-riders",
-      active: location === "/admin-riders"
-    },
-    {
-      icon: Package,
-      label: "Orders",
-      path: "/admin-dashboard",
-      active: false
-    },
-    {
-      icon: MapPin,
-      label: "Tracking",
-      path: "/bts-dashboard",
-      active: location === "/bts-dashboard"
-    },
-    {
-      icon: Settings,
-      label: "Settings",
-      path: "/admin-dashboard",
-      active: false
-    }
-  ];
-
-  // Vendor navigation items
-  const vendorNavItems: NavItem[] = [
-    {
-      icon: Home,
-      label: "Dashboard",
-      path: "/vendor-dashboard",
-      active: location === "/vendor-dashboard"
-    },
-    {
-      icon: Package,
-      label: "Orders",
-      path: "/vendor-dashboard",
-      active: false
-    },
-    {
-      icon: Search,
-      label: "Menu",
-      path: "/vendor-dashboard",
-      active: false
-    },
-    {
-      icon: BarChart3,
-      label: "Analytics",
-      path: "/vendor-dashboard",
-      active: false
-    },
-    {
-      icon: Settings,
-      label: "Settings",
-      path: "/vendor-dashboard",
-      active: false
-    }
-  ];
-
-  // Default customer navigation items
+  // Customer navigation items only
   const customerNavItems: NavItem[] = [
     {
       icon: Home,
       label: "Home",
-      path: "/",
-      active: location === "/" || location === ""
+      path: "/home",
+      active: location === "/home"
     },
     {
       icon: Search,
-      label: "Search",
+      label: "Restaurants",
       path: "/restaurants",
-      active: location.includes("/restaurants") || location.includes("/restaurant/")
+      active: location.includes("/restaurant")
     },
     {
       icon: ShoppingBag,
@@ -170,105 +55,56 @@ export default function MobileBottomNav() {
       badge: cartItemCount > 0 ? cartItemCount : null
     },
     {
-      icon: MapPin,
+      icon: Package,
       label: "Orders",
       path: "/customer-orders",
-      active: location === "/customer-orders" || location.includes("/order/")
+      active: location.includes("/customer-orders") || location.includes("/order-tracking")
     },
     {
       icon: User,
       label: "Profile",
-      path: "/profile",
-      active: location === "/profile"
+      path: "/customer-dashboard",
+      active: location === "/customer-dashboard"
     }
   ];
 
-  // Select appropriate navigation items based on context
-  let navItems = customerNavItems;
-  if (isRiderDashboard) {
-    navItems = riderNavItems;
-  } else if (isAdminDashboard) {
-    navItems = adminNavItems;
-  } else if (isVendorDashboard) {
-    navItems = vendorNavItems;
+  // Only show for customer routes and not on dashboard routes
+  if (!isCustomerRoute) {
+    return null;
   }
 
   return (
-    <div className="mobile-bottom-nav-container">
-      {/* Enhanced gradient background with glassmorphism - consistent with navbar */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#004225]/90 via-[#004225]/85 to-[#004225]/80 backdrop-blur-xl"></div>
-      <div className="absolute inset-0 bg-gradient-to-r from-[#FF6B35]/10 via-transparent to-[#FFD23F]/10"></div>
-      <div className="absolute inset-0 bts-shimmer opacity-20"></div>
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#FF6B35] via-[#FFD23F] to-[#FF6B35]"></div>
-      
-      {/* Navigation content */}
-      <nav className="relative z-10 flex items-center justify-around px-2 py-2 safe-area-pb mobile-no-select">
-        {navItems.map((item, index) => {
-          const IconComponent = item.icon;
-          
-          const handleClick = (e: React.MouseEvent) => {
-            if (item.tabAction && isRiderDashboard) {
-              e.preventDefault();
-              // Trigger tab change event for rider dashboard
-              const tabEvent = new CustomEvent('riderTabChange', { 
-                detail: { tab: item.tabAction } 
-              });
-              window.dispatchEvent(tabEvent);
-            }
-          };
+    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe-bottom">
+      <div className="grid grid-cols-5 text-center">
+        {customerNavItems.map((item) => {
+          const Icon = item.icon;
           
           return (
-            <Link key={item.path + (item.tabAction || '')} href={item.path}>
-              <div 
-                className={`relative flex flex-col items-center p-3 rounded-2xl transition-all duration-200 min-w-[64px] touch-manipulation ${
-                  item.active 
-                    ? 'bg-gradient-to-b from-[#FFD23F]/30 to-[#FF6B35]/20 shadow-lg scale-105 border border-[#FFD23F]/40' 
-                    : 'hover:bg-[#FFD23F]/10 active:scale-95 active:bg-[#FF6B35]/15'
-                }`}
-                onClick={handleClick}
-              >
-                
-                {/* Icon container with glow effect */}
-                <div className={`relative p-2 rounded-xl transition-all duration-300 ${
-                  item.active ? 'bg-gradient-to-br from-[#FFD23F]/20 to-[#FF6B35]/20 shadow-lg' : ''
-                }`}>
-                  <IconComponent 
-                    className={`h-6 w-6 transition-all duration-300 ${
-                      item.active 
-                        ? 'text-[#FFD23F] drop-shadow-[0_2px_8px_rgba(255,210,63,0.8)]' 
-                        : 'text-white/90 hover:text-[#FFD23F]/80'
-                    }`}
-                  />
-                  
-                  {/* Badge for cart count */}
+            <Link key={item.label} href={item.path}>
+              <div className={`py-3 px-1 transition-colors ${
+                item.active 
+                  ? 'text-[#FF6B35] bg-orange-50' 
+                  : 'text-gray-600 hover:text-[#FF6B35]'
+              }`}>
+                <div className="relative">
+                  <Icon className={`w-5 h-5 mx-auto mb-1 ${
+                    item.active ? 'text-[#FF6B35]' : ''
+                  }`} />
                   {item.badge && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-[#FF6B35] text-white text-xs bts-glow-accent">
-                      {item.badge > 99 ? '99+' : item.badge}
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-2 -right-2 w-4 h-4 p-0 text-xs flex items-center justify-center"
+                    >
+                      {item.badge}
                     </Badge>
                   )}
                 </div>
-                
-                {/* Label with gradient text */}
-                <span className={`text-xs font-medium mt-1 transition-all duration-300 ${
-                  item.active 
-                    ? 'text-[#FFD23F] font-bold drop-shadow-[0_1px_4px_rgba(255,210,63,0.8)]' 
-                    : 'text-white/80 hover:text-white'
-                }`}>
-                  {item.label}
-                </span>
-                
-                {/* Enhanced active indicator */}
-                {item.active && (
-                  <div className="absolute -bottom-1 w-8 h-0.5 rounded-full bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] shadow-lg drop-shadow-[0_2px_6px_rgba(255,210,63,0.6)]"></div>
-                )}
+                <div className="text-xs font-medium">{item.label}</div>
               </div>
             </Link>
           );
         })}
-      </nav>
-      
-      {/* Safe area bottom spacing for iOS */}
-      <div className="h-safe-area-inset-bottom bg-transparent"></div>
+      </div>
     </div>
   );
 }
