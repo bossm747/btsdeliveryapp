@@ -1,258 +1,331 @@
-import HeroSection from "@/components/hero-section";
-import ServiceCards from "@/components/service-cards";
-import RestaurantCard from "@/components/restaurant-card";
-import AIRecommendations from "@/components/ai-recommendations";
-import AdvancedChatbot from "@/components/advanced-chatbot";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Star, Download, Users, Bike, Sparkles } from "lucide-react";
-import { Link } from "wouter";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { MapPin, Search, Bell, ChevronRight, Clock, Star, Sparkles } from "lucide-react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Restaurant } from "@shared/schema";
+import MobileNav from "@/components/mobile-nav";
+import PWAInstall from "@/components/pwa-install";
 
 export default function Home() {
+  const [searchQuery, setSearchQuery] = useState("");
   const { data: restaurants, isLoading } = useQuery<Restaurant[]>({
     queryKey: ["/api/restaurants"],
   });
 
   const featuredRestaurants = restaurants?.filter(r => r.isFeatured).slice(0, 6) || [];
 
+  const services = [
+    { 
+      name: "Food", 
+      icon: "🍔", 
+      path: "/restaurants",
+      color: "bg-orange-100",
+      description: "Order from restaurants"
+    },
+    { 
+      name: "Pabili", 
+      icon: "🛒", 
+      path: "/pabili",
+      color: "bg-green-100",
+      description: "Shopping service"
+    },
+    { 
+      name: "Pabayad", 
+      icon: "💳", 
+      path: "/pabayad",
+      color: "bg-blue-100",
+      description: "Bills payment"
+    },
+    { 
+      name: "Padala", 
+      icon: "📦", 
+      path: "/parcel",
+      color: "bg-purple-100",
+      description: "Send parcels"
+    },
+    { 
+      name: "Mart", 
+      icon: "🏪", 
+      path: "/mart",
+      color: "bg-yellow-100",
+      description: "Grocery shopping"
+    },
+    { 
+      name: "Express", 
+      icon: "🚚", 
+      path: "/express",
+      color: "bg-red-100",
+      description: "Express delivery"
+    }
+  ];
+
+  const categories = [
+    { name: "All", emoji: "🍽️", active: true },
+    { name: "Fast Food", emoji: "🍟" },
+    { name: "Pizza", emoji: "🍕" },
+    { name: "Filipino", emoji: "🥘" },
+    { name: "Chicken", emoji: "🍗" },
+    { name: "Coffee", emoji: "☕" },
+    { name: "Desserts", emoji: "🍰" },
+    { name: "Healthy", emoji: "🥗" }
+  ];
+
+  const promos = [
+    {
+      title: "50% OFF First Order",
+      subtitle: "New users only",
+      color: "from-orange-400 to-red-500",
+      emoji: "🎉"
+    },
+    {
+      title: "Free Delivery",
+      subtitle: "Min. order ₱500",
+      color: "from-green-400 to-emerald-500",
+      emoji: "🚚"
+    },
+    {
+      title: "Cashback ₱100",
+      subtitle: "Use GCash payment",
+      color: "from-blue-400 to-purple-500",
+      emoji: "💰"
+    }
+  ];
+
   return (
-    <div className="min-h-screen" data-testid="home-page">
-      <HeroSection />
-      <ServiceCards />
-      
-      {/* AI Recommendations Section */}
-      <section className="py-16 bg-gradient-to-br from-orange-50 to-yellow-50" data-testid="ai-recommendations-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Sparkles className="h-8 w-8 text-orange-500" />
-              <h2 className="text-4xl font-bold text-foreground">
-                AI-Powered Recommendations
-              </h2>
-            </div>
-            <p className="text-xl text-muted-foreground">
-              Personalized suggestions just for you, powered by Innovatehub AI "Pareng Boyong"
-            </p>
-          </div>
-          <AIRecommendations customerId="user-1" />
-        </div>
-      </section>
-      
-      {/* Featured Restaurants */}
-      <section className="py-16 bg-background" data-testid="featured-restaurants-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-12">
-            <div>
-              <h2 className="text-4xl font-bold text-foreground mb-4" data-testid="featured-restaurants-title">
-                Mga Sikat na Restaurants
-              </h2>
-              <p className="text-xl text-muted-foreground">
-                Mga pinakakasikatan sa buong Batangas Province
-              </p>
-            </div>
-            <Link href="/restaurants">
-              <Button variant="ghost" className="text-primary font-semibold hover:text-primary/80" data-testid="view-all-restaurants">
-                Tignan Lahat <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0" data-testid="home-page">
+      {/* Mobile Header - Fixed */}
+      <header className="sticky top-0 z-40 bg-white shadow-sm">
+        {/* Location Bar */}
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <Link href="/location">
+              <button className="flex items-center gap-2 flex-1" data-testid="button-location">
+                <MapPin className="h-5 w-5 text-orange-500" />
+                <div className="text-left">
+                  <p className="text-xs text-gray-500">Deliver to</p>
+                  <p className="text-sm font-semibold truncate">Batangas City, Batangas</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 ml-auto" />
+              </button>
+            </Link>
+            <Link href="/notifications">
+              <button className="ml-3 p-2 relative" data-testid="button-notifications">
+                <Bell className="h-5 w-5 text-gray-600" />
+                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+              </button>
             </Link>
           </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {isLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="space-y-3">
-                  <Skeleton className="h-48 w-full rounded-xl" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ))
-            ) : featuredRestaurants.length > 0 ? (
-              featuredRestaurants.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <p className="text-muted-foreground text-lg">No featured restaurants available at the moment.</p>
-                <Link href="/restaurants">
-                  <Button className="mt-4">Browse All Restaurants</Button>
-                </Link>
-              </div>
-            )}
+        </div>
+
+        {/* Search Bar */}
+        <div className="px-4 py-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search for food, shops, or services"
+              className="pl-10 pr-4 h-10 bg-gray-50 border-gray-200"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              data-testid="input-search"
+            />
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* For Riders Section */}
-      <section className="py-16 bg-white" data-testid="riders-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Para sa mga Riders</h2>
-            <p className="text-xl text-muted-foreground">Kumita habang nagse-serve sa community</p>
+      {/* Main Content */}
+      <main className="pb-4">
+        {/* Services Grid */}
+        <section className="px-4 py-4">
+          <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+            {services.map((service) => (
+              <Link key={service.path} href={service.path}>
+                <div className="flex flex-col items-center p-3 rounded-xl hover:shadow-md transition-shadow bg-white">
+                  <div className={`w-14 h-14 rounded-xl ${service.color} flex items-center justify-center mb-2`}>
+                    <span className="text-2xl">{service.icon}</span>
+                  </div>
+                  <span className="text-xs font-medium text-gray-700">{service.name}</span>
+                </div>
+              </Link>
+            ))}
           </div>
-          
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <div className="space-y-6">
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <span className="text-primary text-xl">₱</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">Competitive Earnings</h3>
-                    <p className="text-muted-foreground">Earn ₱500-₱1,500 per day with flexible working hours</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center">
-                    <span className="text-secondary text-xl">🛣️</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">Smart Route Planning</h3>
-                    <p className="text-muted-foreground">GPS-powered navigation for efficient deliveries</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
-                    <span className="text-accent text-xl">🛡️</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">Insurance Coverage</h3>
-                    <p className="text-muted-foreground">Protected while on duty with comprehensive insurance</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-6">
-              <img 
-                src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600" 
-                alt="Filipino delivery rider on motorcycle" 
-                className="rounded-2xl shadow-xl w-full h-auto"
-              />
-              
-              <div className="text-center">
-                <Button className="bg-primary text-white px-8 py-4 text-lg hover:bg-primary/90" data-testid="become-rider-button">
-                  Maging Rider Ngayon
-                </Button>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Requirements: Valid license, motorcycle, smartphone
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Local Business Support */}
-      <section className="py-16 bg-background" data-testid="local-business-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Supporting Local Batangas Businesses</h2>
-            <p className="text-xl text-muted-foreground">Proudly serving authentic Batangueño establishments</p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300",
-                title: "Traditional Eateries",
-                description: "Authentic Batangueño flavors from family-owned restaurants"
-              },
-              {
-                image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300",
-                title: "Coffee Shops",
-                description: "Local barako coffee and specialty drinks"
-              },
-              {
-                image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300",
-                title: "Bakeries",
-                description: "Fresh pandesal and Filipino pastries daily"
-              },
-              {
-                image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300",
-                title: "Market Vendors",
-                description: "Fresh produce and local specialties"
-              }
-            ].map((business, index) => (
-              <div key={business.title} className="text-center space-y-4" data-testid={`business-${index}`}>
-                <img 
-                  src={business.image} 
-                  alt={business.title}
-                  className="w-full h-48 object-cover rounded-xl shadow-lg"
-                />
-                <h3 className="font-bold text-foreground">{business.title}</h3>
-                <p className="text-sm text-muted-foreground">{business.description}</p>
+        {/* Promotions Carousel */}
+        <section className="px-4 py-4">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+            {promos.map((promo, index) => (
+              <div
+                key={index}
+                className={`min-w-[280px] p-4 rounded-xl bg-gradient-to-r ${promo.color} text-white`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-lg mb-1">{promo.title}</h3>
+                    <p className="text-sm opacity-90">{promo.subtitle}</p>
+                  </div>
+                  <span className="text-3xl">{promo.emoji}</span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Get Started CTA */}
-      <section className="py-16 hero-gradient text-white" data-testid="get-started-section">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl lg:text-5xl font-bold mb-6">
-            Ready to Experience BTS Delivery?
-          </h2>
-          <p className="text-xl text-white/90 mb-8">
-            Join thousands of satisfied customers across Batangas Province
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Link href="/restaurants">
-              <Button className="bg-white text-primary px-8 py-4 text-lg hover:bg-white/90" data-testid="order-now-button">
-                <ArrowRight className="mr-2 h-5 w-5" />
-                <div className="text-left">
-                  <div className="text-xs">Start Ordering</div>
-                  <div className="text-lg font-bold">Order Now</div>
-                </div>
+        {/* Categories */}
+        <section className="px-4 py-4">
+          <h2 className="text-lg font-bold mb-3">Categories</h2>
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+            {categories.map((category) => (
+              <button
+                key={category.name}
+                className={`flex flex-col items-center min-w-[70px] p-3 rounded-xl transition-colors ${
+                  category.active ? 'bg-orange-100 border-orange-300' : 'bg-white'
+                } border`}
+                data-testid={`category-${category.name.toLowerCase()}`}
+              >
+                <span className="text-2xl mb-1">{category.emoji}</span>
+                <span className="text-xs font-medium">{category.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* AI Recommendations */}
+        <section className="px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-orange-500" />
+              <h2 className="text-lg font-bold">AI Recommendations</h2>
+            </div>
+            <Link href="/ai-recommendations">
+              <Button variant="ghost" size="sm" className="text-orange-500">
+                See all
               </Button>
             </Link>
-            
-            <Button 
-              className="bg-black/20 backdrop-blur text-white border border-white/30 px-8 py-4 text-lg hover:bg-black/30" 
-              data-testid="save-webapp-button"
-              onClick={() => {
-                alert("Add to Home Screen: On your mobile browser, tap the Share button and select 'Add to Home Screen' to install BTS Delivery as a web app!");
-              }}
-            >
-              <Download className="mr-2 h-5 w-5" />
-              <div className="text-left">
-                <div className="text-xs">Save as Web App</div>
-                <div className="text-lg font-bold">Install PWA</div>
+          </div>
+          
+          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 border border-orange-100">
+            <p className="text-sm text-gray-700 mb-2">Powered by Innovatehub AI "Pareng Boyong"</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 bg-white rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <span>🍗</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Jollibee Batangas</p>
+                    <p className="text-xs text-gray-500">95% match • Fast delivery</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400" />
               </div>
-            </Button>
-          </div>
-          
-          <div className="mb-8">
-            <p className="text-white/80 text-sm">
-              ✓ No app download needed • ✓ Works on any device • ✓ Always up-to-date
-            </p>
-          </div>
-          
-          <div className="flex items-center justify-center space-x-8 text-white/80">
-            <div className="flex items-center space-x-2">
-              <Users className="h-5 w-5" />
-              <span>50K+ Users</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Star className="h-5 w-5" />
-              <span>4.8 Rating</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Bike className="h-5 w-5" />
-              <span>1000+ Riders</span>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Advanced AI Chatbot - Floating on all pages */}
-      <AdvancedChatbot />
+        {/* Popular Restaurants */}
+        <section className="px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold">Popular Near You</h2>
+            <Link href="/restaurants">
+              <Button variant="ghost" size="sm" className="text-orange-500">
+                See all
+              </Button>
+            </Link>
+          </div>
+          
+          <div className="space-y-3">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="p-3">
+                  <div className="flex gap-3">
+                    <Skeleton className="w-20 h-20 rounded-lg" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : featuredRestaurants.length > 0 ? (
+              featuredRestaurants.map((restaurant) => (
+                <Link key={restaurant.id} href={`/restaurant/${restaurant.id}`}>
+                  <Card className="p-3 hover:shadow-md transition-shadow">
+                    <div className="flex gap-3">
+                      <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">🍽️</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-sm">{restaurant.name}</h3>
+                        <p className="text-xs text-gray-500 mt-1">{restaurant.cuisine}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                            <span className="text-xs font-medium">{restaurant.rating || 4.5}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">{restaurant.deliveryTime || '25-35'} min</span>
+                          </div>
+                          {restaurant.isFeatured && (
+                            <Badge className="text-[10px] px-1.5 py-0 h-4 bg-orange-100 text-orange-600">
+                              Featured
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              ))
+            ) : (
+              <Card className="p-8 text-center">
+                <p className="text-gray-500">No restaurants available in your area</p>
+                <Link href="/restaurants">
+                  <Button className="mt-4">Browse All Restaurants</Button>
+                </Link>
+              </Card>
+            )}
+          </div>
+        </section>
+
+        {/* Recommended Dishes */}
+        <section className="px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold">Try Something New</h2>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { name: "Chickenjoy", restaurant: "Jollibee", price: "₱89", emoji: "🍗" },
+              { name: "Hawaiian Pizza", restaurant: "Greenwich", price: "₱299", emoji: "🍕" },
+              { name: "PM2 Inasal", restaurant: "Mang Inasal", price: "₱139", emoji: "🍖" },
+              { name: "Sisig Bowl", restaurant: "Max's", price: "₱175", emoji: "🥘" }
+            ].map((dish, index) => (
+              <Card key={index} className="p-3">
+                <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
+                  <span className="text-3xl">{dish.emoji}</span>
+                </div>
+                <h4 className="font-medium text-sm">{dish.name}</h4>
+                <p className="text-xs text-gray-500">{dish.restaurant}</p>
+                <p className="text-sm font-bold text-orange-500 mt-1">{dish.price}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileNav />
+      
+      {/* PWA Install Prompt */}
+      <PWAInstall />
     </div>
   );
 }

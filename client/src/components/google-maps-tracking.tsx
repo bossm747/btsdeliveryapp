@@ -516,6 +516,14 @@ export default function GoogleMapsTracking({
           <LoadScript
             googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ""}
             libraries={libraries}
+            loadingElement={
+              <div className="flex items-center justify-center h-[500px] bg-gray-100">
+                <RefreshCw className="h-8 w-8 animate-spin text-orange-500" />
+              </div>
+            }
+            onError={(error) => {
+              console.error("Google Maps loading error:", error);
+            }}
           >
             <GoogleMap
               mapContainerStyle={containerStyle}
