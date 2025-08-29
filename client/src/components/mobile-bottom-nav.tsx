@@ -43,7 +43,7 @@ export default function MobileBottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bts-glass border-t border-border/50 shadow-2xl">
+    <div className="mobile-bottom-nav-fixed md:hidden bts-glass border-t border-border/50 shadow-2xl">
       {/* Enhanced gradient background with glassmorphism - consistent with navbar */}
       <div className="absolute inset-0 bg-gradient-to-t from-[#004225]/90 via-[#004225]/85 to-[#004225]/80 backdrop-blur-xl"></div>
       <div className="absolute inset-0 bg-gradient-to-r from-[#FF6B35]/10 via-transparent to-[#FFD23F]/10"></div>

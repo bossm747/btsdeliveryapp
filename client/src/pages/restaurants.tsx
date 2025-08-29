@@ -131,7 +131,7 @@ export default function Restaurants() {
         )}
 
         {!isLoading && filteredRestaurants.length > 0 && (
-          <div className="text-center mt-8" data-testid="results-count">
+          <div className="text-center mt-8 mb-8" data-testid="results-count">
             <p className="text-muted-foreground">
               Showing {filteredRestaurants.length} of {restaurants?.length || 0} restaurants
             </p>

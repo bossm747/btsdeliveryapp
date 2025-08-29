@@ -71,6 +71,43 @@
   height: env(safe-area-inset-bottom, 0);
 }
 
+/* Global mobile page spacing to ensure content is never hidden */
+@media (max-width: 768px) {
+  /* Force all page containers to have bottom spacing */
+  .min-h-screen {
+    padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  
+  /* Ensure last content elements have extra margin */
+  .page-container > *:last-child,
+  .section-container > *:last-child,
+  div[data-testid] > *:last-child {
+    margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  
+  /* Ensure scroll end position is above navigation */
+  html {
+    scroll-padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  /* Ensure bottom navigation stays truly fixed */
+  .mobile-bottom-nav-fixed {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 50 !important;
+  }
+  
+  /* Apply extra bottom margin to common content containers */
+  [data-testid$="-grid"]:last-child,
+  [data-testid$="-results"]:last-child,
+  [data-testid$="-list"]:last-child,
+  [data-testid$="-content"]:last-child {
+    margin-bottom: calc(32px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 /* Enhanced mobile native app styles */
 @media (max-width: 768px) {
   /* Remove all scrollbars on mobile for native feel */
@@ -121,13 +158,19 @@
   
   /* Ensure last elements in sections are properly visible */
   section:last-child,
-  div:last-child {
-    margin-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  .section-content:last-child,
+  .page-content:last-child {
+    margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
   
   /* Mobile page content wrapper */
   .mobile-safe-bottom {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  /* Ensure all page content has proper bottom spacing */
+  .pb-safe-bottom {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 }
 
