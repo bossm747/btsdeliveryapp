@@ -641,7 +641,7 @@ export default function RiderDashboard() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0 pb-20 md:pb-0">
+      <div className="flex-1 lg:ml-0 pb-0">
         {/* Header - Native Mobile Style */}
         <div className="bg-gradient-to-br from-white via-white to-gray-50/50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-900/50 border-b border-gray-100 dark:border-gray-700 px-4 lg:px-6 py-3 lg:py-4">
           <div className="flex items-center justify-between">
@@ -700,14 +700,14 @@ export default function RiderDashboard() {
           </div>
         </div>
 
-        {/* Content Area - Native Mobile Style */}
-        <div className="p-4 lg:p-6 pb-20 lg:pb-6 overflow-y-auto">
+        {/* Content Area - Responsive Style */}
+        <div className="p-4 lg:p-6 pb-20 md:pb-6 overflow-y-auto">
           {renderMainContent()}
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation - Native App Style */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
+      {/* Mobile Bottom Navigation - Native App Style - MOBILE ONLY */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
         <div className="grid grid-cols-6 py-2">
           {[
             { id: 'map', icon: MapPin, label: 'Live', color: 'text-blue-500' },
