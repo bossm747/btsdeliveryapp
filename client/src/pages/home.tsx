@@ -11,6 +11,13 @@ import type { Restaurant } from "@shared/schema";
 import MobileNav from "@/components/mobile-nav";
 import PWAInstall from "@/components/pwa-install";
 
+// Import generated images
+import foodSpreadImg from "@/assets/generated/food-spread.jpg";
+import pabiliServiceImg from "@/assets/generated/pabili-service.jpg";
+import pabayad ServiceImg from "@/assets/generated/pabayad-service.jpg";
+import parcelDeliveryImg from "@/assets/generated/parcel-delivery.jpg";
+import deliveryHeroImg from "@/assets/generated/delivery-hero.jpg";
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const { data: restaurants, isLoading } = useQuery<Restaurant[]>({
