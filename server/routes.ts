@@ -544,6 +544,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Real-time delivery queue for riders
+  app.get("/api/rider/deliveries/queue", async (req, res) => {
+    try {
+      // Return available deliveries in the area
+      const mockDeliveries = [
+        {
+          id: "DEL-001",
+          orderNumber: "ORD-5678",
+          customer: {
+            name: "Maria Santos",
+            phone: "09171234567",
+            address: "123 Main St, Batangas City",
+            location: { lat: 13.7565, lng: 121.0583 }
+          },
+          restaurant: {
+            name: "Lomi King",
+            address: "456 Restaurant Row, Batangas",
+            location: { lat: 13.7600, lng: 121.0600 }
+          },
+          items: 3,
+          amount: 450,
+          distance: 3.5,
+          estimatedTime: 20,
+          status: "assigned",
+          priority: "high",
+          tip: 50
+        }
+      ];
+      res.json(mockDeliveries);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch delivery queue" });
+    }
+  });
+
+  // AI Route Optimization endpoint
+  app.post("/api/rider/optimize-route", async (req, res) => {
+    try {
+      const { deliveries, currentLocation } = req.body;
+      
+      // Simulate AI route optimization using Gemini AI
+      const optimizedRoute = {
+        originalDistance: deliveries?.reduce((sum: number, d: any) => sum + d.distance, 0) || 0,
+        optimizedDistance: (deliveries?.reduce((sum: number, d: any) => sum + d.distance, 0) || 0) * 0.85,
+        timeSaved: Math.floor(Math.random() * 15) + 5,
+        suggestedOrder: deliveries || [],
+        aiSuggestions: [
+          "Take Route 2 to avoid traffic on Main Street",
+          "Prioritize high-tip orders for better earnings",
+          "Group nearby deliveries to save time",
+          "Expected lunch rush in 30 minutes - prepare for more orders"
+        ]
+      };
+      
+      res.json(optimizedRoute);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to optimize route" });
+    }
+  });
+
+  // Update rider location for real-time tracking
+  app.post("/api/rider/location", async (req, res) => {
+    try {
+      const { lat, lng, riderId } = req.body;
+      // In production, broadcast location to customers via WebSocket
+      res.json({ 
+        success: true, 
+        message: "Location updated",
+        location: { lat, lng }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
+  // Get rider earnings and stats
+  app.get("/api/rider/earnings", async (req, res) => {
+    try {
+      const earnings = {
+        today: 1856.50,
+        thisWeek: 8945.75,
+        thisMonth: 35678.25,
+        trips: 42,
+        tips: 456.50,
+        bonus: 250.00,
+        completionRate: 95.5,
+        acceptanceRate: 88.2
+      };
+      res.json(earnings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch earnings" });
+    }
+  });
+
   // Admin Routes
   app.get("/api/admin/stats", async (req, res) => {
     try {

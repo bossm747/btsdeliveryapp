@@ -666,15 +666,20 @@ export default function AdvancedChatbot() {
 
   return (
     <>
-      {/* Chat Toggle Button */}
+      {/* Chat Toggle Button with Glow Effect */}
       {!isOpen && (
-        <Button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-4 right-4 rounded-full h-14 w-14 shadow-lg bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 z-50"
-          data-testid="button-advanced-chat-open"
-        >
-          <Bot className="h-6 w-6" />
-        </Button>
+        <div className="fixed bottom-4 right-4 z-50">
+          <Button
+            onClick={() => setIsOpen(true)}
+            className="relative rounded-full h-16 w-16 shadow-lg bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 animate-glow"
+            data-testid="button-advanced-chat-open"
+          >
+            <MessageCircle className="h-10 w-10" />
+          </Button>
+          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-medium text-orange-600 whitespace-nowrap">
+            Need Help?
+          </span>
+        </div>
       )}
 
       {/* Advanced Chat Window */}
@@ -688,7 +693,7 @@ export default function AdvancedChatbot() {
                   <AvatarFallback className="bg-white text-orange-500">BTS</AvatarFallback>
                 </Avatar>
                 <div>
-                  <CardTitle className="text-lg">BTS Advanced Assistant</CardTitle>
+                  <CardTitle className="text-lg">BTS Support</CardTitle>
                   <div className="flex items-center gap-2 text-xs text-white/80">
                     <Shield className="h-3 w-3" />
                     Secure
@@ -893,20 +898,6 @@ export default function AdvancedChatbot() {
         </Card>
       )}
 
-      {/* Help Tooltip when closed */}
-      {!isOpen && (
-        <div className="fixed bottom-20 right-4 bg-white rounded-lg shadow-lg p-3 animate-pulse z-40 max-w-xs">
-          <div className="flex items-start gap-2">
-            <HelpCircle className="h-5 w-5 text-orange-500 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium">Advanced AI Assistant</p>
-              <p className="text-xs text-gray-600 mt-1">
-                Track orders, view analytics, get receipts, and more with rich visualizations!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

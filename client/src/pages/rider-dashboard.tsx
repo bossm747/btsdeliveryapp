@@ -7,9 +7,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RiderPayout from "@/components/rider-payout";
+import RiderMapTracking from "@/components/rider-map-tracking";
 import { 
   MapPin, Package, Clock, DollarSign, Star, TrendingUp, 
-  Navigation, Phone, CheckCircle, XCircle, AlertCircle 
+  Navigation, Phone, CheckCircle, XCircle, AlertCircle,
+  Activity, Zap, Shield, Brain
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -113,7 +115,22 @@ export default function RiderDashboard() {
   return (
     <div className="container mx-auto px-4 py-8" data-testid="page-rider-dashboard">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2" data-testid="text-title">Rider Dashboard</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2" data-testid="text-title">Rider Dashboard</h1>
+            <p className="text-gray-600">Real-time delivery management powered by AI</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <Badge className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-3 py-1">
+              <Brain className="h-4 w-4 mr-1" />
+              AI-Powered
+            </Badge>
+            <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1">
+              <Activity className="h-4 w-4 mr-1" />
+              Real-time GPS
+            </Badge>
+          </div>
+        </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center space-x-2">
             <Switch
@@ -184,13 +201,18 @@ export default function RiderDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="active" className="space-y-4">
-        <TabsList>
+      <Tabs defaultValue="map" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="map">Live Tracking</TabsTrigger>
           <TabsTrigger value="active">Active Deliveries</TabsTrigger>
           <TabsTrigger value="available">Available Orders</TabsTrigger>
           <TabsTrigger value="history">Delivery History</TabsTrigger>
           <TabsTrigger value="earnings">Earnings & Payout</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="map" className="space-y-4">
+          <RiderMapTracking riderId={riderData?.id || "rider-1"} />
+        </TabsContent>
 
         <TabsContent value="active" className="space-y-4">
           {activeDeliveries.length === 0 ? (

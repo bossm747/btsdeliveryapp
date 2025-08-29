@@ -139,4 +139,21 @@
   .order-status-active {
     background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
   }
+  
+  /* Glowing neon effect for help button */
+  @keyframes glow {
+    0% {
+      box-shadow: 0 0 5px rgba(255, 107, 53, 0.5), 0 0 10px rgba(255, 107, 53, 0.5), 0 0 15px rgba(255, 107, 53, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 10px rgba(255, 107, 53, 0.7), 0 0 20px rgba(255, 107, 53, 0.6), 0 0 30px rgba(255, 107, 53, 0.5);
+    }
+    100% {
+      box-shadow: 0 0 5px rgba(255, 107, 53, 0.5), 0 0 10px rgba(255, 107, 53, 0.5), 0 0 15px rgba(255, 107, 53, 0.5);
+    }
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite;
+  }
 }
