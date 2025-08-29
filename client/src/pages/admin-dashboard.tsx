@@ -23,10 +23,11 @@ import {
 } from "@/components/ui/select";
 import { 
   Users, Store, Package, DollarSign, TrendingUp, AlertCircle,
-  Search, Filter, Download, Settings, CheckCircle, XCircle
+  Search, Filter, Download, Settings, CheckCircle, XCircle, BarChart3
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import AdminAnalytics from "@/components/admin-analytics";
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -154,14 +155,19 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="orders" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue="analytics" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="restaurants">Restaurants</TabsTrigger>
           <TabsTrigger value="riders">Riders</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <AdminAnalytics stats={stats} />
+        </TabsContent>
 
         <TabsContent value="orders" className="space-y-4">
           <Card>

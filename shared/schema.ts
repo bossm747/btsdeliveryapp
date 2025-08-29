@@ -215,3 +215,70 @@ export type Rider = typeof riders.$inferSelect;
 export type InsertRider = z.infer<typeof insertRiderSchema>;
 export type Review = typeof reviews.$inferSelect;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
+
+// Loyalty Points System Tables
+export const loyaltyPoints = pgTable("loyalty_points", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  points: integer("points").notNull().default(0),
+  lifetimePoints: integer("lifetime_points").notNull().default(0),
+  tier: varchar("tier", { length: 50 }).notNull().default("Bronze"),
+  lastEarnedAt: timestamp("last_earned_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+export const pointsTransactions = pgTable("points_transactions", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  orderId: uuid("order_id").references(() => orders.id),
+  type: varchar("type", { length: 50 }).notNull(),
+  points: integer("points").notNull(),
+  description: varchar("description", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const rewards = pgTable("rewards", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  pointsCost: integer("points_cost").notNull(),
+  category: varchar("category", { length: 100 }),
+  value: varchar("value", { length: 100 }),
+  code: varchar("code", { length: 50 }).unique(),
+  imageUrl: varchar("image_url", { length: 500 }),
+  minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }),
+  validFrom: timestamp("valid_from").defaultNow(),
+  validUntil: timestamp("valid_until"),
+  isActive: boolean("is_active").default(true),
+  maxRedemptions: integer("max_redemptions"),
+  currentRedemptions: integer("current_redemptions").default(0),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const redemptions = pgTable("redemptions", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  rewardId: varchar("reward_id", { length: 255 }).notNull().references(() => rewards.id),
+  orderId: uuid("order_id").references(() => orders.id),
+  pointsUsed: integer("points_used").notNull(),
+  status: varchar("status", { length: 50 }).notNull().default("pending"),
+  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+// Loyalty Types
+export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions).omit({ id: true, createdAt: true });
+export const insertRewardSchema = createInsertSchema(rewards).omit({ id: true, createdAt: true });
+export const insertRedemptionSchema = createInsertSchema(redemptions).omit({ id: true, createdAt: true });
+
+export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
+export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
+export type PointsTransaction = typeof pointsTransactions.$inferSelect;
+export type InsertPointsTransaction = z.infer<typeof insertPointsTransactionSchema>;
+export type Reward = typeof rewards.$inferSelect;
+export type InsertReward = z.infer<typeof insertRewardSchema>;
+export type Redemption = typeof redemptions.$inferSelect;
+export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;

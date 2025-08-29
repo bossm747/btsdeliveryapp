@@ -5,20 +5,24 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/hooks/use-cart";
 import { ShoppingCart, Menu } from "lucide-react";
+import { useLanguage } from "@/contexts/language-context";
+import NotificationCenter from "@/components/notification-center";
+import LanguageToggle from "@/components/language-toggle";
 import btsLogo from "@assets/btslogo.png";
 
 export default function Navbar() {
   const [, setLocation] = useLocation();
   const { getTotalItems } = useCart();
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useLanguage();
 
   const totalItems = getTotalItems();
 
   const navigationItems = [
-    { label: "Food", href: "/restaurants" },
-    { label: "Pabili", href: "/pabili" },
-    { label: "Pabayad", href: "/pabayad" },
-    { label: "Parcel", href: "/parcel" },
+    { label: t("service.food"), href: "/restaurants" },
+    { label: t("service.pabili"), href: "/pabili" },
+    { label: t("service.pabayad"), href: "/pabayad" },
+    { label: t("service.parcel"), href: "/parcel" },
     { label: "Para sa Vendors", href: "/vendor-dashboard" },
     { label: "Para sa Riders", href: "/rider-dashboard" },
   ];
@@ -48,6 +52,10 @@ export default function Navbar() {
               </Link>
             ))}
             
+            <NotificationCenter userId="user-1" userRole="customer" />
+            
+            <LanguageToggle />
+            
             <Button
               variant="outline"
               size="sm"
@@ -56,7 +64,7 @@ export default function Navbar() {
               data-testid="cart-button"
             >
               <ShoppingCart className="h-4 w-4 mr-2" />
-              Cart
+              {t("nav.cart")}
               {totalItems > 0 && (
                 <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center">
                   {totalItems}
@@ -70,6 +78,8 @@ export default function Navbar() {
           </div>
           
           <div className="md:hidden flex items-center space-x-2">
+            <NotificationCenter userId="user-1" userRole="customer" />
+            
             <Button
               variant="outline"
               size="sm"

@@ -1,10 +1,20 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertRestaurantSchema, insertMenuCategorySchema, insertMenuItemSchema, insertOrderSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import * as geminiAI from "./services/gemini";
+import { nanoid } from "nanoid";
+
+interface ExtendedWebSocket extends WebSocket {
+  userId?: string;
+  userRole?: string;
+  isAlive?: boolean;
+  clientId?: string;
+  subscriptions?: Set<string>;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -175,6 +185,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const order = await storage.updateOrderStatus(req.params.id, status, notes);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Send real-time notification for order status update
+      const statusMessages: { [key: string]: string } = {
+        'confirmed': 'Ang iyong order ay nakumpirma na!',
+        'preparing': 'Ginagawa na ang iyong order',
+        'ready': 'Handa na ang iyong order para sa pickup',
+        'picked_up': 'Nakuha na ng rider ang iyong order',
+        'on_the_way': 'Papunta na sa iyo ang iyong order',
+        'delivered': 'Nadeliver na ang iyong order. Salamat!',
+        'cancelled': 'Na-cancel ang iyong order'
+      };
+      
+      const message = statusMessages[status] || `Order status updated to ${status}`;
+      
+      // Use global notification function if available
+      if ((global as any).notifyOrderUpdate) {
+        await (global as any).notifyOrderUpdate(order.id, status, message);
       }
       
       res.json(order);
@@ -852,6 +880,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Dashboard Endpoints
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      // Get various statistics for admin dashboard
+      const restaurants = await storage.getRestaurants();
+      const orders = await storage.getOrders();
+      const riders = await storage.getRiders();
+      
+      // Calculate statistics
+      const totalUsers = 15234; // Simplified for demo
+      const activeRestaurants = restaurants.filter(r => r.isActive).length;
+      const totalOrders = orders.length;
+      const activeRiders = riders.filter(r => r.isOnline).length;
+      const onlineRiders = riders.filter(r => r.isOnline).length;
+      
+      // Calculate today's revenue
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayOrders = orders.filter(o => new Date(o.createdAt) >= today);
+      const revenueToday = todayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
+      
+      res.json({
+        totalUsers,
+        activeRestaurants,
+        totalOrders,
+        activeRiders: riders.length,
+        onlineRiders,
+        revenueToday,
+        activeUsers: 12456
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ message: "Failed to fetch statistics" });
+    }
+  });
+
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      // Mock user data for demo
+      const users = [
+        { id: "1", firstName: "Juan", lastName: "Dela Cruz", email: "juan@example.com", phone: "09171234567", role: "customer", status: "active" },
+        { id: "2", firstName: "Maria", lastName: "Santos", email: "maria@example.com", phone: "09181234567", role: "vendor", status: "active" },
+        { id: "3", firstName: "Pedro", lastName: "Garcia", email: "pedro@example.com", phone: "09191234567", role: "rider", status: "active" },
+        { id: "4", firstName: "Ana", lastName: "Reyes", email: "ana@example.com", phone: "09201234567", role: "customer", status: "active" },
+        { id: "5", firstName: "Jose", lastName: "Mendoza", email: "jose@example.com", phone: "09211234567", role: "customer", status: "inactive" }
+      ];
+      
+      const { searchTerm } = req.query;
+      if (searchTerm) {
+        const filtered = users.filter(u => 
+          u.firstName.toLowerCase().includes(searchTerm.toString().toLowerCase()) ||
+          u.lastName.toLowerCase().includes(searchTerm.toString().toLowerCase()) ||
+          u.email.toLowerCase().includes(searchTerm.toString().toLowerCase())
+        );
+        return res.json(filtered);
+      }
+      
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/admin/restaurants", async (req, res) => {
+    try {
+      const restaurants = await storage.getRestaurants();
+      const enrichedRestaurants = restaurants.map(r => ({
+        ...r,
+        ownerName: "Restaurant Owner",
+        city: r.address?.city || "Batangas City"
+      }));
+      res.json(enrichedRestaurants);
+    } catch (error) {
+      console.error("Error fetching admin restaurants:", error);
+      res.status(500).json({ message: "Failed to fetch restaurants" });
+    }
+  });
+
+  app.get("/api/admin/orders", async (req, res) => {
+    try {
+      const orders = await storage.getOrders();
+      const { filterStatus } = req.query;
+      
+      let filteredOrders = orders;
+      if (filterStatus && filterStatus !== "all") {
+        filteredOrders = orders.filter(o => o.status === filterStatus);
+      }
+      
+      // Enrich order data
+      const enrichedOrders = await Promise.all(
+        filteredOrders.slice(0, 20).map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          return {
+            ...order,
+            customerName: "Customer",
+            restaurantName: restaurant?.name || "Restaurant"
+          };
+        })
+      );
+      
+      res.json(enrichedOrders);
+    } catch (error) {
+      console.error("Error fetching admin orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/admin/riders", async (req, res) => {
+    try {
+      const riders = await storage.getRiders();
+      const enrichedRiders = riders.map(r => ({
+        ...r,
+        name: "Rider " + r.id.slice(0, 8),
+        totalDeliveries: Math.floor(Math.random() * 200) + 50
+      }));
+      res.json(enrichedRiders);
+    } catch (error) {
+      console.error("Error fetching admin riders:", error);
+      res.status(500).json({ message: "Failed to fetch riders" });
+    }
+  });
+
+  app.patch("/api/admin/restaurants/:id/approve", async (req, res) => {
+    try {
+      const restaurant = await storage.updateRestaurant(req.params.id, { isActive: true });
+      if (!restaurant) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+      res.json(restaurant);
+    } catch (error) {
+      console.error("Error approving restaurant:", error);
+      res.status(500).json({ message: "Failed to approve restaurant" });
+    }
+  });
+
+  app.patch("/api/admin/riders/:id/verify", async (req, res) => {
+    try {
+      const rider = await storage.updateRider(req.params.id, { isVerified: true });
+      if (!rider) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+      res.json(rider);
+    } catch (error) {
+      console.error("Error verifying rider:", error);
+      res.status(500).json({ message: "Failed to verify rider" });
+    }
+  });
+
   // Get live delivery tracking
   app.post("/api/chatbot/live-tracking", validateChatContext, async (req, res) => {
     try {
@@ -897,5 +1074,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // WebSocket server for real-time notifications
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  const clients = new Map<string, ExtendedWebSocket>();
+
+  // Broadcast notification to specific users
+  const broadcastNotification = (notification: any, targetUsers?: string[]) => {
+    const message = JSON.stringify(notification);
+    
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN) {
+        if (targetUsers && client.userId) {
+          if (targetUsers.includes(client.userId)) {
+            client.send(message);
+          }
+        } else if (!targetUsers) {
+          client.send(message);
+        }
+      }
+    });
+  };
+
+  // Send notification by role
+  const notifyByRole = (notification: any, role: string) => {
+    const message = JSON.stringify(notification);
+    
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && client.userRole === role) {
+        client.send(message);
+      }
+    });
+  };
+
+  // Send notification for order updates
+  const notifyOrderUpdate = async (orderId: string, status: string, message: string) => {
+    const order = await storage.getOrder(orderId);
+    if (!order) return;
+    
+    const notification = {
+      type: "order_update",
+      orderId,
+      status,
+      message,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Notify customer
+    if (order.customerId) {
+      broadcastNotification(notification, [order.customerId]);
+    }
+    
+    // Notify restaurant
+    const restaurant = await storage.getRestaurant(order.restaurantId);
+    if (restaurant?.ownerId) {
+      broadcastNotification(notification, [restaurant.ownerId]);
+    }
+    
+    // Notify rider if assigned
+    if (order.riderId) {
+      const rider = await storage.getRider(order.riderId);
+      if (rider?.userId) {
+        broadcastNotification(notification, [rider.userId]);
+      }
+    }
+  };
+
+  wss.on("connection", (ws: ExtendedWebSocket) => {
+    const clientId = nanoid();
+    ws.clientId = clientId;
+    ws.isAlive = true;
+    ws.subscriptions = new Set();
+    
+    console.log(`New WebSocket connection: ${clientId}`);
+
+    // Send initial connection success
+    ws.send(JSON.stringify({ 
+      type: "connection", 
+      status: "connected",
+      clientId,
+      timestamp: new Date().toISOString()
+    }));
+
+    ws.on("pong", () => {
+      ws.isAlive = true;
+    });
+
+    ws.on("message", (message: string) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        switch (data.type) {
+          case "auth":
+            ws.userId = data.userId;
+            ws.userRole = data.role;
+            if (data.userId) {
+              clients.set(data.userId, ws);
+            }
+            
+            ws.send(JSON.stringify({ 
+              type: "auth", 
+              success: true,
+              userId: data.userId,
+              role: data.role
+            }));
+            
+            console.log(`User ${data.userId} authenticated with role ${data.role}`);
+            break;
+            
+          case "subscribe":
+            // Subscribe to specific order updates
+            if (data.orderId && ws.subscriptions) {
+              ws.subscriptions.add(data.orderId);
+              ws.send(JSON.stringify({
+                type: "subscribed",
+                orderId: data.orderId,
+                timestamp: new Date().toISOString()
+              }));
+            }
+            break;
+            
+          case "unsubscribe":
+            if (data.orderId && ws.subscriptions) {
+              ws.subscriptions.delete(data.orderId);
+              ws.send(JSON.stringify({
+                type: "unsubscribed",
+                orderId: data.orderId
+              }));
+            }
+            break;
+            
+          case "ping":
+            ws.send(JSON.stringify({ type: "pong" }));
+            break;
+        }
+      } catch (error) {
+        console.error("WebSocket message error:", error);
+        ws.send(JSON.stringify({ 
+          type: "error", 
+          message: "Invalid message format" 
+        }));
+      }
+    });
+
+    ws.on("close", () => {
+      console.log(`WebSocket connection closed: ${clientId}`);
+      if (ws.userId) {
+        clients.delete(ws.userId);
+      }
+    });
+
+    ws.on("error", (error) => {
+      console.error(`WebSocket error for ${clientId}:`, error);
+    });
+  });
+
+  // Heartbeat to keep connections alive
+  const interval = setInterval(() => {
+    wss.clients.forEach((ws: ExtendedWebSocket) => {
+      if (ws.isAlive === false) {
+        if (ws.userId) {
+          clients.delete(ws.userId);
+        }
+        return ws.terminate();
+      }
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on("close", () => {
+    clearInterval(interval);
+  });
+  
+  // Export notification functions for use in order status updates
+  (global as any).notifyOrderUpdate = notifyOrderUpdate;
+  (global as any).broadcastNotification = broadcastNotification;
+  
   return httpServer;
 }
