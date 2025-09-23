@@ -3399,17 +3399,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         heading: heading ? parseFloat(heading) : undefined,
       });
 
-      // Broadcast location update via WebSocket
-      const locationUpdate = {
-        type: "rider_location_update",
-        riderId,
-        location: { lat: parseFloat(latitude), lng: parseFloat(longitude) },
-        timestamp: new Date().toISOString()
-      };
-
-      // Will be broadcast to subscribers via WebSocket
-      if ((global as any).broadcastNotification) {
-        (global as any).broadcastNotification(locationUpdate);
+      // Get current order for rider to broadcast location to tracking subscribers
+      const orders = await storage.getOrders();
+      const activeOrder = orders.find(o => o.riderId === riderId && (o.status === 'picked_up' || o.status === 'in_transit'));
+      
+      if (activeOrder) {
+        broadcastRiderLocationUpdate(activeOrder.id, {
+          lat: parseFloat(latitude),
+          lng: parseFloat(longitude),
+          accuracy: accuracy ? parseFloat(accuracy) : undefined,
+          speed: speed ? parseFloat(speed) : undefined,
+          heading: heading ? parseFloat(heading) : undefined
+        });
       }
 
       res.json({ success: true });
@@ -3513,19 +3514,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes
       );
 
-      // Broadcast tracking event via WebSocket
-      const trackingUpdate = {
-        type: "delivery_tracking_event",
-        orderId,
-        riderId,
-        eventType,
-        location,
-        timestamp: new Date().toISOString()
-      };
-
-      if ((global as any).broadcastNotification) {
-        (global as any).broadcastNotification(trackingUpdate);
-      }
+      // Broadcast tracking event to real-time subscribers
+      broadcastTrackingEvent(orderId, event);
 
       res.json(event);
     } catch (error) {
@@ -3545,6 +3535,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CRITICAL FIX: Add missing API route that client expects
+  app.get("/api/orders/:id/tracking", async (req, res) => {
+    const startTime = Date.now();
+    const orderId = req.params.id;
+    
+    console.log(`📍 TRACKING API: GET /api/orders/${orderId}/tracking requested`);
+    
+    try {
+      
+      // Get the order details
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Get the restaurant details
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+      if (!restaurant) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      // Get rider details if assigned
+      let rider = null;
+      let riderLocation = null;
+      if (order.riderId) {
+        const riderData = await storage.getRider(order.riderId);
+        if (riderData) {
+          rider = {
+            id: riderData.id,
+            name: riderData.firstName + " " + riderData.lastName,
+            phone: riderData.phone,
+            vehicleType: riderData.vehicleType || "motorcycle",
+            rating: riderData.rating || 4.5,
+            photo: riderData.profileImageUrl
+          };
+          
+          // Get rider's current location
+          const latestLocation = await gpsTrackingService.getRiderLatestLocation(order.riderId);
+          if (latestLocation) {
+            riderLocation = latestLocation.location;
+          }
+        }
+      }
+
+      // Get tracking events
+      const events = await gpsTrackingService.getOrderTrackingEvents(orderId);
+
+      // Build tracking timeline from events
+      const timeline = events.map(event => ({
+        id: event.id,
+        eventType: event.eventType,
+        timestamp: event.timestamp.toISOString(),
+        location: event.location,
+        notes: event.notes
+      }));
+
+      // Calculate estimated time based on status
+      let estimatedTime = 30; // Default 30 minutes
+      switch (order.status) {
+        case 'pending':
+        case 'confirmed':
+          estimatedTime = 45;
+          break;
+        case 'preparing':
+          estimatedTime = 25;
+          break;
+        case 'ready':
+        case 'picked_up':
+          estimatedTime = 15;
+          break;
+        case 'in_transit':
+          estimatedTime = 10;
+          break;
+        case 'delivered':
+          estimatedTime = 0;
+          break;
+      }
+
+      // Build comprehensive tracking response that client expects
+      const trackingData = {
+        orderId: order.id,
+        orderNumber: order.orderNumber || `BTS-${order.id.slice(-6).toUpperCase()}`,
+        status: order.status,
+        estimatedTime,
+        actualDeliveryTime: order.status === 'delivered' ? order.updatedAt?.toISOString() : undefined,
+        distance: 5.2, // TODO: Calculate actual distance
+        customer: {
+          name: order.customerName || "Customer",
+          phone: order.customerPhone || "",
+          address: order.deliveryAddress || "",
+          location: order.deliveryLocation || { lat: 13.7565, lng: 121.0583 }
+        },
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          phone: restaurant.phone || "",
+          address: restaurant.address || "",
+          location: restaurant.location || { lat: 13.7565, lng: 121.0583 }
+        },
+        rider,
+        timeline,
+        currentLocation: riderLocation,
+        estimatedArrival: order.status === 'delivered' ? null : 
+          new Date(Date.now() + estimatedTime * 60 * 1000).toISOString()
+      };
+
+      const duration = Date.now() - startTime;
+      console.log(`✅ TRACKING API: Successfully returned tracking data for order ${orderId} in ${duration}ms`);
+      console.log(`📊 TRACKING DATA: Status=${trackingData.status}, Rider=${trackingData.rider ? trackingData.rider.name : 'None'}, Timeline=${trackingData.timeline.length} events`);
+      
+      res.json(trackingData);
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`❌ TRACKING API: Failed to fetch tracking for order ${orderId} in ${duration}ms:`, error);
+      res.status(500).json({ message: "Failed to fetch order tracking" });
+    }
+  });
+
   // Get estimated arrival time
   app.post("/api/gps/eta", async (req, res) => {
     try {
@@ -3555,6 +3663,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const eta = await gpsTrackingService.getEstimatedArrival(riderId, destination);
+      
+      // Get current order for rider to broadcast ETA update
+      const orders = await storage.getOrders();
+      const activeOrder = orders.find(o => o.riderId === riderId && (o.status === 'picked_up' || o.status === 'in_transit'));
+      
+      if (activeOrder && eta) {
+        const estimatedArrival = new Date(Date.now() + eta * 60 * 1000).toISOString();
+        broadcastETAUpdate(activeOrder.id, estimatedArrival, eta);
+      }
+      
       res.json({ estimatedMinutes: eta });
     } catch (error) {
       console.error("Error calculating ETA:", error);
@@ -3661,6 +3779,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Broadcast order status updates to tracking subscribers
+  const broadcastOrderStatusUpdate = (orderId: string, trackingData: any, previousStatus?: string) => {
+    const statusKey = `order_status:${orderId}`;
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.subscriptions?.has(statusKey)) {
+        client.send(JSON.stringify({
+          type: "order_status_update",
+          orderId,
+          trackingData,
+          previousStatus,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    });
+  };
+
+  // Broadcast rider location updates to tracking subscribers
+  const broadcastRiderLocationUpdate = (orderId: string, location: any) => {
+    const locationKey = `rider_location:${orderId}`;
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.subscriptions?.has(locationKey)) {
+        client.send(JSON.stringify({
+          type: "rider_location_update",
+          orderId,
+          location,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    });
+  };
+
+  // Broadcast tracking events to tracking subscribers
+  const broadcastTrackingEvent = (orderId: string, event: any) => {
+    const eventKey = `tracking_events:${orderId}`;
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.subscriptions?.has(eventKey)) {
+        client.send(JSON.stringify({
+          type: "tracking_event",
+          orderId,
+          event,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    });
+  };
+
+  // Broadcast ETA updates to tracking subscribers
+  const broadcastETAUpdate = (orderId: string, estimatedArrival: string, estimatedTime: number) => {
+    const etaKey = `eta_updates:${orderId}`;
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.subscriptions?.has(etaKey)) {
+        client.send(JSON.stringify({
+          type: "eta_update",
+          orderId,
+          estimatedArrival,
+          estimatedTime,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    });
+  };
+
   wss.on("connection", (ws: ExtendedWebSocket) => {
     const clientId = nanoid();
     ws.clientId = clientId;
@@ -3681,26 +3865,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ws.isAlive = true;
     });
 
-    ws.on("message", (message: string) => {
+    ws.on("message", async (message: string) => {
       try {
         const data = JSON.parse(message.toString());
         
         switch (data.type) {
           case "auth":
-            ws.userId = data.userId;
-            ws.userRole = data.role;
-            if (data.userId) {
-              clients.set(data.userId, ws);
+            // Validate JWT token for WebSocket authentication
+            try {
+              if (!data.token) {
+                ws.send(JSON.stringify({ 
+                  type: "auth", 
+                  success: false, 
+                  error: "JWT token required" 
+                }));
+                console.log(`WebSocket auth failed: No JWT token provided`);
+                break;
+              }
+
+              const decoded = jwt.verify(data.token, JWT_SECRET) as any;
+              
+              // Check if session is still valid
+              const [session] = await db.select()
+                .from(userSessions)
+                .where(eq(userSessions.sessionToken, data.token));
+              
+              if (!session || new Date() > session.expiresAt) {
+                ws.send(JSON.stringify({ 
+                  type: "auth", 
+                  success: false, 
+                  error: "Token expired or invalid" 
+                }));
+                console.log(`WebSocket auth failed: Invalid or expired token`);
+                break;
+              }
+
+              // Get user data
+              const [user] = await db.select()
+                .from(users)
+                .where(eq(users.id, decoded.userId));
+
+              if (!user) {
+                ws.send(JSON.stringify({ 
+                  type: "auth", 
+                  success: false, 
+                  error: "User not found" 
+                }));
+                console.log(`WebSocket auth failed: User ${decoded.userId} not found`);
+                break;
+              }
+
+              ws.userId = user.id;
+              ws.userRole = user.role;
+              if (user.id) {
+                clients.set(user.id, ws);
+              }
+              
+              ws.send(JSON.stringify({ 
+                type: "auth", 
+                success: true,
+                userId: user.id,
+                role: user.role,
+                timestamp: new Date().toISOString()
+              }));
+              
+              console.log(`WebSocket: User ${user.id} authenticated with role ${user.role} (${clientId})`);
+            } catch (error) {
+              ws.send(JSON.stringify({ 
+                type: "auth", 
+                success: false, 
+                error: "Invalid JWT token" 
+              }));
+              console.log(`WebSocket auth failed: JWT validation error:`, error);
             }
-            
-            ws.send(JSON.stringify({ 
-              type: "auth", 
-              success: true,
-              userId: data.userId,
-              role: data.role
-            }));
-            
-            console.log(`User ${data.userId} authenticated with role ${data.role}`);
             break;
             
           case "subscribe":
@@ -3716,28 +3953,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
             
           case "subscribe_tracking":
-            // Subscribe to real-time tracking
-            if (data.orderId && ws.subscriptions) {
-              ws.subscriptions.add(`tracking:${data.orderId}`);
-              ws.send(JSON.stringify({
-                type: "subscription_confirmed",
-                orderId: data.orderId,
-                role: data.role,
-                timestamp: new Date().toISOString()
+          case "subscribe_order_tracking":
+            // Subscribe to real-time tracking (requires authentication)
+            if (!ws.userId) {
+              ws.send(JSON.stringify({ 
+                type: "error", 
+                message: "Authentication required for order tracking subscriptions" 
               }));
+              console.log(`WebSocket: Unauthenticated client ${ws.clientId} attempted to subscribe to order ${data.orderId}`);
+              break;
+            }
+
+            if (data.orderId && ws.subscriptions) {
+              // Verify user has access to this order
+              try {
+                const order = await storage.getOrder(data.orderId);
+                if (!order) {
+                  ws.send(JSON.stringify({ 
+                    type: "error", 
+                    message: "Order not found" 
+                  }));
+                  console.log(`WebSocket: Order ${data.orderId} not found for subscription`);
+                  break;
+                }
+
+                // Check if user has permission to track this order
+                const canTrack = (
+                  order.customerId === ws.userId || // Customer can track own orders
+                  order.vendorId === ws.userId ||   // Vendor can track orders from their restaurant
+                  order.riderId === ws.userId ||    // Rider can track assigned orders
+                  ws.userRole === 'admin'           // Admin can track all orders
+                );
+
+                if (!canTrack) {
+                  ws.send(JSON.stringify({ 
+                    type: "error", 
+                    message: "Insufficient permissions to track this order" 
+                  }));
+                  console.log(`WebSocket: User ${ws.userId} denied access to track order ${data.orderId}`);
+                  break;
+                }
+
+                ws.subscriptions.add(`tracking:${data.orderId}`);
+                ws.subscriptions.add(`order_status:${data.orderId}`);
+                ws.subscriptions.add(`rider_location:${data.orderId}`);
+                ws.subscriptions.add(`eta_updates:${data.orderId}`);
+                ws.subscriptions.add(`tracking_events:${data.orderId}`);
+                
+                ws.send(JSON.stringify({
+                  type: "subscription_confirmed",
+                  orderId: data.orderId,
+                  role: ws.userRole,
+                  timestamp: new Date().toISOString()
+                }));
+                
+                console.log(`WebSocket: User ${ws.userId} (${ws.userRole}) subscribed to order tracking for ${data.orderId} (${ws.clientId})`);
+              } catch (error) {
+                console.error(`WebSocket: Error verifying order access:`, error);
+                ws.send(JSON.stringify({ 
+                  type: "error", 
+                  message: "Failed to verify order access" 
+                }));
+              }
             }
             break;
             
           case "rider_location":
             // Broadcast rider location to all subscribers
             if (data.orderId && data.location) {
-              const trackingKey = `tracking:${data.orderId}`;
+              const trackingKey = `rider_location:${data.orderId}`;
               wss.clients.forEach((client: ExtendedWebSocket) => {
                 if (client.readyState === WebSocket.OPEN && 
                     client.subscriptions?.has(trackingKey) &&
                     client.clientId !== ws.clientId) {
                   client.send(JSON.stringify({
-                    type: "location_update",
+                    type: "rider_location_update",
                     orderId: data.orderId,
                     location: data.location,
                     timestamp: new Date().toISOString()
@@ -3750,15 +4040,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case "order_status_update":
             // Broadcast order status to all subscribers
             if (data.orderId && data.status) {
-              const trackingKey = `tracking:${data.orderId}`;
+              const statusKey = `order_status:${data.orderId}`;
               wss.clients.forEach((client: ExtendedWebSocket) => {
                 if (client.readyState === WebSocket.OPEN && 
-                    client.subscriptions?.has(trackingKey)) {
+                    client.subscriptions?.has(statusKey)) {
                   client.send(JSON.stringify({
-                    type: "order_update",
+                    type: "order_status_update",
                     orderId: data.orderId,
-                    status: data.status,
-                    message: data.message,
+                    trackingData: data.trackingData,
+                    previousStatus: data.previousStatus,
+                    timestamp: new Date().toISOString()
+                  }));
+                }
+              });
+            }
+            break;
+            
+          case "tracking_event":
+            // Broadcast tracking events to all subscribers
+            if (data.orderId && data.event) {
+              const eventKey = `tracking_events:${data.orderId}`;
+              wss.clients.forEach((client: ExtendedWebSocket) => {
+                if (client.readyState === WebSocket.OPEN && 
+                    client.subscriptions?.has(eventKey)) {
+                  client.send(JSON.stringify({
+                    type: "tracking_event",
+                    orderId: data.orderId,
+                    event: data.event,
+                    timestamp: new Date().toISOString()
+                  }));
+                }
+              });
+            }
+            break;
+            
+          case "eta_update":
+            // Broadcast ETA updates to all subscribers
+            if (data.orderId && (data.estimatedArrival || data.estimatedTime)) {
+              const etaKey = `eta_updates:${data.orderId}`;
+              wss.clients.forEach((client: ExtendedWebSocket) => {
+                if (client.readyState === WebSocket.OPEN && 
+                    client.subscriptions?.has(etaKey)) {
+                  client.send(JSON.stringify({
+                    type: "eta_update",
+                    orderId: data.orderId,
+                    estimatedArrival: data.estimatedArrival,
+                    estimatedTime: data.estimatedTime,
                     timestamp: new Date().toISOString()
                   }));
                 }

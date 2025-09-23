@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { riderLocationHistory, orders, riders } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
-import type { InsertRiderLocationHistory } from "@shared/schema";
+import { riderLocationHistory, orders, riders, deliveryRoutes, deliveryTrackingEvents } from "@shared/schema";
+import { eq, and, desc, gte } from "drizzle-orm";
+import type { InsertRiderLocationHistory, InsertDeliveryRoute, InsertDeliveryTrackingEvent } from "@shared/schema";
 
 export interface LocationData {
   latitude: number;
@@ -57,7 +57,6 @@ export class GPSTrackingService {
           accuracy: location.accuracy,
           timestamp: (location.timestamp || new Date()).toISOString()
         },
-        lastLocationUpdate: new Date(),
         lastActivityAt: new Date()
       })
       .where(eq(riders.id, riderId));
@@ -69,9 +68,9 @@ export class GPSTrackingService {
   async getRiderLatestLocation(riderId: string) {
     const [location] = await db
       .select()
-      .from(riderLocations)
-      .where(eq(riderLocations.riderId, riderId))
-      .orderBy(desc(riderLocations.timestamp))
+      .from(riderLocationHistory)
+      .where(eq(riderLocationHistory.riderId, riderId))
+      .orderBy(desc(riderLocationHistory.timestamp))
       .limit(1);
 
     return location;
@@ -85,12 +84,12 @@ export class GPSTrackingService {
     
     return await db
       .select()
-      .from(riderLocations)
+      .from(riderLocationHistory)
       .where(and(
-        eq(riderLocations.riderId, riderId),
-        // Note: You might need to adjust the timestamp comparison based on your DB setup
+        eq(riderLocationHistory.riderId, riderId),
+        gte(riderLocationHistory.timestamp, since)
       ))
-      .orderBy(desc(riderLocations.timestamp));
+      .orderBy(desc(riderLocationHistory.timestamp));
   }
 
   /**
@@ -167,12 +166,12 @@ export class GPSTrackingService {
     const routeData: InsertDeliveryRoute = {
       riderId,
       orderId,
-      startLocation,
-      endLocation,
+      origin: startLocation,
+      destination: endLocation,
       waypoints,
-      optimizedRoute,
-      estimatedDistance: optimizedRoute?.distance.toString(),
-      estimatedDuration: optimizedRoute?.duration,
+      distance: optimizedRoute?.distance.toString() || "0",
+      estimatedDuration: optimizedRoute?.duration || 0,
+      routePolyline: optimizedRoute?.overview_polyline,
       status: 'planned',
     };
 
@@ -187,9 +186,8 @@ export class GPSTrackingService {
     await db
       .update(deliveryRoutes)
       .set({ 
-        status: 'in_progress', 
-        startTime: new Date(),
-        updatedAt: new Date()
+        status: 'active', 
+        startedAt: new Date()
       })
       .where(eq(deliveryRoutes.id, routeId));
   }
@@ -206,10 +204,8 @@ export class GPSTrackingService {
       .update(deliveryRoutes)
       .set({ 
         status: 'completed',
-        endTime: new Date(),
-        actualDistance: actualDistance?.toString(),
-        actualDuration,
-        updatedAt: new Date()
+        completedAt: new Date(),
+        actualDuration
       })
       .where(eq(deliveryRoutes.id, routeId));
   }
@@ -276,9 +272,10 @@ export class GPSTrackingService {
     const riderLocation = await this.getRiderLatestLocation(riderId);
     if (!riderLocation) return false;
 
+    const locationData = riderLocation.location as any;
     const distance = this.calculateDistance(
-      parseFloat(riderLocation.latitude),
-      parseFloat(riderLocation.longitude),
+      parseFloat(locationData.lat),
+      parseFloat(locationData.lng),
       deliveryLocation.lat,
       deliveryLocation.lng
     );
@@ -293,10 +290,11 @@ export class GPSTrackingService {
     const riderLocation = await this.getRiderLatestLocation(riderId);
     if (!riderLocation) return null;
 
+    const locationData = riderLocation.location as any;
     const route = await this.calculateOptimalRoute(
       { 
-        lat: parseFloat(riderLocation.latitude), 
-        lng: parseFloat(riderLocation.longitude) 
+        lat: parseFloat(locationData.lat), 
+        lng: parseFloat(locationData.lng) 
       },
       destination
     );

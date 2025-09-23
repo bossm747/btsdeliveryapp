@@ -41,9 +41,5 @@ integrations = ["javascript_google_analytics==1.0.0", "javascript_log_in_with_re
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 44485
-externalPort = 3000
-
 [objectStorage]
 defaultBucketID = "replit-objstore-84ffb069-af63-422f-a3b1-aa655f319125"

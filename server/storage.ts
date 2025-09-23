@@ -492,8 +492,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRider(id: string): Promise<Rider | undefined> {
-    const [rider] = await db.select().from(riders).where(eq(riders.id, id));
-    return rider;
+    try {
+      const [rider] = await db.select().from(riders).where(eq(riders.id, id));
+      return rider;
+    } catch (error: any) {
+      // Handle database schema mismatch gracefully
+      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        console.warn(`Database schema mismatch for rider ${id}, using basic query:`, error.message);
+        // Fallback to basic query without problematic columns
+        const [rider] = await db.select({
+          id: riders.id,
+          userId: riders.userId,
+          firstName: riders.firstName,
+          lastName: riders.lastName,
+          phone: riders.phone,
+          vehicleType: riders.vehicleType,
+          rating: riders.rating,
+          profileImageUrl: riders.profileImageUrl,
+          isOnline: riders.isOnline,
+          status: riders.status,
+          createdAt: riders.createdAt,
+          updatedAt: riders.updatedAt
+        }).from(riders).where(eq(riders.id, id));
+        return rider;
+      }
+      throw error;
+    }
   }
 
   async getRiderByUserId(userId: string): Promise<Rider | undefined> {

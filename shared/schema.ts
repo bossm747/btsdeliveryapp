@@ -453,6 +453,39 @@ export const riderLocationHistory = pgTable("rider_location_history", {
   activityType: varchar("activity_type", { length: 20 }).default("idle"), // idle, traveling_to_pickup, traveling_to_delivery, at_restaurant, at_customer
 });
 
+// Delivery Routes table for tracking optimized delivery paths
+export const deliveryRoutes = pgTable("delivery_routes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  riderId: uuid("rider_id").references(() => riders.id).notNull(),
+  origin: jsonb("origin").notNull(), // {lat, lng, address}
+  destination: jsonb("destination").notNull(), // {lat, lng, address}
+  waypoints: jsonb("waypoints"), // [{lat, lng, address}]
+  distance: decimal("distance", { precision: 8, scale: 2 }).notNull(), // kilometers
+  estimatedDuration: integer("estimated_duration").notNull(), // minutes
+  actualDuration: integer("actual_duration"), // minutes
+  routePolyline: text("route_polyline"), // encoded polyline
+  status: varchar("status", { length: 20 }).default("planned"), // planned, active, completed, cancelled
+  trafficConditions: varchar("traffic_conditions", { length: 20 }), // light, moderate, heavy
+  weatherConditions: varchar("weather_conditions", { length: 20 }), // clear, rain, storm
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Delivery Tracking Events table for real-time status updates
+export const deliveryTrackingEvents = pgTable("delivery_tracking_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  riderId: uuid("rider_id").references(() => riders.id),
+  eventType: varchar("event_type", { length: 50 }).notNull(), // order_placed, rider_assigned, picked_up, in_transit, delivered, cancelled
+  eventData: jsonb("event_data"), // Additional event-specific data
+  location: jsonb("location"), // {lat, lng, accuracy}
+  estimatedArrival: timestamp("estimated_arrival"),
+  notes: text("notes"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
 // Rider Assignment Queue table
 export const riderAssignmentQueue = pgTable("rider_assignment_queue", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1086,6 +1119,8 @@ export const insertReviewSchema = createInsertSchema(reviews);
 export const insertRiderLocationHistorySchema = createInsertSchema(riderLocationHistory);
 export const insertRiderAssignmentQueueSchema = createInsertSchema(riderAssignmentQueue);
 export const insertRiderPerformanceMetricsSchema = createInsertSchema(riderPerformanceMetrics);
+export const insertDeliveryRouteSchema = createInsertSchema(deliveryRoutes);
+export const insertDeliveryTrackingEventSchema = createInsertSchema(deliveryTrackingEvents);
 
 // Loyalty Types
 export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
@@ -1128,6 +1163,10 @@ export type RiderAssignmentQueue = typeof riderAssignmentQueue.$inferSelect;
 export type InsertRiderAssignmentQueue = z.infer<typeof insertRiderAssignmentQueueSchema>;
 export type RiderPerformanceMetrics = typeof riderPerformanceMetrics.$inferSelect;
 export type InsertRiderPerformanceMetrics = z.infer<typeof insertRiderPerformanceMetricsSchema>;
+export type DeliveryRoute = typeof deliveryRoutes.$inferSelect;
+export type InsertDeliveryRoute = z.infer<typeof insertDeliveryRouteSchema>;
+export type DeliveryTrackingEvent = typeof deliveryTrackingEvents.$inferSelect;
+export type InsertDeliveryTrackingEvent = z.infer<typeof insertDeliveryTrackingEventSchema>;
 
 export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
 export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;

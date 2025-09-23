@@ -64,12 +64,20 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       setConnected(true);
       reconnectAttemptsRef.current = 0;
 
-      // Authenticate if userId is provided
+      // Authenticate if userId is provided  
       if (userId) {
+        // Get JWT token from localStorage
+        const token = localStorage.getItem('token') || '';
+        if (!token) {
+          console.error('No JWT token found for WebSocket authentication');
+          return;
+        }
+
         ws.send(JSON.stringify({
           type: "auth",
           userId,
-          role: userRole || "customer"
+          role: userRole || "customer",
+          token: token
         }));
       }
     };
