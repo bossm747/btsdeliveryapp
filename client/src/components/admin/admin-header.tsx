@@ -35,8 +35,18 @@ export default function AdminHeader({
     refetchInterval: 30000, // Refresh every 30 seconds
   }) as { data: number };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      // Clear any auth tokens from localStorage
+      localStorage.removeItem("authToken");
+      // Call logout function which will clear auth context
+      logout();
+      // Redirect will happen automatically via the auth context
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Force logout even if there's an error
+      logout();
+    }
   };
 
   const getUserInitials = () => {

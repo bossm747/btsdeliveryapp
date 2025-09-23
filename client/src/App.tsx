@@ -28,6 +28,11 @@ import CustomerDashboard from "@/pages/customer/customer-dashboard";
 import RiderDashboard from "@/pages/rider/rider-dashboard";
 import VendorDashboard from "@/pages/vendor/vendor-dashboard";
 import AdminDashboard from "@/pages/admin/admin-dashboard";
+import AdminDispatch from "@/pages/admin/admin-dispatch";
+import AdminAnalyticsPage from "@/pages/admin/admin-analytics";
+import AdminOrders from "@/pages/admin/admin-orders";
+import AdminRestaurants from "@/pages/admin/admin-restaurants";
+import AdminUsers from "@/pages/admin/admin-users";
 
 // Customer layout components
 import Navbar from "@/components/navbar";
@@ -78,7 +83,7 @@ function Router() {
               user?.role === "customer" ? "/customer-dashboard" :
               user?.role === "vendor" ? "/vendor-dashboard" :
               user?.role === "rider" ? "/rider-dashboard" :
-              user?.role === "admin" ? "/admin-dashboard" : "/login"
+              user?.role === "admin" ? "/admin/dispatch" : "/login"
             } 
           />
         ) : (
@@ -186,8 +191,113 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Admin Dashboard - protected for admins only */}
+      {/* Admin Routes - protected for admins only */}
       <Route path="/admin-dashboard">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/dispatch">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDispatch />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/analytics">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminAnalyticsPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/orders">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminOrders />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/restaurants">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminRestaurants />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/users">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminUsers />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Placeholder routes for remaining admin sections */}
+      <Route path="/admin/riders">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/financial">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/zones">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/support">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/monitoring">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/alerts">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/reports">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AdminDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/config">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
             <AdminDashboard />

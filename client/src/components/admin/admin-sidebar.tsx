@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Link, useLocation } from "wouter";
 import {
   BarChart3,
   Users,
@@ -21,9 +22,10 @@ import btsLogo from "@assets/bts-logo-transparent.png";
 
 interface AdminSidebarProps {
   activeTab: string;
-  onTabChange: (tab: string) => void;
+  onTabChange?: (tab: string) => void;
   isOpen: boolean;
 }
+
 
 interface NavItem {
   id: string;
@@ -32,6 +34,7 @@ interface NavItem {
   badge?: number;
   badgeColor?: string;
   description?: string;
+  path: string;
 }
 
 const navigationItems: NavItem[] = [
@@ -41,13 +44,15 @@ const navigationItems: NavItem[] = [
     icon: Radio,
     badge: 12,
     badgeColor: "bg-red-500",
-    description: "Real-time order tracking and assignment"
+    description: "Real-time order tracking and assignment",
+    path: "/admin/dispatch"
   },
   {
     id: "analytics",
     label: "Analytics",
     icon: BarChart3,
-    description: "Platform performance metrics"
+    description: "Platform performance metrics",
+    path: "/admin/analytics"
   },
   {
     id: "orders",
@@ -55,7 +60,8 @@ const navigationItems: NavItem[] = [
     icon: ShoppingCart,
     badge: 8,
     badgeColor: "bg-blue-500",
-    description: "View and manage all orders"
+    description: "View and manage all orders",
+    path: "/admin/orders"
   },
   {
     id: "restaurants", 
@@ -63,7 +69,8 @@ const navigationItems: NavItem[] = [
     icon: Store,
     badge: 3,
     badgeColor: "bg-orange-500",
-    description: "Manage vendor partnerships"
+    description: "Manage vendor partnerships",
+    path: "/admin/restaurants"
   },
   {
     id: "riders",
@@ -71,25 +78,29 @@ const navigationItems: NavItem[] = [
     icon: Truck,
     badge: 5,
     badgeColor: "bg-green-500",
-    description: "Delivery rider operations"
+    description: "Delivery rider operations",
+    path: "/admin/riders"
   },
   {
     id: "users",
     label: "User Management",
     icon: Users,
-    description: "Customer account management"
+    description: "Customer account management",
+    path: "/admin/users"
   },
   {
     id: "financial",
     label: "Financial Reports",
     icon: DollarSign,
-    description: "Revenue, commissions & settlements"
+    description: "Revenue, commissions & settlements",
+    path: "/admin/financial"
   },
   {
     id: "zones",
     label: "Delivery Zones",
     icon: MapPin,
-    description: "Service area management"
+    description: "Service area management",
+    path: "/admin/zones"
   },
   {
     id: "support",
@@ -97,13 +108,15 @@ const navigationItems: NavItem[] = [
     icon: HeadphonesIcon,
     badge: 15,
     badgeColor: "bg-purple-500",
-    description: "Customer support tickets"
+    description: "Customer support tickets",
+    path: "/admin/support"
   },
   {
     id: "monitoring",
     label: "System Health",
     icon: Activity,
-    description: "Platform monitoring & alerts"
+    description: "Platform monitoring & alerts",
+    path: "/admin/monitoring"
   },
   {
     id: "alerts",
@@ -111,23 +124,27 @@ const navigationItems: NavItem[] = [
     icon: AlertCircle,
     badge: 7,
     badgeColor: "bg-red-500",
-    description: "System alerts & notifications"
+    description: "System alerts & notifications",
+    path: "/admin/alerts"
   },
   {
     id: "reports",
     label: "Reports",
     icon: FileText,
-    description: "Generate business reports"
+    description: "Generate business reports",
+    path: "/admin/reports"
   },
   {
     id: "config",
     label: "Configuration",
     icon: Settings,
-    description: "Platform settings & rules"
+    description: "Platform settings & rules",
+    path: "/admin/config"
   }
 ];
 
 export default function AdminSidebar({ activeTab, onTabChange, isOpen }: AdminSidebarProps) {
+  const [location] = useLocation();
   return (
     <aside 
       className={cn(
@@ -154,45 +171,49 @@ export default function AdminSidebar({ activeTab, onTabChange, isOpen }: AdminSi
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
-        {navigationItems.map((item) => (
-          <Button
-            key={item.id}
-            variant={activeTab === item.id ? "default" : "ghost"}
-            className={cn(
-              "w-full justify-start h-12 px-3",
-              activeTab === item.id 
-                ? "bg-blue-600 text-white hover:bg-blue-700" 
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            )}
-            onClick={() => onTabChange(item.id)}
-            data-testid={`nav-${item.id}`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center space-x-3">
-                <item.icon className="h-5 w-5 flex-shrink-0" />
-                <div className="text-left">
-                  <div className="text-sm font-medium">{item.label}</div>
-                  {item.description && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 hidden lg:block">
-                      {item.description}
+        {navigationItems.map((item) => {
+          const isActive = location === item.path || (activeTab === item.id);
+          
+          return (
+            <Link key={item.id} href={item.path}>
+              <Button
+                variant={isActive ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-start h-12 px-3",
+                  isActive 
+                    ? "bg-blue-600 text-white hover:bg-blue-700" 
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                )}
+                data-testid={`nav-${item.id}`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center space-x-3">
+                    <item.icon className="h-5 w-5 flex-shrink-0" />
+                    <div className="text-left">
+                      <div className="text-sm font-medium">{item.label}</div>
+                      {item.description && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 hidden lg:block">
+                          {item.description}
+                        </div>
+                      )}
                     </div>
+                  </div>
+                  
+                  {item.badge && item.badge > 0 && (
+                    <Badge 
+                      className={cn(
+                        "text-white text-xs px-2 py-1 ml-auto",
+                        item.badgeColor || "bg-gray-500"
+                      )}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </Badge>
                   )}
                 </div>
-              </div>
-              
-              {item.badge && item.badge > 0 && (
-                <Badge 
-                  className={cn(
-                    "text-white text-xs px-2 py-1 ml-auto",
-                    item.badgeColor || "bg-gray-500"
-                  )}
-                >
-                  {item.badge > 99 ? "99+" : item.badge}
-                </Badge>
-              )}
-            </div>
-          </Button>
-        ))}
+              </Button>
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Sidebar Footer */}
