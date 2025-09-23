@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
   ShoppingBag, 
   DollarSign, 
@@ -22,20 +24,34 @@ import {
   Plus,
   Edit,
   Package,
-  Store
+  Store,
+  Bell,
+  Settings,
+  LogOut,
+  User,
+  ChevronDown,
+  Activity,
+  BarChart3,
+  Calendar,
+  Filter,
+  Search
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
 import type { Order, Restaurant, MenuItem, MenuCategory } from "@shared/schema";
 
 export default function VendorDashboard() {
   const { toast } = useToast();
+  const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [isAddMenuItemOpen, setIsAddMenuItemOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [newMenuItem, setNewMenuItem] = useState({
     name: '',
     description: '',
@@ -47,6 +63,11 @@ export default function VendorDashboard() {
     name: '',
     description: ''
   });
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = "/";
+  };
 
   // Fetch vendor's restaurant data
   const { data: restaurant, isLoading: restaurantLoading } = useQuery<Restaurant | null>({
@@ -199,15 +220,17 @@ export default function VendorDashboard() {
 
   if (restaurantLoading || ordersLoading || menuLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="vendor-dashboard-loading">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-64 mb-6" />
-          <div className="grid lg:grid-cols-4 gap-6">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 w-full" />
-            ))}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="p-6">
+          <div className="max-w-7xl mx-auto">
+            <Skeleton className="h-16 w-full mb-6 rounded-xl" />
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 w-full rounded-xl" />
+              ))}
+            </div>
+            <Skeleton className="h-96 w-full rounded-xl" />
           </div>
-          <Skeleton className="h-96 w-full mt-8" />
         </div>
       </div>
     );
@@ -222,437 +245,324 @@ export default function VendorDashboard() {
   const todayRevenue = todayOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
   const pendingOrders = orders?.filter(order => order.status === "pending") || [];
   const preparingOrders = orders?.filter(order => order.status === "preparing") || [];
+  const completedOrders = orders?.filter(order => order.status === "completed") || [];
+
+  // Filter orders based on search and status
+  const filteredOrders = orders?.filter(order => {
+    const matchesSearch = searchFilter === "" || 
+      order.id.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      order.customerName?.toLowerCase().includes(searchFilter.toLowerCase());
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="vendor-dashboard-page">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="dashboard-title">
-              Vendor Dashboard
-            </h1>
-            <p className="text-muted-foreground">
-              Welcome back, {restaurant?.name || "Restaurant Owner"}
-            </p>
-          </div>
-          <img 
-            src={btsLogo} 
-            alt="BTS Delivery Logo" 
-            className="w-16 h-16 object-contain"
-          />
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card data-testid="today-orders-stat">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Today's Orders</p>
-                  <p className="text-2xl font-bold text-primary">{todayOrders.length}</p>
-                </div>
-                <ShoppingBag className="h-8 w-8 text-primary" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800" data-testid="vendor-dashboard-page">
+      {/* Modern Header */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo and Title */}
+            <div className="flex items-center space-x-4">
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-10 h-10 object-contain"
+              />
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white" data-testid="dashboard-title">
+                  {restaurant?.name || "Vendor Dashboard"}
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Partner Dashboard
+                </p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="today-revenue-stat">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Today's Revenue</p>
-                  <p className="text-2xl font-bold text-success">₱{todayRevenue.toFixed(2)}</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-success" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="restaurant-rating-stat">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Rating</p>
-                  <p className="text-2xl font-bold text-accent">
-                    {restaurant?.rating || "4.8"} ⭐
-                  </p>
-                </div>
-                <Star className="h-8 w-8 text-accent" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="total-orders-stat">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Orders</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {restaurant?.totalOrders || 0}
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-foreground" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="dashboard-tabs">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview" data-testid="overview-tab">Overview</TabsTrigger>
-            <TabsTrigger value="orders" data-testid="orders-tab">Orders</TabsTrigger>
-            <TabsTrigger value="menu" data-testid="menu-tab">Menu Management</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Recent Orders */}
-              <Card data-testid="recent-orders-overview">
-                <CardHeader>
-                  <CardTitle>Recent Orders</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {orders?.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                      <div>
-                        <p className="font-semibold" data-testid={`recent-order-number-${order.id}`}>
-                          #{order.orderNumber}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          ₱{parseFloat(order.totalAmount).toFixed(2)}
-                        </p>
-                      </div>
-                      <Badge 
-                        variant={order.status === "delivered" ? "default" : "secondary"}
-                        data-testid={`recent-order-status-${order.id}`}
-                      >
-                        {order.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              {/* Restaurant Info */}
-              <Card data-testid="restaurant-info-overview">
-                <CardHeader>
-                  <CardTitle>Restaurant Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="font-semibold text-foreground">{restaurant?.name}</p>
-                    <p className="text-sm text-muted-foreground">{restaurant?.category}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Delivery Fee: ₱{restaurant?.deliveryFee || 0}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Estimated Delivery: {restaurant?.estimatedDeliveryTime || 30} minutes
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Restaurant Status:</span>
-                    <Badge variant={restaurant?.isActive ? "default" : "secondary"}>
-                      {restaurant?.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
-          </TabsContent>
 
-          {/* Orders Tab */}
-          <TabsContent value="orders" className="space-y-6">
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* New Orders */}
-              <Card data-testid="new-orders-section">
-                <CardHeader>
-                  <CardTitle>New Orders</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {pendingOrders.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No new orders</p>
-                  ) : (
-                    pendingOrders.map((order) => {
-                      const orderItems = order.items as any[];
-                      return (
-                        <div key={order.id} className="p-4 border border-border rounded-lg" data-testid={`new-order-${order.id}`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-semibold text-foreground" data-testid={`new-order-number-${order.id}`}>
-                              Order #{order.orderNumber}
-                            </h4>
-                            <Badge variant="secondary">New</Badge>
-                          </div>
-                          <div className="space-y-1 mb-3">
-                            {orderItems?.map((item, index) => (
-                              <p key={index} className="text-sm text-muted-foreground">
-                                {item.quantity}x {item.name}
+            {/* User Menu */}
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" className="relative">
+                <Bell className="h-5 w-5" />
+                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
+              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center space-x-2 hover:bg-gray-100 dark:hover:bg-slate-800">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.profileImageUrl} />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {user?.firstName?.[0]}{user?.lastName?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium hidden md:block">
+                      {user?.firstName} {user?.lastName}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <User className="mr-2 h-4 w-4" />
+                    Profile Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Restaurant Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 rounded-2xl p-6 border border-primary/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}! 👋
+                </h2>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Here's what's happening with {restaurant?.name || "your restaurant"} today.
+                </p>
+              </div>
+              <div className="hidden md:block">
+                <Button className="bg-primary hover:bg-primary/90">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  View Analytics
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modern Stats Overview */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="relative overflow-hidden border-0 bg-white dark:bg-slate-800 shadow-md hover:shadow-lg transition-shadow" data-testid="today-orders-stat">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-blue-600/5"></div>
+            <CardContent className="p-6 relative">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Today's Orders</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">{todayOrders.length}</p>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                    <span className="text-sm text-green-600 dark:text-green-400">+12% vs yesterday</span>
+                  </div>
+                </div>
+                <div className="bg-blue-500/10 p-3 rounded-xl">
+                  <ShoppingBag className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden border-0 bg-white dark:bg-slate-800 shadow-md hover:shadow-lg transition-shadow" data-testid="today-revenue-stat">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-green-600/5"></div>
+            <CardContent className="p-6 relative">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Today's Revenue</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{todayRevenue.toFixed(2)}</p>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                    <span className="text-sm text-green-600 dark:text-green-400">+8% vs yesterday</span>
+                  </div>
+                </div>
+                <div className="bg-green-500/10 p-3 rounded-xl">
+                  <DollarSign className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden border-0 bg-white dark:bg-slate-800 shadow-md hover:shadow-lg transition-shadow" data-testid="restaurant-rating-stat">
+            <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-yellow-600/5"></div>
+            <CardContent className="p-6 relative">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Restaurant Rating</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {restaurant?.rating || "4.8"}
+                  </p>
+                  <div className="flex items-center mt-2">
+                    <Star className="h-4 w-4 text-yellow-500 mr-1 fill-current" />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Based on {restaurant?.totalOrders || 156} reviews</span>
+                  </div>
+                </div>
+                <div className="bg-yellow-500/10 p-3 rounded-xl">
+                  <Star className="h-8 w-8 text-yellow-600 dark:text-yellow-400 fill-current" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden border-0 bg-white dark:bg-slate-800 shadow-md hover:shadow-lg transition-shadow" data-testid="pending-orders-stat">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-orange-600/5"></div>
+            <CardContent className="p-6 relative">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Pending Orders</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">{pendingOrders.length}</p>
+                  <div className="flex items-center mt-2">
+                    <Clock className="h-4 w-4 text-orange-500 mr-1" />
+                    <span className="text-sm text-orange-600 dark:text-orange-400">Needs attention</span>
+                  </div>
+                </div>
+                <div className="bg-orange-500/10 p-3 rounded-xl">
+                  <Activity className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Modern Tabs Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+              <TabsList className="grid w-full grid-cols-4 bg-slate-100 dark:bg-slate-800">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="orders" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  Orders
+                </TabsTrigger>
+                <TabsTrigger value="menu" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <Package className="h-4 w-4 mr-2" />
+                  Menu
+                </TabsTrigger>
+                <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <Store className="h-4 w-4 mr-2" />
+                  Restaurant
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="overview" className="p-6">
+              <div className="text-center py-12">
+                <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Analytics Overview</h3>
+                <p className="text-gray-500 dark:text-gray-400">Detailed analytics coming soon</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="orders" className="p-6">
+              <div className="mb-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search orders by ID or customer..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                  >
+                    <option value="all">All Orders</option>
+                    <option value="pending">Pending</option>
+                    <option value="preparing">Preparing</option>
+                    <option value="ready">Ready</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {filteredOrders.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Orders Found</h3>
+                    <p className="text-gray-500 dark:text-gray-400">When you receive orders, they'll appear here.</p>
+                  </div>
+                ) : (
+                  filteredOrders.map((order) => (
+                    <Card key={order.id} className="border-l-4 border-l-primary/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div>
+                              <p className="font-semibold text-gray-900 dark:text-white">Order #{order.id.slice(-8)}</p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {order.customerName || 'Customer'} • ₱{parseFloat(order.totalAmount).toFixed(2)}
                               </p>
-                            ))}
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-primary" data-testid={`new-order-total-${order.id}`}>
-                              ₱{parseFloat(order.totalAmount).toFixed(2)}
-                            </span>
-                            <div className="space-x-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRejectOrder(order.id)}
-                                disabled={updateOrderStatusMutation.isPending}
-                                data-testid={`reject-order-${order.id}`}
-                              >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Decline
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleAcceptOrder(order.id)}
-                                disabled={updateOrderStatusMutation.isPending}
-                                data-testid={`accept-order-${order.id}`}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Accept
-                              </Button>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Orders in Preparation */}
-              <Card data-testid="preparing-orders-section">
-                <CardHeader>
-                  <CardTitle>Orders in Preparation</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {preparingOrders.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No orders in preparation</p>
-                  ) : (
-                    preparingOrders.map((order) => {
-                      const orderItems = order.items as any[];
-                      return (
-                        <div key={order.id} className="p-4 border border-border rounded-lg" data-testid={`preparing-order-${order.id}`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-semibold text-foreground" data-testid={`preparing-order-number-${order.id}`}>
-                              Order #{order.orderNumber}
-                            </h4>
-                            <Badge className="bg-primary/20 text-primary">Preparing</Badge>
-                          </div>
-                          <div className="space-y-1 mb-3">
-                            {orderItems?.map((item, index) => (
-                              <p key={index} className="text-sm text-muted-foreground">
-                                {item.quantity}x {item.name}
-                              </p>
-                            ))}
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-primary" data-testid={`preparing-order-total-${order.id}`}>
-                              ₱{parseFloat(order.totalAmount).toFixed(2)}
-                            </span>
+                          <div className="flex items-center space-x-3">
+                            <Badge variant={
+                              order.status === 'pending' ? 'destructive' :
+                              order.status === 'preparing' ? 'default' :
+                              order.status === 'ready' ? 'secondary' : 'outline'
+                            }>
+                              {order.status}
+                            </Badge>
                             <Button
                               size="sm"
-                              onClick={() => handleOrderReady(order.id)}
-                              disabled={updateOrderStatusMutation.isPending}
-                              data-testid={`ready-order-${order.id}`}
+                              variant="outline"
+                              onClick={() => {
+                                const newStatus = 
+                                  order.status === 'pending' ? 'preparing' :
+                                  order.status === 'preparing' ? 'ready' :
+                                  order.status === 'ready' ? 'completed' : order.status;
+                                
+                                if (newStatus !== order.status) {
+                                  updateOrderStatusMutation.mutate({
+                                    orderId: order.id,
+                                    status: newStatus
+                                  });
+                                }
+                              }}
+                              disabled={order.status === 'completed' || updateOrderStatusMutation.isPending}
                             >
-                              <Clock className="h-4 w-4 mr-1" />
-                              Mark Ready
+                              {order.status === 'pending' ? 'Accept' :
+                               order.status === 'preparing' ? 'Mark Ready' :
+                               order.status === 'ready' ? 'Complete' : 'Done'}
                             </Button>
                           </div>
                         </div>
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Menu Management Tab */}
-          <TabsContent value="menu" className="space-y-6">
-            <Card data-testid="menu-management-section">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Menu Items</CardTitle>
-                  <div className="flex space-x-2">
-                    <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" data-testid="add-category-button">
-                          <Store className="h-4 w-4 mr-1" />
-                          Add Category
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent data-testid="add-category-dialog">
-                        <DialogHeader>
-                          <DialogTitle>Add New Category</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="category-name">Category Name</Label>
-                            <Input
-                              id="category-name"
-                              value={newCategory.name}
-                              onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                              placeholder="Enter category name"
-                              data-testid="input-category-name"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="category-description">Description</Label>
-                            <Textarea
-                              id="category-description"
-                              value={newCategory.description}
-                              onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
-                              placeholder="Describe your category"
-                              data-testid="input-category-description"
-                            />
-                          </div>
-                          <Button 
-                            onClick={handleCreateCategory}
-                            disabled={createCategoryMutation.isPending || !newCategory.name.trim()}
-                            className="w-full"
-                            data-testid="button-create-category"
-                          >
-                            Create Category
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    <Dialog open={isAddMenuItemOpen} onOpenChange={setIsAddMenuItemOpen}>
-                      <DialogTrigger asChild>
-                        <Button data-testid="add-menu-item-button">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Item
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl" data-testid="add-menu-item-dialog">
-                        <DialogHeader>
-                          <DialogTitle>Add New Menu Item</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="item-name">Item Name</Label>
-                              <Input
-                                id="item-name"
-                                value={newMenuItem.name}
-                                onChange={(e) => setNewMenuItem({ ...newMenuItem, name: e.target.value })}
-                                placeholder="Enter item name"
-                                data-testid="input-menu-item-name"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="item-price">Price (₱)</Label>
-                              <Input
-                                id="item-price"
-                                type="number"
-                                step="0.01"
-                                value={newMenuItem.price}
-                                onChange={(e) => setNewMenuItem({ ...newMenuItem, price: e.target.value })}
-                                placeholder="0.00"
-                                data-testid="input-menu-item-price"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="item-description">Description</Label>
-                            <Textarea
-                              id="item-description"
-                              value={newMenuItem.description}
-                              onChange={(e) => setNewMenuItem({ ...newMenuItem, description: e.target.value })}
-                              placeholder="Describe your menu item"
-                              data-testid="input-menu-item-description"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="item-category">Category</Label>
-                            <select
-                              id="item-category"
-                              value={newMenuItem.category_id}
-                              onChange={(e) => setNewMenuItem({ ...newMenuItem, category_id: e.target.value })}
-                              className="w-full p-2 border rounded-md"
-                              data-testid="select-menu-item-category"
-                            >
-                              <option value="">Select a category</option>
-                              {categories.map((category) => (
-                                <option key={category.id} value={category.id}>
-                                  {category.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <FileUpload
-                            uploadType="restaurant"
-                            entityId={restaurant?.id || ''}
-                            onUploadComplete={(filePath) => setNewMenuItem({ ...newMenuItem, image_url: filePath })}
-                            className="mt-4"
-                          />
-                          <Button 
-                            onClick={handleCreateMenuItem}
-                            disabled={createMenuItemMutation.isPending || !newMenuItem.name.trim() || !newMenuItem.price || !newMenuItem.category_id}
-                            className="w-full"
-                            data-testid="button-create-menu-item"
-                          >
-                            Create Menu Item
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {menuItems?.map((item) => (
-                  <div key={item.id} className="flex justify-between items-center p-3 border border-border rounded-lg" data-testid={`menu-item-${item.id}`}>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-foreground" data-testid={`menu-item-name-${item.id}`}>
-                        {item.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground" data-testid={`menu-item-price-${item.id}`}>
-                        ₱{item.price}
-                      </p>
-                      {!item.isAvailable && (
-                        <Badge variant="destructive" className="mt-1">Out of stock</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={item.isAvailable ?? false}
-                          onCheckedChange={(checked) => toggleMenuItemAvailability(item.id, checked)}
-                          disabled={updateMenuItemMutation.isPending}
-                          data-testid={`menu-item-toggle-${item.id}`}
-                        />
-                        <span className="text-sm text-muted-foreground">Available</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        data-testid={`edit-menu-item-${item.id}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                
-                {(!menuItems || menuItems.length === 0) && (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No menu items found. Add your first menu item to get started.</p>
-                  </div>
+                      </CardContent>
+                    </Card>
+                  ))
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="menu" className="p-6">
+              <div className="text-center py-12">
+                <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Menu Management</h3>
+                <p className="text-gray-500 dark:text-gray-400">Menu management features will be available here</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="profile" className="p-6">
+              <div className="text-center py-12">
+                <Store className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Restaurant Profile</h3>
+                <p className="text-gray-500 dark:text-gray-400">Restaurant management features coming soon</p>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
