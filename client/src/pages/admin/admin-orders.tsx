@@ -90,7 +90,7 @@ export default function AdminOrders() {
                     <div>
                       <p className="text-blue-100 text-sm font-medium">Total Orders</p>
                       <p className="text-3xl font-bold">{(stats as any)?.totalOrders || 0}</p>
-                      <p className="text-blue-100 text-sm">+18% from last week</p>
+                      <p className="text-blue-100 text-sm">Live data</p>
                     </div>
                     <Package className="h-8 w-8 text-blue-200" />
                   </div>
@@ -102,8 +102,8 @@ export default function AdminOrders() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-green-100 text-sm font-medium">Completed Today</p>
-                      <p className="text-3xl font-bold">127</p>
-                      <p className="text-green-100 text-sm">+8% from yesterday</p>
+                      <p className="text-3xl font-bold">{(stats as any)?.completedToday || 0}</p>
+                      <p className="text-green-100 text-sm">Live data</p>
                     </div>
                     <CheckCircle className="h-8 w-8 text-green-200" />
                   </div>
@@ -115,8 +115,8 @@ export default function AdminOrders() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-orange-100 text-sm font-medium">Pending Orders</p>
-                      <p className="text-3xl font-bold">23</p>
-                      <p className="text-orange-100 text-sm">Needs attention</p>
+                      <p className="text-3xl font-bold">{(stats as any)?.pendingOrders || 0}</p>
+                      <p className="text-orange-100 text-sm">Live data</p>
                     </div>
                     <AlertCircle className="h-8 w-8 text-orange-200" />
                   </div>
@@ -128,8 +128,8 @@ export default function AdminOrders() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-purple-100 text-sm font-medium">Average Time</p>
-                      <p className="text-3xl font-bold">24m</p>
-                      <p className="text-purple-100 text-sm">-2m from average</p>
+                      <p className="text-3xl font-bold">{(stats as any)?.avgDeliveryTime || 0}m</p>
+                      <p className="text-purple-100 text-sm">Live data</p>
                     </div>
                     <TrendingUp className="h-8 w-8 text-purple-200" />
                   </div>

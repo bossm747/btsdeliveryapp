@@ -111,7 +111,7 @@ export default function AdminRestaurants() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Pending Applications</p>
-                      <p className="text-2xl font-bold">5</p>
+                      <p className="text-2xl font-bold">{(stats as any)?.pendingApplications || 0}</p>
                     </div>
                     <AlertCircle className="h-8 w-8 text-orange-600" />
                   </div>
@@ -122,7 +122,7 @@ export default function AdminRestaurants() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                      <p className="text-2xl font-bold">₱2.4M</p>
+                      <p className="text-2xl font-bold">₱{((stats as any)?.totalRevenue / 1000000).toFixed(1) || 0}M</p>
                     </div>
                     <DollarSign className="h-8 w-8 text-green-600" />
                   </div>
@@ -133,7 +133,7 @@ export default function AdminRestaurants() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Avg Rating</p>
-                      <p className="text-2xl font-bold">4.7</p>
+                      <p className="text-2xl font-bold">{(stats as any)?.avgRating || 0}</p>
                     </div>
                     <TrendingUp className="h-8 w-8 text-purple-600" />
                   </div>

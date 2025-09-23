@@ -104,7 +104,7 @@ export default function AdminUsers() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">New This Month</p>
-                      <p className="text-2xl font-bold">245</p>
+                      <p className="text-2xl font-bold">{(stats as any)?.newThisMonth || 0}</p>
                     </div>
                     <TrendingUp className="h-8 w-8 text-purple-600" />
                   </div>
@@ -115,7 +115,7 @@ export default function AdminUsers() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Retention Rate</p>
-                      <p className="text-2xl font-bold">87%</p>
+                      <p className="text-2xl font-bold">{(stats as any)?.retentionRate || 0}%</p>
                     </div>
                     <BarChart3 className="h-8 w-8 text-green-600" />
                   </div>
