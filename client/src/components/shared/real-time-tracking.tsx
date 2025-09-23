@@ -454,7 +454,7 @@ export default function RealTimeTracking({
             <Suspense fallback={<Skeleton className="h-96 w-full rounded-lg" />}>
               <GoogleMapsTracking
                 orderId={orderId}
-                userRole={userRole}
+                userRole={userRole === "vendor" ? "merchant" : userRole}
                 onLocationUpdate={(location) => setRiderLocation(location)}
               />
             </Suspense>

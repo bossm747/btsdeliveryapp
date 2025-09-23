@@ -41,7 +41,7 @@ export default function VendorOrders() {
   useEffect(() => {
     try {
       if (audioRef.current === null) {
-        audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+Dm1XIkBTGH0fPVfzEGHmnA7OF6LwUuhM/z2YU2CRZjuOnUnkwODVKm5fKxZSAJPJPY8sz5MQUZ', 'audio/wav');
+        audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+Dm1XIkBTGH0fPVfzEGHmnA7OF6LwUuhM/z2YU2CRZjuOnUnkwODVKm5fKxZSAJPJPY8sz5MQUZ');
       }
     } catch (error) {
       console.warn('Failed to initialize notification audio:', error);
@@ -85,7 +85,7 @@ export default function VendorOrders() {
             });
             
             // Track recent orders for highlighting
-            setRecentOrderIds(prev => new Set([...prev, data.order.id]));
+            setRecentOrderIds(prev => new Set([...Array.from(prev), data.order.id]));
             setUnreadNotifications(prev => prev + 1);
             
             // Refresh orders data

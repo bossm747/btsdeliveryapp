@@ -123,6 +123,7 @@ export interface IStorage {
   // Menu operations
   getMenuCategories(restaurantId: string): Promise<MenuCategory[]>;
   getMenuItems(restaurantId: string): Promise<MenuItem[]>;
+  getMenuItem(id: string): Promise<MenuItem | undefined>;
   getMenuItemsByCategory(categoryId: string): Promise<MenuItem[]>;
   createMenuCategory(category: InsertMenuCategory): Promise<MenuCategory>;
   createMenuItem(item: InsertMenuItem): Promise<MenuItem>;
@@ -136,6 +137,7 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   getOrdersByCustomer(customerId: string): Promise<Order[]>;
   getOrdersByRestaurant(restaurantId: string): Promise<Order[]>;
+  getRestaurantOrders(restaurantId: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: string, status: string, notes?: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
@@ -167,18 +169,12 @@ export interface IStorage {
   getRiderLocationHistory(riderId: string, hours: number): Promise<RiderLocationHistory[]>;
   updateRiderStatus(riderId: string, updates: { isOnline?: boolean }): Promise<Rider | undefined>;
   
-  createRiderSession(session: InsertRiderSession): Promise<RiderSession>;
-  endRiderSession(riderId: string, endData: any): Promise<RiderSession | undefined>;
-  
   getAvailableRiders(lat: number, lng: number, radiusKm: number): Promise<Rider[]>;
   getOnlineRiders(): Promise<Rider[]>;
   
-  createOrderAssignment(assignment: InsertOrderAssignment): Promise<OrderAssignment>;
-  updateOrderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<OrderAssignment | undefined>;
-  
-  createDeliveryTracking(tracking: InsertDeliveryTracking): Promise<DeliveryTracking>;
-  updateDeliveryTracking(orderId: string, updates: any): Promise<DeliveryTracking | undefined>;
-  getDeliveryTracking(orderId: string): Promise<DeliveryTracking | undefined>;
+  // Rider Assignment Queue Operations (using existing schema)
+  createRiderAssignment(assignment: InsertRiderAssignmentQueue): Promise<RiderAssignmentQueue>;
+  updateRiderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<RiderAssignmentQueue | undefined>;
   
   getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]>;
 
@@ -243,6 +239,10 @@ export interface IStorage {
   // Audit Log Operations
   getAuditLogs(restaurantId?: string, userId?: string): Promise<AuditLog[]>;
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  
+  // Delivery Tracking Operations
+  updateDeliveryTracking(orderId: string, updates: any): Promise<any>;
+  getDeliveryTracking(orderId: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -282,6 +282,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(orders.createdAt));
   }
 
+
   async getFavoriteRestaurants(customerId: string): Promise<Restaurant[]> {
     const favoriteRestaurants = await db
       .select({
@@ -290,19 +291,35 @@ export class DatabaseStorage implements IStorage {
         name: restaurants.name,
         description: restaurants.description,
         category: restaurants.category,
+        logoUrl: restaurants.logoUrl,
         imageUrl: restaurants.imageUrl,
+        galleryImages: restaurants.galleryImages,
         address: restaurants.address,
         phone: restaurants.phone,
+        email: restaurants.email,
+        website: restaurants.website,
+        socialMedia: restaurants.socialMedia,
         operatingHours: restaurants.operatingHours,
-        rating: restaurants.rating,
-        totalOrders: restaurants.totalOrders,
+        holidayHours: restaurants.holidayHours,
+        serviceAreas: restaurants.serviceAreas,
+        services: restaurants.services,
         deliveryFee: restaurants.deliveryFee,
         minimumOrder: restaurants.minimumOrder,
         estimatedDeliveryTime: restaurants.estimatedDeliveryTime,
+        maxOrdersPerHour: restaurants.maxOrdersPerHour,
+        preparationBuffer: restaurants.preparationBuffer,
         isActive: restaurants.isActive,
         isFeatured: restaurants.isFeatured,
+        isAcceptingOrders: restaurants.isAcceptingOrders,
+        pauseUntil: restaurants.pauseUntil,
+        businessLicense: restaurants.businessLicense,
+        taxId: restaurants.taxId,
+        vatRegistered: restaurants.vatRegistered,
+        rating: restaurants.rating,
+        totalOrders: restaurants.totalOrders,
+        totalReviews: restaurants.totalReviews,
         createdAt: restaurants.createdAt,
-        updatedAt: restaurants.updatedAt,
+        updatedAt: restaurants.updatedAt
       })
       .from(userFavorites)
       .innerJoin(restaurants, eq(userFavorites.restaurantId, restaurants.id))
@@ -421,6 +438,27 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  async getMenuItem(id: string): Promise<MenuItem | undefined> {
+    const [item] = await db.select().from(menuItems).where(eq(menuItems.id, id));
+    return item;
+  }
+
+  async deleteMenuItem(id: string): Promise<void> {
+    await db.delete(menuItems).where(eq(menuItems.id, id));
+  }
+
+  async updateMenuCategory(id: string, updates: Partial<MenuCategory>): Promise<MenuCategory | undefined> {
+    const [category] = await db.update(menuCategories)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(menuCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteMenuCategory(id: string): Promise<void> {
+    await db.delete(menuCategories).where(eq(menuCategories.id, id));
+  }
+
   // Order operations
   async getOrders(): Promise<Order[]> {
     return await db.select().from(orders).orderBy(desc(orders.createdAt));
@@ -431,13 +469,13 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
-  async getOrdersByCustomer(customerId: string): Promise<Order[]> {
+  async getOrdersByRestaurant(restaurantId: string): Promise<Order[]> {
     return await db.select().from(orders)
-      .where(eq(orders.customerId, customerId))
+      .where(eq(orders.restaurantId, restaurantId))
       .orderBy(desc(orders.createdAt));
   }
 
-  async getOrdersByRestaurant(restaurantId: string): Promise<Order[]> {
+  async getRestaurantOrders(restaurantId: string): Promise<Order[]> {
     return await db.select().from(orders)
       .where(eq(orders.restaurantId, restaurantId))
       .orderBy(desc(orders.createdAt));
@@ -492,32 +530,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRider(id: string): Promise<Rider | undefined> {
-    try {
-      const [rider] = await db.select().from(riders).where(eq(riders.id, id));
-      return rider;
-    } catch (error: any) {
-      // Handle database schema mismatch gracefully
-      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
-        console.warn(`Database schema mismatch for rider ${id}, using basic query:`, error.message);
-        // Fallback to basic query without problematic columns
-        const [rider] = await db.select({
-          id: riders.id,
-          userId: riders.userId,
-          firstName: riders.firstName,
-          lastName: riders.lastName,
-          phone: riders.phone,
-          vehicleType: riders.vehicleType,
-          rating: riders.rating,
-          profileImageUrl: riders.profileImageUrl,
-          isOnline: riders.isOnline,
-          status: riders.status,
-          createdAt: riders.createdAt,
-          updatedAt: riders.updatedAt
-        }).from(riders).where(eq(riders.id, id));
-        return rider;
-      }
-      throw error;
-    }
+    const [rider] = await db.select().from(riders).where(eq(riders.id, id));
+    return rider;
   }
 
   async getRiderByUserId(userId: string): Promise<Rider | undefined> {
@@ -657,27 +671,6 @@ export class DatabaseStorage implements IStorage {
     return rider;
   }
 
-  async createRiderSession(session: InsertRiderSession): Promise<RiderSession> {
-    const [record] = await db.insert(riderSessions).values(session).returning();
-    return record;
-  }
-
-  async endRiderSession(riderId: string, endData: any): Promise<RiderSession | undefined> {
-    const [session] = await db.update(riderSessions)
-      .set({ 
-        endTime: new Date(),
-        totalEarnings: endData.totalEarnings,
-        totalOrders: endData.totalOrders,
-        totalDistance: endData.totalDistance,
-        status: 'ended'
-      })
-      .where(and(
-        eq(riderSessions.riderId, riderId),
-        sql`${riderSessions.endTime} IS NULL`
-      ))
-      .returning();
-    return session;
-  }
 
   async getAvailableRiders(lat: number, lng: number, radiusKm: number): Promise<Rider[]> {
     // Get riders that are online and have recent location data within radius
@@ -700,51 +693,30 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(riders.rating));
   }
 
-  async createOrderAssignment(assignment: InsertOrderAssignment): Promise<OrderAssignment> {
-    const [record] = await db.insert(orderAssignments).values(assignment).returning();
+  // Rider Assignment Queue Operations
+  async createRiderAssignment(assignment: InsertRiderAssignmentQueue): Promise<RiderAssignmentQueue> {
+    const [record] = await db.insert(riderAssignmentQueue).values(assignment).returning();
     return record;
   }
 
-  async updateOrderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<OrderAssignment | undefined> {
+  async updateRiderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<RiderAssignmentQueue | undefined> {
     const updateData: any = { 
-      status,
-      ...(rejectionReason && { rejectionReason }),
+      assignmentStatus: status,
     };
     
     if (status === 'accepted') {
-      updateData.acceptedTime = new Date();
+      updateData.acceptedAt = new Date();
     } else if (status === 'rejected') {
-      updateData.rejectedTime = new Date();
+      updateData.rejectedByRiders = sql`COALESCE(rejected_by_riders, '[]'::jsonb) || ${JSON.stringify([rejectionReason])}`;
     }
     
-    const [assignment] = await db.update(orderAssignments)
+    const [assignment] = await db.update(riderAssignmentQueue)
       .set(updateData)
-      .where(eq(orderAssignments.id, assignmentId))
+      .where(eq(riderAssignmentQueue.id, assignmentId))
       .returning();
     return assignment;
   }
 
-  async createDeliveryTracking(tracking: InsertDeliveryTracking): Promise<DeliveryTracking> {
-    const [record] = await db.insert(deliveryTracking).values(tracking).returning();
-    return record;
-  }
-
-  async updateDeliveryTracking(orderId: string, updates: any): Promise<DeliveryTracking | undefined> {
-    const [tracking] = await db.update(deliveryTracking)
-      .set({ 
-        ...updates,
-        updatedAt: new Date()
-      })
-      .where(eq(deliveryTracking.orderId, orderId))
-      .returning();
-    return tracking;
-  }
-
-  async getDeliveryTracking(orderId: string): Promise<DeliveryTracking | undefined> {
-    const [tracking] = await db.select().from(deliveryTracking)
-      .where(eq(deliveryTracking.orderId, orderId));
-    return tracking;
-  }
 
   async getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]> {
     const whereConditions = [eq(riderPerformanceMetrics.riderId, riderId)];
@@ -871,17 +843,18 @@ export class DatabaseStorage implements IStorage {
 
   // Financial Operations
   async getVendorEarnings(restaurantId: string, startDate?: string, endDate?: string): Promise<VendorEarnings[]> {
-    let query = db.select().from(vendorEarnings).where(eq(vendorEarnings.restaurantId, restaurantId));
+    let whereConditions = [eq(vendorEarnings.restaurantId, restaurantId)];
     
     if (startDate && endDate) {
-      query = query.where(and(
-        eq(vendorEarnings.restaurantId, restaurantId),
+      whereConditions.push(
         sql`${vendorEarnings.recordDate} >= ${startDate}`,
         sql`${vendorEarnings.recordDate} <= ${endDate}`
-      ));
+      );
     }
     
-    return await query.orderBy(desc(vendorEarnings.recordDate));
+    return await db.select().from(vendorEarnings)
+      .where(and(...whereConditions))
+      .orderBy(desc(vendorEarnings.recordDate));
   }
 
   async createVendorEarnings(earnings: InsertVendorEarnings): Promise<VendorEarnings> {
@@ -972,16 +945,15 @@ export class DatabaseStorage implements IStorage {
 
   // Customer Relationship Management
   async getCustomerNotes(restaurantId: string, customerId?: string): Promise<CustomerNote[]> {
-    let query = db.select().from(customerNotes).where(eq(customerNotes.restaurantId, restaurantId));
+    let whereConditions = [eq(customerNotes.restaurantId, restaurantId)];
     
     if (customerId) {
-      query = query.where(and(
-        eq(customerNotes.restaurantId, restaurantId),
-        eq(customerNotes.customerId, customerId)
-      ));
+      whereConditions.push(eq(customerNotes.customerId, customerId));
     }
     
-    return await query.orderBy(desc(customerNotes.createdAt));
+    return await db.select().from(customerNotes)
+      .where(and(...whereConditions))
+      .orderBy(desc(customerNotes.createdAt));
   }
 
   async createCustomerNote(note: InsertCustomerNote): Promise<CustomerNote> {
@@ -1060,6 +1032,54 @@ export class DatabaseStorage implements IStorage {
   async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
     const [record] = await db.insert(auditLogs).values(log).returning();
     return record;
+  }
+  
+  // Delivery Tracking Operations
+  async updateDeliveryTracking(orderId: string, updates: any): Promise<any> {
+    try {
+      // Update the order status and tracking info
+      const [order] = await db.update(orders)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(orders.id, orderId))
+        .returning();
+      
+      if (order && updates.status) {
+        // Add status to history
+        await db.insert(orderStatusHistory).values({
+          orderId: order.id,
+          status: updates.status,
+          notes: updates.notes || "Tracking update"
+        });
+      }
+      
+      return order;
+    } catch (error) {
+      console.error("Error updating delivery tracking:", error);
+      throw error;
+    }
+  }
+  
+  async getDeliveryTracking(orderId: string): Promise<any> {
+    try {
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      if (!order) return null;
+      
+      // Get tracking history
+      const history = await db.select().from(orderStatusHistory)
+        .where(eq(orderStatusHistory.orderId, orderId))
+        .orderBy(orderStatusHistory.timestamp);
+      
+      return {
+        orderId: order.id,
+        currentStatus: order.status,
+        estimatedArrival: order.estimatedDeliveryTime?.toISOString(),
+        actualDeliveryTime: order.actualDeliveryTime?.toISOString(),
+        timeline: history
+      };
+    } catch (error) {
+      console.error("Error getting delivery tracking:", error);
+      throw error;
+    }
   }
 }
 

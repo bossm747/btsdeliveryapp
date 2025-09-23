@@ -711,7 +711,7 @@ export const supportMessages = pgTable("support_messages", {
 });
 
 // Zones Management - Philippines barangay/city level zone configuration
-export const deliveryZones = pgTable("delivery_zones", {
+export const deliveryZones: any = pgTable("delivery_zones", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 50 }).unique().notNull(),

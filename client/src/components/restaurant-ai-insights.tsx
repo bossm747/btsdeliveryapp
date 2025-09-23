@@ -86,7 +86,8 @@ export default function RestaurantAIInsights({
   };
 
   // Prepare chart data
-  const chartData = forecast?.forecast?.map((day: any) => ({
+  const forecastData = forecast as any;
+  const chartData = forecastData?.forecast?.map((day: any) => ({
     date: new Date(day.date).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }),
     orders: day.expectedOrders,
     confidence: day.confidenceLevel
@@ -163,7 +164,7 @@ export default function RestaurantAIInsights({
 
           {/* Forecast Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {forecast?.forecast?.slice(0, 6).map((day: any, index: number) => (
+            {forecastData?.forecast?.slice(0, 6).map((day: any, index: number) => (
               <Card key={index}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -211,7 +212,7 @@ export default function RestaurantAIInsights({
               <div>
                 <h4 className="font-medium mb-3">Predicted Peak Hours</h4>
                 <div className="flex flex-wrap gap-2">
-                  {forecast?.peakHours?.map((hour: string, index: number) => (
+                  {forecastData?.peakHours?.map((hour: string, index: number) => (
                     <Badge key={index} variant="outline" className="py-2 px-3">
                       <AlertCircle className="h-3 w-3 mr-1" />
                       {hour}
@@ -224,7 +225,7 @@ export default function RestaurantAIInsights({
               <div>
                 <h4 className="font-medium mb-3">Inventory Recommendations</h4>
                 <div className="space-y-2">
-                  {forecast?.stockingSuggestions?.map((suggestion: string, index: number) => (
+                  {forecastData?.stockingSuggestions?.map((suggestion: string, index: number) => (
                     <div key={index} className="flex items-start gap-2 p-3 bg-muted rounded-lg">
                       <Package className="h-4 w-4 text-orange-600 mt-0.5" />
                       <p className="text-sm">{suggestion}</p>
@@ -317,7 +318,9 @@ export default function RestaurantAIInsights({
                 )}
               </Button>
 
-              {generatePromoMutation.data && (
+              {generatePromoMutation.data && (() => {
+                const promoData = generatePromoMutation.data as any;
+                return (
                 <div className="space-y-4 mt-6">
                   {/* Tagline */}
                   <div className="p-4 border rounded-lg">
@@ -326,13 +329,13 @@ export default function RestaurantAIInsights({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyToClipboard(generatePromoMutation.data.tagline)}
+                        onClick={() => copyToClipboard(promoData?.tagline || '')}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
                     <p className="text-lg font-bold text-orange-600">
-                      {generatePromoMutation.data.tagline}
+                      {promoData?.tagline || 'No tagline generated'}
                     </p>
                   </div>
 
@@ -343,12 +346,12 @@ export default function RestaurantAIInsights({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyToClipboard(generatePromoMutation.data.description)}
+                        onClick={() => copyToClipboard(promoData?.description || '')}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-sm">{generatePromoMutation.data.description}</p>
+                    <p className="text-sm">{promoData?.description || 'No description generated'}</p>
                   </div>
 
                   {/* Social Media Post */}
@@ -361,13 +364,13 @@ export default function RestaurantAIInsights({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyToClipboard(generatePromoMutation.data.socialMediaPost)}
+                        onClick={() => copyToClipboard(promoData?.socialMediaPost || '')}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
                     <p className="text-sm whitespace-pre-wrap">
-                      {generatePromoMutation.data.socialMediaPost}
+                      {promoData?.socialMediaPost || 'No social media post generated'}
                     </p>
                   </div>
 
@@ -378,25 +381,26 @@ export default function RestaurantAIInsights({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyToClipboard(generatePromoMutation.data.smsMessage)}
+                        onClick={() => copyToClipboard(promoData?.smsMessage || '')}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-sm font-mono">{generatePromoMutation.data.smsMessage}</p>
+                    <p className="text-sm font-mono">{promoData?.smsMessage || 'No SMS message generated'}</p>
                   </div>
 
                   {/* Terms */}
                   <div className="p-4 border rounded-lg">
                     <h4 className="font-medium mb-2">Terms & Conditions</h4>
                     <ul className="text-xs text-muted-foreground space-y-1">
-                      {generatePromoMutation.data.terms?.map((term: string, index: number) => (
+                      {promoData?.terms?.map((term: string, index: number) => (
                         <li key={index}>• {term}</li>
                       ))}
                     </ul>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>

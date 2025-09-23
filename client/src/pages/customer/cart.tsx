@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useCart } from "@/hooks/use-cart";
+import { useCartStore } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
@@ -38,7 +38,7 @@ const orderSchema = z.object({
 type OrderFormData = z.infer<typeof orderSchema>;
 
 export default function Cart() {
-  const { items, updateQuantity, removeItem, clearCart, getTotalPrice, getCurrentRestaurantId } = useCart();
+  const { items, updateQuantity, removeItem, clearCart, getTotalPrice, getCurrentRestaurantId } = useCartStore();
   const { toast } = useToast();
   const { user } = useAuth();
   const [, setLocation] = useLocation();

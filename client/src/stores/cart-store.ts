@@ -10,6 +10,7 @@ export interface CartItem {
   restaurantId?: string;
   restaurantName?: string;
   category?: string;
+  specialInstructions?: string;
 }
 
 interface CartStore {
@@ -20,6 +21,7 @@ interface CartStore {
   clearCart: () => void;
   getTotalPrice: () => number;
   getTotalItems: () => number;
+  getCurrentRestaurantId: () => string | undefined;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -73,6 +75,11 @@ export const useCartStore = create<CartStore>()(
       
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0);
+      },
+
+      getCurrentRestaurantId: () => {
+        const items = get().items;
+        return items.length > 0 ? items[0].restaurantId : undefined;
       }
     }),
     {
