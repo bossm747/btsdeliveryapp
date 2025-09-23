@@ -15,9 +15,9 @@ import {
   Activity,
   FileText,
   Bell,
-  Radio,
-  Shield
+  Radio
 } from "lucide-react";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 interface AdminSidebarProps {
   activeTab: string;
@@ -139,7 +139,11 @@ export default function AdminSidebar({ activeTab, onTabChange, isOpen }: AdminSi
       {/* Sidebar Header */}
       <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center space-x-2">
-          <Shield className="h-8 w-8 text-blue-600" />
+          <img 
+            src={btsLogo} 
+            alt="BTS Delivery Logo" 
+            className="w-8 h-8 object-contain"
+          />
           <div className="hidden sm:block">
             <h1 className="text-lg font-bold text-gray-900 dark:text-white">
               Admin Console
@@ -195,7 +199,11 @@ export default function AdminSidebar({ activeTab, onTabChange, isOpen }: AdminSi
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
           <div className="flex items-center space-x-2">
-            <Bell className="h-5 w-5 text-blue-600" />
+            <img 
+              src={btsLogo} 
+              alt="BTS" 
+              className="w-5 h-5 object-contain"
+            />
             <div>
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                 System Status

@@ -11,8 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, Settings, User, LogOut, Shield, Menu } from "lucide-react";
+import { Bell, Settings, User, LogOut, Menu } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import btsLogo from "@assets/bts-logo-transparent.png";
 
 interface AdminHeaderProps {
   title?: string;
@@ -71,7 +72,11 @@ export default function AdminHeader({
           
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2">
-              <Shield className="h-8 w-8 text-blue-600" />
+              <img 
+                src={btsLogo} 
+                alt="BTS Delivery Logo" 
+                className="w-8 h-8 object-contain"
+              />
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                 BTS Delivery
               </h1>
@@ -189,7 +194,11 @@ export default function AdminHeader({
                     {user?.email}
                   </p>
                   <Badge variant="outline" className="w-fit mt-1">
-                    <Shield className="w-3 h-3 mr-1" />
+                    <img 
+                      src={btsLogo} 
+                      alt="BTS" 
+                      className="w-3 h-3 mr-1 object-contain"
+                    />
                     {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin'}
                   </Badge>
                 </div>
