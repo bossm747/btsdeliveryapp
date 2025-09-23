@@ -26,8 +26,8 @@ import Parcel from "@/pages/shared/parcel";
 // Role-specific dashboards
 import CustomerDashboard from "@/pages/customer/customer-dashboard";
 import RiderDashboard from "@/pages/rider/rider-dashboard";
-import VendorDashboard from "@/pages/vendor/vendor-dashboard-mobile";
-import AdminDashboard from "@/pages/admin/admin-dashboard-mobile";
+import VendorDashboard from "@/pages/vendor/vendor-dashboard";
+import AdminDashboard from "@/pages/admin/admin-dashboard";
 
 // Customer layout components
 import Navbar from "@/components/navbar";

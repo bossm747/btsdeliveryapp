@@ -1074,33 +1074,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Real-time delivery queue for riders
   app.get("/api/rider/deliveries/queue", async (req, res) => {
     try {
-      // Return available deliveries in the area
-      const mockDeliveries = [
-        {
-          id: "DEL-001",
-          orderNumber: "ORD-5678",
-          customer: {
-            name: "Maria Santos",
-            phone: "09171234567",
-            address: "123 Main St, Batangas City",
-            location: { lat: 13.7565, lng: 121.0583 }
-          },
-          restaurant: {
-            name: "Lomi King",
-            address: "456 Restaurant Row, Batangas",
-            location: { lat: 13.7600, lng: 121.0600 }
-          },
-          items: 3,
-          amount: 450,
-          distance: 3.5,
-          estimatedTime: 20,
-          status: "assigned",
-          priority: "high",
-          tip: 50
-        }
-      ];
-      res.json(mockDeliveries);
+      // Get available orders that need delivery
+      const availableOrders = await db
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          deliveryAddress: orders.deliveryAddress,
+          customerId: orders.customerId,
+          restaurantId: orders.restaurantId,
+          createdAt: orders.createdAt
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.status, "ready"),
+            isNull(orders.riderId)
+          )
+        )
+        .limit(10);
+
+      // Enrich with restaurant and customer data
+      const enrichedOrders = await Promise.all(
+        availableOrders.map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          const customer = await db.select().from(users).where(eq(users.id, order.customerId)).limit(1);
+          
+          return {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            customer: {
+              name: customer[0] ? `${customer[0].firstName} ${customer[0].lastName}` : "Customer",
+              phone: customer[0]?.phone || "",
+              address: typeof order.deliveryAddress === 'object' ? 
+                (order.deliveryAddress as any)?.address || "Delivery Address" : 
+                order.deliveryAddress || "Delivery Address",
+              location: typeof order.deliveryAddress === 'object' ? 
+                (order.deliveryAddress as any)?.location || { lat: 13.7565, lng: 121.0583 } :
+                { lat: 13.7565, lng: 121.0583 }
+            },
+            restaurant: {
+              name: restaurant?.name || "Restaurant",
+              address: restaurant?.address || "Restaurant Address",
+              location: restaurant?.location || { lat: 13.7600, lng: 121.0600 }
+            },
+            items: Array.isArray(order.deliveryAddress) ? order.deliveryAddress.length : 1,
+            amount: parseFloat(order.totalAmount),
+            distance: 3.5, // TODO: Calculate actual distance
+            estimatedTime: 25, // TODO: Calculate based on distance
+            status: order.status,
+            priority: "normal",
+            tip: 0
+          };
+        })
+      );
+
+      res.json(enrichedOrders);
     } catch (error) {
+      console.error("Error fetching delivery queue:", error);
       res.status(500).json({ message: "Failed to fetch delivery queue" });
     }
   });
@@ -1148,18 +1180,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get rider earnings and stats
   app.get("/api/rider/earnings", async (req, res) => {
     try {
+      // Get rider ID from authenticated user or request
+      const riderId = req.user?.id; // Assuming middleware provides rider user
+      
+      if (!riderId) {
+        return res.status(401).json({ message: "Rider authentication required" });
+      }
+
+      // Find rider record
+      const [rider] = await db.select().from(riders).where(eq(riders.userId, riderId)).limit(1);
+      
+      if (!rider) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+
+      // Get delivered orders for this rider
+      const deliveredOrders = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.riderId, rider.id),
+            eq(orders.status, "delivered")
+          )
+        );
+
+      // Calculate time periods
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const thisWeekStart = new Date(today);
+      thisWeekStart.setDate(today.getDate() - today.getDay());
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Filter orders by time periods
+      const todayOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= today);
+      const thisWeekOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= thisWeekStart);
+      const thisMonthOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= thisMonthStart);
+
+      // Calculate earnings (assuming 20% commission)
+      const calculateEarnings = (orders: any[]) => 
+        orders.reduce((sum, o) => sum + (parseFloat(o.totalAmount) * 0.2), 0);
+
       const earnings = {
-        today: 1856.50,
-        thisWeek: 8945.75,
-        thisMonth: 35678.25,
-        trips: 42,
-        tips: 456.50,
-        bonus: 250.00,
-        completionRate: 95.5,
-        acceptanceRate: 88.2
+        today: calculateEarnings(todayOrders),
+        thisWeek: calculateEarnings(thisWeekOrders),
+        thisMonth: calculateEarnings(thisMonthOrders),
+        trips: deliveredOrders.length,
+        tips: 0, // TODO: Implement tips system
+        bonus: 0, // TODO: Implement bonus system
+        completionRate: 100, // TODO: Calculate based on accepted vs completed
+        acceptanceRate: 100 // TODO: Calculate based on offered vs accepted
       };
+
       res.json(earnings);
     } catch (error) {
+      console.error("Error fetching rider earnings:", error);
       res.status(500).json({ message: "Failed to fetch earnings" });
     }
   });
