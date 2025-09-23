@@ -86,7 +86,7 @@ export default function Login() {
           navigate("/rider-dashboard");
           break;
         case "admin":
-          navigate("/admin-dashboard");
+          navigate("/admin/dispatch");
           break;
         default:
           navigate("/");
