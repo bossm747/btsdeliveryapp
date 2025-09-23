@@ -21,9 +21,11 @@ import {
   type RiderAssignmentQueue,
   riders,
   users,
-  userSessions
+  userSessions,
+  orders,
+  restaurants
 } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, isNull } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
