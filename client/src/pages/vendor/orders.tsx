@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,15 @@ import {
   ShoppingBag, 
   Search,
   CheckCircle, 
-  XCircle
+  XCircle,
+  Bell,
+  Clock,
+  Users,
+  Activity,
+  Wifi,
+  WifiOff,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -20,11 +28,120 @@ export default function VendorOrders() {
   const queryClient = useQueryClient();
   const [searchFilter, setSearchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  // Real-time features state
+  const [isConnected, setIsConnected] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(new Set());
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize notification sound
+  useEffect(() => {
+    try {
+      if (audioRef.current === null) {
+        audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+Dm1XIkBTGH0fPVfzEGHmnA7OF6LwUuhM/z2YU2CRZjuOnUnkwODVKm5fKxZSAJPJPY8sz5MQUZ', 'audio/wav');
+      }
+    } catch (error) {
+      console.warn('Failed to initialize notification audio:', error);
+    }
+  }, []);
 
   // Fetch vendor's restaurant data
   const { data: restaurant } = useQuery<Restaurant | null>({
     queryKey: ["/api/vendor/restaurant"],
   });
+
+  // WebSocket connection for real-time order updates
+  useEffect(() => {
+    if (!restaurant?.id) return;
+
+    const connectWebSocket = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/vendor/${restaurant.id}`;
+      
+      wsRef.current = new WebSocket(wsUrl);
+
+      wsRef.current.onopen = () => {
+        setIsConnected(true);
+        console.log('WebSocket connected');
+      };
+
+      wsRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'NEW_ORDER') {
+            // Play notification sound
+            if (soundEnabled && audioRef.current) {
+              audioRef.current.play().catch(() => {});
+            }
+            
+            // Show toast notification
+            toast({
+              title: "New Order Received!",
+              description: `Order #${data.order.orderNumber || data.order.id.slice(-8)} for ₱${parseFloat(data.order.totalAmount).toFixed(2)}`,
+              duration: 5000,
+            });
+            
+            // Track recent orders for highlighting
+            setRecentOrderIds(prev => new Set([...prev, data.order.id]));
+            setUnreadNotifications(prev => prev + 1);
+            
+            // Refresh orders data
+            queryClient.invalidateQueries({ queryKey: ["/api/vendor/orders"] });
+            
+            // Clear highlight after 30 seconds
+            setTimeout(() => {
+              setRecentOrderIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(data.order.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+          
+          if (data.type === 'ORDER_UPDATE') {
+            // Refresh orders data for any status updates
+            queryClient.invalidateQueries({ queryKey: ["/api/vendor/orders"] });
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      wsRef.current.onclose = () => {
+        setIsConnected(false);
+        console.log('WebSocket disconnected');
+        // Attempt to reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setIsConnected(false);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [restaurant?.id, soundEnabled, toast, queryClient]);
+
+  // Clear notifications when user views orders
+  useEffect(() => {
+    if (unreadNotifications > 0) {
+      const timer = setTimeout(() => {
+        setUnreadNotifications(0);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [unreadNotifications]);
 
   // Fetch vendor's orders
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
@@ -78,11 +195,109 @@ export default function VendorOrders() {
 
   return (
     <div className="space-y-6" data-testid="vendor-orders-page">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders Management</h1>
-        <div className="text-sm text-gray-500">
-          {filteredOrders.length} of {orders?.length || 0} orders
+      {/* Header with Real-time Status */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders Management</h1>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-green-600" data-testid="icon-connected" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-red-600" data-testid="icon-disconnected" />
+              )}
+              <span className={`text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                {isConnected ? 'Live Updates Active' : 'Reconnecting...'}
+              </span>
+            </div>
+            
+            <Button
+              size="sm" 
+              variant="outline"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              data-testid="button-toggle-sound"
+            >
+              {soundEnabled ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
+              Sound {soundEnabled ? 'On' : 'Off'}
+            </Button>
+          </div>
         </div>
+        
+        <div className="flex items-center gap-4">
+          {unreadNotifications > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
+              <Bell className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                {unreadNotifications} new order{unreadNotifications > 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+          
+          <div className="text-sm text-gray-500">
+            {filteredOrders.length} of {orders?.length || 0} orders
+          </div>
+        </div>
+      </div>
+
+      {/* Real-time Stats Dashboard */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="count-pending-orders">
+              {orders?.filter(order => order.status === 'pending').length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Needs immediate attention</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="count-active-orders">
+              {orders?.filter(order => ['confirmed', 'preparing'].includes(order.status)).length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Being prepared</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ready Orders</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="count-ready-orders">
+              {orders?.filter(order => order.status === 'ready').length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Awaiting pickup</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Today's Orders</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="count-today-orders">
+              {orders?.filter(order => 
+                new Date(order.createdAt!).toDateString() === new Date().toDateString()
+              ).length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Total today</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search and Filters */}
@@ -123,7 +338,15 @@ export default function VendorOrders() {
           </div>
         ) : (
           filteredOrders.map((order) => (
-            <Card key={order.id} className="border-l-4 border-l-primary/50" data-testid={`card-order-${order.id.slice(-8)}`}>
+            <Card 
+              key={order.id} 
+              className={`border-l-4 ${
+                recentOrderIds.has(order.id) 
+                  ? 'border-l-orange-500 bg-orange-50 dark:bg-orange-900/20 animate-pulse' 
+                  : 'border-l-primary/50'
+              }`} 
+              data-testid={`card-order-${order.id.slice(-8)}`}
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-4">

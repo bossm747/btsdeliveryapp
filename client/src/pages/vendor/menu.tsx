@@ -7,25 +7,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Package, 
   Plus,
   Edit,
   Eye,
-  EyeOff
+  EyeOff,
+  Trash2,
+  Settings,
+  Tags,
+  Sparkles,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
-import type { Restaurant, MenuItem, MenuCategory, MenuModifier, ModifierOption } from "@shared/schema";
+import type { Restaurant, MenuItem, MenuCategory, MenuModifier, ModifierOption, MenuItemModifier } from "@shared/schema";
 
 export default function VendorMenu() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Dialog states
   const [isAddMenuItemOpen, setIsAddMenuItemOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isAddModifierOpen, setIsAddModifierOpen] = useState(false);
+  const [isEditMenuItemOpen, setIsEditMenuItemOpen] = useState(false);
+  const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
+  const [isEditModifierOpen, setIsEditModifierOpen] = useState(false);
+  const [isManageModifierOptionsOpen, setIsManageModifierOptionsOpen] = useState(false);
+  const [isAssignModifiersOpen, setIsAssignModifiersOpen] = useState(false);
+  
+  // Form states
   const [newMenuItem, setNewMenuItem] = useState({
     name: '',
     description: '',
@@ -33,11 +50,14 @@ export default function VendorMenu() {
     category_id: '',
     image_url: ''
   });
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
   const [newCategory, setNewCategory] = useState({
     name: '',
     description: '',
     restaurant_id: ''
   });
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
   const [newModifier, setNewModifier] = useState({
     name: '',
     type: 'single',
@@ -45,6 +65,10 @@ export default function VendorMenu() {
     min_selections: 0,
     max_selections: 1
   });
+  const [editingModifier, setEditingModifier] = useState<MenuModifier | null>(null);
+  const [selectedModifierForOptions, setSelectedModifierForOptions] = useState<MenuModifier | null>(null);
+  const [selectedItemForModifiers, setSelectedItemForModifiers] = useState<MenuItem | null>(null);
+  const [newModifierOption, setNewModifierOption] = useState({ name: '', price: '0' });
 
   // Fetch vendor's restaurant data
   const { data: restaurant } = useQuery<Restaurant | null>({
@@ -67,6 +91,18 @@ export default function VendorMenu() {
   const { data: modifiers = [], isLoading: modifiersLoading } = useQuery<MenuModifier[]>({
     queryKey: ["/api/vendor/modifiers"],
     enabled: !!restaurant,
+  });
+
+  // Fetch modifier options for selected modifier
+  const { data: modifierOptions = [] } = useQuery<ModifierOption[]>({
+    queryKey: ["/api/vendor/modifiers", selectedModifierForOptions?.id, "options"],
+    enabled: !!selectedModifierForOptions?.id,
+  });
+
+  // Fetch assigned modifiers for selected item
+  const { data: itemModifiers = [] } = useQuery<MenuItemModifier[]>({
+    queryKey: ["/api/vendor/menu-items", selectedItemForModifiers?.id, "modifiers"],
+    enabled: !!selectedItemForModifiers?.id,
   });
 
   // Update menu item availability mutation
@@ -140,6 +176,155 @@ export default function VendorMenu() {
       toast({ title: 'Error', description: 'Failed to create modifier', variant: 'destructive' });
     }
   });
+
+  // Edit mutations
+  const editMenuItemMutation = useMutation({
+    mutationFn: async (updates: Partial<MenuItem> & { id: string }) => {
+      const { id, ...data } = updates;
+      return await apiRequest("PATCH", `/api/vendor/menu-items/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
+      setEditingMenuItem(null);
+      setIsEditMenuItemOpen(false);
+      toast({ title: 'Success', description: 'Menu item updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update menu item', variant: 'destructive' });
+    }
+  });
+
+  const editCategoryMutation = useMutation({
+    mutationFn: async (updates: Partial<MenuCategory> & { id: string }) => {
+      const { id, ...data } = updates;
+      return await apiRequest("PATCH", `/api/vendor/categories/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
+      setEditingCategory(null);
+      setIsEditCategoryOpen(false);
+      toast({ title: 'Success', description: 'Category updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update category', variant: 'destructive' });
+    }
+  });
+
+  const editModifierMutation = useMutation({
+    mutationFn: async (updates: Partial<MenuModifier> & { id: string }) => {
+      const { id, ...data } = updates;
+      return await apiRequest("PATCH", `/api/vendor/modifiers/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor/modifiers'] });
+      setEditingModifier(null);
+      setIsEditModifierOpen(false);
+      toast({ title: 'Success', description: 'Modifier updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update modifier', variant: 'destructive' });
+    }
+  });
+
+  // AI Description Generation Mutation
+  const generateDescriptionMutation = useMutation({
+    mutationFn: async ({ itemName, category }: { itemName: string; category: string }) => {
+      const response = await apiRequest('POST', '/api/ai/generate-description', { itemName, category });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      if (editingMenuItem) {
+        setEditingMenuItem({ ...editingMenuItem, description: data.description });
+      } else {
+        setNewMenuItem(prev => ({ ...prev, description: data.description }));
+      }
+      toast({ title: 'Success', description: 'AI description generated successfully!' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to generate description', variant: 'destructive' });
+    }
+  });
+
+  // Delete mutations
+  const deleteMenuItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      return await apiRequest("DELETE", `/api/vendor/menu-items/${itemId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
+      toast({ title: 'Success', description: 'Menu item deleted successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete menu item', variant: 'destructive' });
+    }
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      return await apiRequest("DELETE", `/api/vendor/categories/${categoryId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
+      toast({ title: 'Success', description: 'Category deleted successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete category', variant: 'destructive' });
+    }
+  });
+
+  const deleteModifierMutation = useMutation({
+    mutationFn: async (modifierId: string) => {
+      return await apiRequest("DELETE", `/api/vendor/modifiers/${modifierId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor/modifiers'] });
+      toast({ title: 'Success', description: 'Modifier deleted successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete modifier', variant: 'destructive' });
+    }
+  });
+
+  // Modifier options mutations
+  const createModifierOptionMutation = useMutation({
+    mutationFn: async (option: { modifierId: string; name: string; price: number }) => {
+      const response = await apiRequest('POST', `/api/vendor/modifiers/${option.modifierId}/options`, {
+        name: option.name,
+        price: option.price
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/modifiers", selectedModifierForOptions?.id, "options"] });
+      setNewModifierOption({ name: '', price: '0' });
+      toast({ title: 'Success', description: 'Modifier option created successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create modifier option', variant: 'destructive' });
+    }
+  });
+
+  const deleteModifierOptionMutation = useMutation({
+    mutationFn: async ({ modifierId, optionId }: { modifierId: string; optionId: string }) => {
+      return await apiRequest("DELETE", `/api/vendor/modifiers/${modifierId}/options/${optionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/modifiers", selectedModifierForOptions?.id, "options"] });
+      toast({ title: 'Success', description: 'Modifier option deleted successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete modifier option', variant: 'destructive' });
+    }
+  });
+
+  const handleGenerateDescription = (itemName: string, categoryId: string) => {
+    const category = categories.find(c => c.id === categoryId);
+    if (itemName.trim() && category?.name) {
+      generateDescriptionMutation.mutate({ itemName, category: category.name });
+    } else {
+      toast({ title: 'Missing Info', description: 'Please enter item name and select category first', variant: 'destructive' });
+    }
+  };
 
   const handleCreateMenuItem = () => {
     if (newMenuItem.name.trim() && newMenuItem.price && newMenuItem.category_id) {
@@ -328,12 +513,30 @@ export default function VendorMenu() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="item-description">Description</Label>
+                  <div className="flex justify-between items-center mb-2">
+                    <Label htmlFor="item-description">Description</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleGenerateDescription(newMenuItem.name, newMenuItem.category_id)}
+                      disabled={!newMenuItem.name.trim() || !newMenuItem.category_id || generateDescriptionMutation.isPending}
+                      data-testid="button-generate-description"
+                      className="flex items-center gap-2"
+                    >
+                      {generateDescriptionMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      {generateDescriptionMutation.isPending ? 'Generating...' : 'Generate with AI'}
+                    </Button>
+                  </div>
                   <Textarea
                     id="item-description"
                     value={newMenuItem.description}
                     onChange={(e) => setNewMenuItem({...newMenuItem, description: e.target.value})}
-                    placeholder="Describe your menu item"
+                    placeholder="Describe your menu item or click 'Generate with AI'"
                     data-testid="textarea-item-description"
                   />
                 </div>
@@ -402,7 +605,7 @@ export default function VendorMenu() {
                 <div key={modifier.id} className="p-3 border rounded-lg" data-testid={`modifier-${modifier.id}`}>
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold">{modifier.name}</h3>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 items-center">
                       <span className={`text-xs px-2 py-1 rounded ${
                         modifier.type === 'single' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                       }`}>
@@ -413,6 +616,57 @@ export default function VendorMenu() {
                           Required
                         </span>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedModifierForOptions(modifier);
+                          setIsManageModifierOptionsOpen(true);
+                        }}
+                        data-testid={`button-manage-options-${modifier.id}`}
+                      >
+                        <Settings className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingModifier(modifier);
+                          setIsEditModifierOpen(true);
+                        }}
+                        data-testid={`button-edit-modifier-${modifier.id}`}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            data-testid={`button-delete-modifier-${modifier.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Modifier</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{modifier.name}"? This will also delete all options for this modifier.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteModifierMutation.mutate(modifier.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
@@ -436,8 +690,54 @@ export default function VendorMenu() {
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {categories.map(category => (
                 <div key={category.id} className="p-3 border rounded-lg" data-testid={`category-${category.id}`}>
-                  <h3 className="font-semibold">{category.name}</h3>
-                  <p className="text-sm text-gray-600">{category.description}</p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold">{category.name}</h3>
+                      <p className="text-sm text-gray-600">{category.description}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingCategory(category);
+                          setIsEditCategoryOpen(true);
+                        }}
+                        data-testid={`button-edit-category-${category.id}`}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            data-testid={`button-delete-category-${category.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{category.name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteCategoryMutation.mutate(category.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -489,10 +789,61 @@ export default function VendorMenu() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-primary">₱{parseFloat(item.price).toFixed(2)}</span>
-                    <Button size="sm" variant="outline" data-testid={`button-edit-${item.id}`}>
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => {
+                          setSelectedItemForModifiers(item);
+                          setIsAssignModifiersOpen(true);
+                        }}
+                        data-testid={`button-assign-modifiers-${item.id}`}
+                      >
+                        <Tags className="h-4 w-4 mr-1" />
+                        Modifiers
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => {
+                          setEditingMenuItem(item);
+                          setIsEditMenuItemOpen(true);
+                        }}
+                        data-testid={`button-edit-${item.id}`}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700"
+                            data-testid={`button-delete-${item.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Menu Item</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{item.name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteMenuItemMutation.mutate(item.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

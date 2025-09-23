@@ -2105,6 +2105,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, async (req, res) => {
+    try {
+      const { optionId } = req.params;
+      const updates = req.body;
+
+      const updatedOption = await storage.updateModifierOption(optionId, updates);
+      if (!updatedOption) {
+        return res.status(404).json({ message: "Modifier option not found" });
+      }
+
+      res.json(updatedOption);
+    } catch (error) {
+      console.error("Error updating modifier option:", error);
+      res.status(500).json({ message: "Failed to update modifier option" });
+    }
+  });
+
+  app.delete("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, async (req, res) => {
+    try {
+      const { optionId } = req.params;
+      await storage.deleteModifierOption(optionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting modifier option:", error);
+      res.status(500).json({ message: "Failed to delete modifier option" });
+    }
+  });
+
+  // Modifier CRUD endpoints
+  app.patch("/api/vendor/modifiers/:modifierId", authenticateToken, async (req, res) => {
+    try {
+      const { modifierId } = req.params;
+      const updates = req.body;
+
+      const updatedModifier = await storage.updateMenuModifier(modifierId, updates);
+      if (!updatedModifier) {
+        return res.status(404).json({ message: "Modifier not found" });
+      }
+
+      res.json(updatedModifier);
+    } catch (error) {
+      console.error("Error updating modifier:", error);
+      res.status(500).json({ message: "Failed to update modifier" });
+    }
+  });
+
+  app.delete("/api/vendor/modifiers/:modifierId", authenticateToken, async (req, res) => {
+    try {
+      const { modifierId } = req.params;
+      
+      // First delete all options for this modifier
+      const options = await storage.getModifierOptions(modifierId);
+      for (const option of options) {
+        await storage.deleteModifierOption(option.id);
+      }
+      
+      // Then delete the modifier itself
+      await storage.deleteMenuModifier(modifierId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting modifier:", error);
+      res.status(500).json({ message: "Failed to delete modifier" });
+    }
+  });
+
+  // Menu Item Modifier Assignment endpoints
+  app.get("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const modifiers = await storage.getMenuItemModifiers(itemId);
+      res.json(modifiers);
+    } catch (error) {
+      console.error("Error fetching item modifiers:", error);
+      res.status(500).json({ message: "Failed to fetch item modifiers" });
+    }
+  });
+
+  app.post("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const assignmentData = insertMenuItemModifierSchema.parse({
+        ...req.body,
+        menuItemId: itemId
+      });
+
+      const assignment = await storage.createMenuItemModifier(assignmentData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error assigning modifier:", error);
+      res.status(400).json({ message: "Failed to assign modifier" });
+    }
+  });
+
+  app.delete("/api/vendor/menu-items/:itemId/modifiers/:assignmentId", authenticateToken, async (req, res) => {
+    try {
+      const { assignmentId } = req.params;
+      await storage.deleteMenuItemModifier(assignmentId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing modifier assignment:", error);
+      res.status(500).json({ message: "Failed to remove modifier assignment" });
+    }
+  });
+
   // Promotions Management
   app.get("/api/vendor/promotions", authenticateToken, async (req, res) => {
     try {
@@ -2163,6 +2267,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating promotion:", error);
       res.status(500).json({ message: "Failed to update promotion" });
+    }
+  });
+
+  app.delete("/api/vendor/promotions/:promotionId", authenticateToken, async (req, res) => {
+    try {
+      const { promotionId } = req.params;
+      
+      await storage.deletePromotion(promotionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting promotion:", error);
+      res.status(500).json({ message: "Failed to delete promotion" });
     }
   });
 
@@ -2260,6 +2376,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/vendor/staff/:staffId", authenticateToken, async (req, res) => {
+    try {
+      const { staffId } = req.params;
+      const updates = req.body;
+
+      const updatedStaff = await storage.updateStaffMember(staffId, updates);
+      if (!updatedStaff) {
+        return res.status(404).json({ message: "Staff member not found" });
+      }
+
+      res.json(updatedStaff);
+    } catch (error) {
+      console.error("Error updating staff member:", error);
+      res.status(500).json({ message: "Failed to update staff member" });
+    }
+  });
+
+  app.delete("/api/vendor/staff/:staffId", authenticateToken, async (req, res) => {
+    try {
+      const { staffId } = req.params;
+      
+      await storage.deleteStaffMember(staffId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting staff member:", error);
+      res.status(500).json({ message: "Failed to delete staff member" });
+    }
+  });
+
   // Inventory Management
   app.get("/api/vendor/inventory", authenticateToken, async (req, res) => {
     try {
@@ -2296,6 +2441,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching low stock items:", error);
       res.status(500).json({ message: "Failed to fetch low stock items" });
+    }
+  });
+
+  app.post("/api/vendor/inventory", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const inventoryData = {
+        ...req.body,
+        restaurantId: restaurants[0].id
+      };
+
+      const item = await storage.createInventoryItem(inventoryData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error creating inventory item:", error);
+      res.status(400).json({ message: "Failed to create inventory item" });
+    }
+  });
+
+  app.patch("/api/vendor/inventory/:itemId", authenticateToken, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const updates = req.body;
+
+      const updatedItem = await storage.updateInventoryItem(itemId, updates);
+      if (!updatedItem) {
+        return res.status(404).json({ message: "Inventory item not found" });
+      }
+
+      res.json(updatedItem);
+    } catch (error) {
+      console.error("Error updating inventory item:", error);
+      res.status(500).json({ message: "Failed to update inventory item" });
+    }
+  });
+
+  app.delete("/api/vendor/inventory/:itemId", authenticateToken, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      
+      await storage.deleteInventoryItem(itemId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting inventory item:", error);
+      res.status(500).json({ message: "Failed to delete inventory item" });
     }
   });
 
@@ -3622,6 +3820,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     clearInterval(interval);
   });
   
+  // ============================================================================
+  // AI SERVICES ENDPOINTS  
+  // ============================================================================
+
+  // Generate menu item description using AI
+  app.post('/api/ai/generate-description', authenticateToken, async (req, res) => {
+    try {
+      const { itemName, category, ingredients } = req.body;
+      
+      if (!itemName || !category) {
+        return res.status(400).json({ message: 'Item name and category are required' });
+      }
+      
+      const description = await aiServices.generateMenuItemDescription(itemName, category, ingredients);
+      res.json({ description });
+    } catch (error) {
+      console.error('Error generating description:', error);
+      res.status(500).json({ message: 'Failed to generate description' });
+    }
+  });
+
+  // Generate AI-powered sales insights
+  app.post('/api/ai/analyze-sales', authenticateToken, async (req, res) => {
+    try {
+      const { period = 'month' } = req.body;
+      
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: 'Restaurant not found' });
+      }
+      
+      // Get sales data (orders)
+      const orders = await storage.getRestaurantOrders(restaurants[0].id);
+      const insights = await aiServices.analyzeSalesData(orders, period);
+      
+      res.json(insights);
+    } catch (error) {
+      console.error('Error analyzing sales:', error);
+      res.status(500).json({ message: 'Failed to analyze sales data' });
+    }
+  });
+
+  // Generate promotional content
+  app.post('/api/ai/generate-promotion', authenticateToken, async (req, res) => {
+    try {
+      const { businessName, promotion, colors } = req.body;
+      
+      if (!businessName || !promotion) {
+        return res.status(400).json({ message: 'Business name and promotion are required' });
+      }
+      
+      const bannerUrl = await aiServices.generatePromotionalBanner(businessName, promotion, colors);
+      res.json({ bannerUrl });
+    } catch (error) {
+      console.error('Error generating promotional banner:', error);
+      res.status(500).json({ message: 'Failed to generate promotional banner' });
+    }
+  });
+
+  // Generate social media content
+  app.post('/api/ai/generate-social-post', authenticateToken, async (req, res) => {
+    try {
+      const { businessName, postType, content } = req.body;
+      
+      if (!businessName || !postType) {
+        return res.status(400).json({ message: 'Business name and post type are required' });
+      }
+      
+      const socialPost = await aiServices.generateSocialMediaPost(businessName, postType, content);
+      res.json(socialPost);
+    } catch (error) {
+      console.error('Error generating social media post:', error);
+      res.status(500).json({ message: 'Failed to generate social media post' });
+    }
+  });
+
   // Export notification functions for use in order status updates
   (global as any).notifyOrderUpdate = notifyOrderUpdate;
   (global as any).broadcastNotification = broadcastNotification;
