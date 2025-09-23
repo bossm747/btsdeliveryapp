@@ -24,60 +24,19 @@ export default function AdminAnalytics({
   riderPerformance = []
 }: AdminAnalyticsProps) {
   
-  // Default data if not provided
-  const defaultOrderTrends = [
-    { day: "Lunes", orders: 145, delivered: 132, cancelled: 13 },
-    { day: "Martes", orders: 189, delivered: 175, cancelled: 14 },
-    { day: "Miyerkules", orders: 210, delivered: 198, cancelled: 12 },
-    { day: "Huwebes", orders: 245, delivered: 230, cancelled: 15 },
-    { day: "Biyernes", orders: 380, delivered: 362, cancelled: 18 },
-    { day: "Sabado", orders: 425, delivered: 410, cancelled: 15 },
-    { day: "Linggo", orders: 398, delivered: 385, cancelled: 13 }
-  ];
+  // Use only real data - no fallback mock data
+  const orderData = orderTrends || [];
+  const revenueData = revenueTrends || [];
+  const serviceData = serviceBreakdown || [];
+  const restaurantData = topRestaurants || [];
+  const riderData = riderPerformance || [];
 
-  const defaultRevenueTrends = [
-    { month: "Enero", revenue: 850000, growth: 12 },
-    { month: "Pebrero", revenue: 920000, growth: 8 },
-    { month: "Marso", revenue: 1080000, growth: 17 },
-    { month: "Abril", revenue: 1250000, growth: 16 },
-    { month: "Mayo", revenue: 1420000, growth: 14 },
-    { month: "Hunyo", revenue: 1680000, growth: 18 }
-  ];
-
-  const defaultServiceBreakdown = [
-    { name: "Food Delivery", value: 65, color: "#FF6B35" },
-    { name: "Pabili", value: 20, color: "#FFD23F" },
-    { name: "Pabayad", value: 10, color: "#004225" },
-    { name: "Parcel", value: 5, color: "#4CAF50" }
-  ];
-
-  const defaultTopRestaurants = [
-    { name: "Lomi King", orders: 456, revenue: 125000, rating: 4.8 },
-    { name: "Sisig Palace", orders: 389, revenue: 98000, rating: 4.7 },
-    { name: "Bulalo Express", orders: 345, revenue: 102000, rating: 4.9 },
-    { name: "Tapa Queen", orders: 312, revenue: 78000, rating: 4.6 },
-    { name: "Adobo Hub", orders: 289, revenue: 72000, rating: 4.7 }
-  ];
-
-  const defaultRiderPerformance = [
-    { name: "Juan Cruz", deliveries: 156, rating: 4.9, earnings: 15600 },
-    { name: "Maria Santos", deliveries: 145, rating: 4.8, earnings: 14500 },
-    { name: "Pedro Garcia", deliveries: 134, rating: 4.7, earnings: 13400 },
-    { name: "Ana Reyes", deliveries: 128, rating: 4.9, earnings: 12800 },
-    { name: "Jose Mendoza", deliveries: 115, rating: 4.6, earnings: 11500 }
-  ];
-
-  const orderData = orderTrends.length > 0 ? orderTrends : defaultOrderTrends;
-  const revenueData = revenueTrends.length > 0 ? revenueTrends : defaultRevenueTrends;
-  const serviceData = serviceBreakdown.length > 0 ? serviceBreakdown : defaultServiceBreakdown;
-  const restaurantData = topRestaurants.length > 0 ? topRestaurants : defaultTopRestaurants;
-  const riderData = riderPerformance.length > 0 ? riderPerformance : defaultRiderPerformance;
-
-  // Calculate metrics
-  const totalRevenue = revenueData.reduce((sum, item) => sum + item.revenue, 0);
-  const avgGrowth = revenueData.reduce((sum, item) => sum + item.growth, 0) / revenueData.length;
-  const totalOrders = orderData.reduce((sum, item) => sum + item.orders, 0);
-  const deliveryRate = orderData.reduce((sum, item) => sum + item.delivered, 0) / totalOrders * 100;
+  // Calculate metrics safely from real data
+  const totalRevenue = revenueData.reduce((sum, item) => sum + (item.revenue || 0), 0);
+  const avgGrowth = revenueData.length > 0 ? revenueData.reduce((sum, item) => sum + (item.growth || 0), 0) / revenueData.length : 0;
+  const totalOrders = orderData.reduce((sum, item) => sum + (item.orders || 0), 0);
+  const totalDelivered = orderData.reduce((sum, item) => sum + (item.delivered || 0), 0);
+  const deliveryRate = totalOrders > 0 ? (totalDelivered / totalOrders * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -91,10 +50,12 @@ export default function AdminAnalytics({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₱{(totalRevenue / 1000).toFixed(0)}K</div>
+            <div className="text-2xl font-bold">
+              {totalRevenue > 0 ? `₱${(totalRevenue / 1000).toFixed(0)}K` : 'No data'}
+            </div>
             <div className="flex items-center text-xs text-green-600">
               <TrendingUp className="h-3 w-3 mr-1" />
-              +{avgGrowth.toFixed(1)}% avg growth
+              {avgGrowth > 0 ? `+${avgGrowth.toFixed(1)}% avg growth` : 'No growth data'}
             </div>
           </CardContent>
         </Card>
@@ -107,10 +68,12 @@ export default function AdminAnalytics({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalOrders.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {totalOrders > 0 ? totalOrders.toLocaleString() : 'No data'}
+            </div>
             <div className="flex items-center text-xs text-green-600">
               <TrendingUp className="h-3 w-3 mr-1" />
-              {deliveryRate.toFixed(1)}% delivered
+              {deliveryRate > 0 ? `${deliveryRate.toFixed(1)}% delivered` : 'No delivery data'}
             </div>
           </CardContent>
         </Card>

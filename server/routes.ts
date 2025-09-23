@@ -1081,20 +1081,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/rider/deliveries/active", async (req, res) => {
     try {
-      // Return active deliveries for the rider
-      const activeDeliveries: any[] = [];
+      // Get active deliveries for the authenticated rider
+      // In production, get rider ID from auth token
+      const [rider] = await db.select().from(riders).limit(1);
+      
+      if (!rider) {
+        return res.json([]);
+      }
+      
+      const activeDeliveries = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.riderId, rider.id),
+            inArray(orders.status, ["assigned", "picked_up", "in_transit"])
+          )
+        );
+      
       res.json(activeDeliveries);
     } catch (error) {
+      console.error("Error fetching active deliveries:", error);
       res.status(500).json({ message: "Failed to fetch active deliveries" });
     }
   });
 
   app.get("/api/rider/deliveries/history", async (req, res) => {
     try {
-      // Return delivery history
-      const history: any[] = [];
+      // Get delivery history for the authenticated rider
+      // In production, get rider ID from auth token  
+      const [rider] = await db.select().from(riders).limit(1);
+      
+      if (!rider) {
+        return res.json([]);
+      }
+      
+      const history = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.riderId, rider.id),
+            eq(orders.status, "delivered")
+          )
+        )
+        .orderBy(desc(orders.updatedAt))
+        .limit(50);
+      
       res.json(history);
     } catch (error) {
+      console.error("Error fetching delivery history:", error);
       res.status(500).json({ message: "Failed to fetch delivery history" });
     }
   });
@@ -1306,22 +1342,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin Routes
-  app.get("/api/admin/stats", async (req, res) => {
-    try {
-      const stats = {
-        totalUsers: 1543,
-        activeRestaurants: 127,
-        totalOrders: 8432,
-        activeRiders: 89,
-        onlineRiders: 34,
-        revenueToday: 125430.50
-      };
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch stats" });
-    }
-  });
 
   app.get("/api/admin/users", async (req, res) => {
     try {
@@ -2055,29 +2075,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/dispatch/alerts", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      // For now, generate sample alerts - in real implementation would fetch from systemAlerts table
-      const alerts = [
-        {
-          id: "alert-1",
+      // Get real alerts from database
+      const currentTime = new Date();
+      const alerts = [];
+      
+      // Check for SLA breaches - orders taking longer than estimated
+      const overDueOrders = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.status, "in_transit"),
+            sql`${orders.createdAt} < ${new Date(currentTime.getTime() - 60 * 60 * 1000)}` // 1 hour overdue
+          )
+        );
+      
+      if (overDueOrders.length > 0) {
+        alerts.push({
+          id: `sla-breach-${Date.now()}`,
           type: "sla_breach",
           severity: "high",
-          title: "Multiple SLA Breaches Detected",
-          description: "3 orders have exceeded their estimated delivery time",
-          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          title: `${overDueOrders.length} Orders Overdue`,
+          description: `${overDueOrders.length} orders have exceeded their estimated delivery time`,
+          timestamp: currentTime.toISOString(),
           acknowledged: false,
-          affectedOrders: ["order-1", "order-2", "order-3"]
-        },
-        {
-          id: "alert-2", 
+          affectedOrders: overDueOrders.map(o => o.id)
+        });
+      }
+      
+      // Check for low rider capacity
+      const onlineRiders = await db
+        .select()
+        .from(riders)
+        .where(eq(riders.isOnline, true));
+      
+      if (onlineRiders.length < 5) {
+        alerts.push({
+          id: `low-capacity-${Date.now()}`,
           type: "rider_offline",
-          severity: "medium",
-          title: "Rider Capacity Low",
-          description: "Only 2 riders online in Batangas City area",
-          timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          severity: "medium", 
+          title: "Low Rider Capacity",
+          description: `Only ${onlineRiders.length} riders online`,
+          timestamp: currentTime.toISOString(),
           acknowledged: false,
-          affectedRiders: ["rider-1", "rider-2"]
-        }
-      ];
+          affectedRiders: onlineRiders.map(r => r.id)
+        });
+      }
       
       res.json(alerts);
     } catch (error) {
@@ -2174,8 +2217,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orders = await storage.getOrders();
       const riders = await storage.getRiders();
       
-      // Calculate statistics
-      const totalUsers = 15234; // Simplified for demo
+      // Calculate real statistics from database
+      const users = await storage.getUsers();
+      const totalUsers = users.length;
       const activeRestaurants = restaurants.filter(r => r.isActive).length;
       const totalOrders = orders.length;
       const activeRiders = riders.filter(r => r.isOnline).length;
