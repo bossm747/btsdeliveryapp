@@ -55,15 +55,23 @@ export default function AIAssistant() {
 
   // Marketing State
   const [socialForm, setSocialForm] = useState({
-    businessName: "",
+    businessName: restaurant?.name || "",
     postType: "general" as "new_item" | "promotion" | "general",
     content: {}
   });
   const [reviewForm, setReviewForm] = useState({
     reviewText: "",
     rating: 5,
-    businessName: ""
+    businessName: restaurant?.name || ""
   });
+
+  // Update forms when restaurant data loads
+  if (restaurant && socialForm.businessName === "") {
+    setSocialForm(prev => ({ ...prev, businessName: restaurant.name }));
+  }
+  if (restaurant && reviewForm.businessName === "") {
+    setReviewForm(prev => ({ ...prev, businessName: restaurant.name }));
+  }
 
   // Analytics State
   const [analyticsForm, setAnalyticsForm] = useState({
@@ -77,12 +85,14 @@ export default function AIAssistant() {
 
   // AI API Mutations
   const generateMenuDescription = useMutation({
-    mutationFn: async (data: typeof menuForm) =>
-      apiRequest("/api/ai/menu-description", "POST", {
+    mutationFn: async (data: typeof menuForm) => {
+      const response = await apiRequest("/api/ai/menu-description", "POST", {
         itemName: data.itemName,
         category: data.category,
         ingredients: data.ingredients ? data.ingredients.split(",").map(i => i.trim()) : undefined
-      }),
+      });
+      return response as { description: string };
+    },
     onSuccess: (data) => {
       toast({
         title: "Description Generated!",
@@ -99,12 +109,14 @@ export default function AIAssistant() {
   });
 
   const generateBusinessDescription = useMutation({
-    mutationFn: async (data: typeof businessForm) =>
-      apiRequest("/api/ai/business-description", "POST", {
+    mutationFn: async (data: typeof businessForm) => {
+      const response = await apiRequest("/api/ai/business-description", "POST", {
         businessName: data.businessName,
         cuisineType: data.cuisineType,
         specialties: data.specialties.split(",").map(s => s.trim())
-      }),
+      });
+      return response as { description: string };
+    },
     onSuccess: (data) => {
       toast({
         title: "Business Description Created!",
@@ -114,8 +126,10 @@ export default function AIAssistant() {
   });
 
   const generateMenuImage = useMutation({
-    mutationFn: async (data: typeof imageForm) =>
-      apiRequest("/api/ai/menu-image", "POST", data),
+    mutationFn: async (data: typeof imageForm) => {
+      const response = await apiRequest("/api/ai/menu-image", "POST", data);
+      return response as { imageUrl: string };
+    },
     onSuccess: () => {
       toast({
         title: "Image Generated!",
@@ -125,11 +139,13 @@ export default function AIAssistant() {
   });
 
   const generatePromoBanner = useMutation({
-    mutationFn: async (data: typeof bannerForm) =>
-      apiRequest("/api/ai/promotional-banner", "POST", {
+    mutationFn: async (data: typeof bannerForm) => {
+      const response = await apiRequest("/api/ai/promotional-banner", "POST", {
         ...data,
         colors: data.colors.split(",").map(c => c.trim())
-      }),
+      });
+      return response as { imageUrl: string };
+    },
     onSuccess: () => {
       toast({
         title: "Banner Created!",
@@ -139,8 +155,10 @@ export default function AIAssistant() {
   });
 
   const generateSocialPost = useMutation({
-    mutationFn: async (data: typeof socialForm) =>
-      apiRequest("/api/ai/social-media-post", "POST", data),
+    mutationFn: async (data: typeof socialForm) => {
+      const response = await apiRequest("/api/ai/social-media-post", "POST", data);
+      return response as { caption: string; hashtags: string[]; callToAction: string };
+    },
     onSuccess: () => {
       toast({
         title: "Social Post Ready!",
@@ -150,8 +168,10 @@ export default function AIAssistant() {
   });
 
   const generateReviewResponse = useMutation({
-    mutationFn: async (data: typeof reviewForm) =>
-      apiRequest("/api/ai/review-response", "POST", data),
+    mutationFn: async (data: typeof reviewForm) => {
+      const response = await apiRequest("/api/ai/review-response", "POST", data);
+      return response as { response: string };
+    },
     onSuccess: () => {
       toast({
         title: "Response Generated!",
@@ -161,8 +181,10 @@ export default function AIAssistant() {
   });
 
   const analyzeSales = useMutation({
-    mutationFn: async (data: typeof analyticsForm) =>
-      apiRequest("/api/ai/sales-analysis", "POST", data),
+    mutationFn: async (data: typeof analyticsForm) => {
+      const response = await apiRequest("/api/ai/sales-analysis", "POST", data);
+      return response as { insights: string; recommendations: string[]; trends: string };
+    },
     onSuccess: () => {
       toast({
         title: "Analysis Complete!",
