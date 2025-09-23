@@ -71,6 +71,13 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+
+  // Customer-specific operations
+  getOrdersByCustomer(customerId: string): Promise<Order[]>;
+  getFavoriteRestaurants(customerId: string): Promise<Restaurant[]>;
+  addFavoriteRestaurant(customerId: string, restaurantId: string): Promise<any>;
+  removeFavoriteRestaurant(customerId: string, restaurantId: string): Promise<void>;
 
   // Restaurant operations
   getRestaurants(): Promise<Restaurant[]>;
@@ -159,6 +166,83 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updatedUser;
+  }
+
+  // Customer-specific operations
+  async getOrdersByCustomer(customerId: string): Promise<Order[]> {
+    return await db.select().from(orders)
+      .where(eq(orders.customerId, customerId))
+      .orderBy(desc(orders.createdAt));
+  }
+
+  async getFavoriteRestaurants(customerId: string): Promise<Restaurant[]> {
+    const favoriteRestaurants = await db
+      .select({
+        id: restaurants.id,
+        ownerId: restaurants.ownerId,
+        name: restaurants.name,
+        description: restaurants.description,
+        category: restaurants.category,
+        imageUrl: restaurants.imageUrl,
+        address: restaurants.address,
+        phone: restaurants.phone,
+        operatingHours: restaurants.operatingHours,
+        rating: restaurants.rating,
+        totalOrders: restaurants.totalOrders,
+        deliveryFee: restaurants.deliveryFee,
+        minimumOrder: restaurants.minimumOrder,
+        estimatedDeliveryTime: restaurants.estimatedDeliveryTime,
+        isActive: restaurants.isActive,
+        isFeatured: restaurants.isFeatured,
+        createdAt: restaurants.createdAt,
+        updatedAt: restaurants.updatedAt,
+      })
+      .from(userFavorites)
+      .innerJoin(restaurants, eq(userFavorites.restaurantId, restaurants.id))
+      .where(and(
+        eq(userFavorites.userId, customerId),
+        eq(restaurants.isActive, true)
+      ))
+      .orderBy(desc(userFavorites.createdAt));
+    
+    return favoriteRestaurants;
+  }
+
+  async addFavoriteRestaurant(customerId: string, restaurantId: string): Promise<any> {
+    // Check if already exists to prevent duplicates
+    const [existing] = await db.select().from(userFavorites)
+      .where(and(
+        eq(userFavorites.userId, customerId),
+        eq(userFavorites.restaurantId, restaurantId)
+      ));
+    
+    if (existing) {
+      return existing;
+    }
+
+    const [favorite] = await db.insert(userFavorites).values({
+      userId: customerId,
+      restaurantId
+    }).returning();
+    
+    return favorite;
+  }
+
+  async removeFavoriteRestaurant(customerId: string, restaurantId: string): Promise<void> {
+    await db.delete(userFavorites)
+      .where(and(
+        eq(userFavorites.userId, customerId),
+        eq(userFavorites.restaurantId, restaurantId)
+      ));
   }
 
   // Restaurant operations

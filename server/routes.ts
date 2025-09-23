@@ -1621,6 +1621,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== CUSTOMER API ENDPOINTS ====================
+  
+  // Customer Profile endpoints
+  app.get("/api/customer/profile", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Remove sensitive data
+      const { passwordHash, ...profile } = user;
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching customer profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  app.patch("/api/customer/profile", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const updates = req.body;
+      // Remove fields that shouldn't be updated through this endpoint
+      delete updates.id;
+      delete updates.passwordHash;
+      delete updates.role;
+      delete updates.createdAt;
+
+      const updatedUser = await storage.updateUser(req.user.id, updates);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { passwordHash, ...profile } = updatedUser;
+      res.json(profile);
+    } catch (error) {
+      console.error("Error updating customer profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Customer Orders endpoints
+  app.get("/api/customer/orders", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const orders = await storage.getOrdersByCustomer(req.user.id);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching customer orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/customer/orders/recent", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const orders = await storage.getOrdersByCustomer(req.user.id);
+      // Return only the 10 most recent orders
+      const recentOrders = orders.slice(0, 10);
+      res.json(recentOrders);
+    } catch (error) {
+      console.error("Error fetching recent orders:", error);
+      res.status(500).json({ message: "Failed to fetch recent orders" });
+    }
+  });
+
+  // Customer Favorites endpoints
+  app.get("/api/customer/favorites", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const favorites = await storage.getFavoriteRestaurants(req.user.id);
+      res.json(favorites);
+    } catch (error) {
+      console.error("Error fetching favorite restaurants:", error);
+      res.status(500).json({ message: "Failed to fetch favorites" });
+    }
+  });
+
+  app.post("/api/customer/favorites/:restaurantId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { restaurantId } = req.params;
+      const favorite = await storage.addFavoriteRestaurant(req.user.id, restaurantId);
+      res.json(favorite);
+    } catch (error) {
+      console.error("Error adding favorite restaurant:", error);
+      res.status(500).json({ message: "Failed to add to favorites" });
+    }
+  });
+
+  app.delete("/api/customer/favorites/:restaurantId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { restaurantId } = req.params;
+      await storage.removeFavoriteRestaurant(req.user.id, restaurantId);
+      res.json({ message: "Removed from favorites" });
+    } catch (error) {
+      console.error("Error removing favorite restaurant:", error);
+      res.status(500).json({ message: "Failed to remove from favorites" });
+    }
+  });
+
   // ==================== VENDOR API ENDPOINTS ====================
   
   // Vendor Categories endpoints

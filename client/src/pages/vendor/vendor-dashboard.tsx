@@ -98,7 +98,7 @@ export default function VendorDashboard() {
       return await apiRequest("PATCH", `/api/menu-items/${itemId}`, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID, "menu"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
       toast({
         title: "Menu item updated",
         description: "The menu item has been successfully updated.",
@@ -151,7 +151,7 @@ export default function VendorDashboard() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID, "menu"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
       setNewMenuItem({ name: '', description: '', price: '', category_id: '', image_url: '' });
       setIsAddMenuItemOpen(false);
       toast({ title: 'Success', description: 'Menu item created successfully' });
@@ -183,7 +183,7 @@ export default function VendorDashboard() {
       createMenuItemMutation.mutate({
         ...newMenuItem,
         price: parseFloat(newMenuItem.price),
-        restaurant_id: MOCK_RESTAURANT_ID
+        restaurant_id: restaurant?.id || ''
       });
     }
   };
@@ -192,7 +192,7 @@ export default function VendorDashboard() {
     if (newCategory.name.trim()) {
       createCategoryMutation.mutate({
         ...newCategory,
-        restaurant_id: MOCK_RESTAURANT_ID
+        restaurant_id: restaurant?.id || ''
       });
     }
   };
@@ -590,7 +590,7 @@ export default function VendorDashboard() {
                           </div>
                           <FileUpload
                             uploadType="restaurant"
-                            entityId={MOCK_RESTAURANT_ID}
+                            entityId={restaurant?.id || ''}
                             onUploadComplete={(filePath) => setNewMenuItem({ ...newMenuItem, image_url: filePath })}
                             className="mt-4"
                           />
