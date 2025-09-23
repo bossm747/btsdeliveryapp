@@ -35,7 +35,7 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState("all");
 
   // Fetch dashboard stats
-  const { data: stats } = useQuery({
+  const { data: stats = {} } = useQuery({
     queryKey: ["/api/admin/stats"],
   });
 
@@ -107,7 +107,7 @@ export default function AdminDashboard() {
             <CardTitle className="text-sm font-medium text-gray-600">Total Users</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-users">{stats?.totalUsers || 0}</div>
+            <div className="text-2xl font-bold" data-testid="stat-users">{(stats as any)?.totalUsers || 0}</div>
             <p className="text-xs text-green-600">+12% from last month</p>
           </CardContent>
         </Card>
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
             <CardTitle className="text-sm font-medium text-gray-600">Active Restaurants</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-restaurants">{stats?.activeRestaurants || 0}</div>
+            <div className="text-2xl font-bold" data-testid="stat-restaurants">{(stats as any)?.activeRestaurants || 0}</div>
             <p className="text-xs text-green-600">+5 new this week</p>
           </CardContent>
         </Card>
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
             <CardTitle className="text-sm font-medium text-gray-600">Total Orders</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-orders">{stats?.totalOrders || 0}</div>
+            <div className="text-2xl font-bold" data-testid="stat-orders">{(stats as any)?.totalOrders || 0}</div>
             <p className="text-xs text-green-600">+18% from last week</p>
           </CardContent>
         </Card>
@@ -137,8 +137,8 @@ export default function AdminDashboard() {
             <CardTitle className="text-sm font-medium text-gray-600">Active Riders</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-riders">{stats?.activeRiders || 0}</div>
-            <p className="text-xs text-gray-600">{stats?.onlineRiders || 0} online now</p>
+            <div className="text-2xl font-bold" data-testid="stat-riders">{(stats as any)?.activeRiders || 0}</div>
+            <p className="text-xs text-gray-600">{(stats as any)?.onlineRiders || 0} online now</p>
           </CardContent>
         </Card>
 
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600" data-testid="stat-revenue">
-              ₱{stats?.revenueToday?.toFixed(2) || "0.00"}
+              ₱{(stats as any)?.revenueToday?.toFixed(2) || "0.00"}
             </div>
             <p className="text-xs text-green-600">+25% from yesterday</p>
           </CardContent>
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order: any) => (
+                  {(orders as any[]).map((order: any) => (
                     <TableRow key={order.id}>
                       <TableCell>{order.orderNumber}</TableCell>
                       <TableCell>{order.customerName}</TableCell>
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {restaurants.map((restaurant: any) => (
+                  {(restaurants as any[]).map((restaurant: any) => (
                     <TableRow key={restaurant.id}>
                       <TableCell className="font-medium">{restaurant.name}</TableCell>
                       <TableCell>{restaurant.ownerName}</TableCell>
@@ -299,7 +299,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {riders.map((rider: any) => (
+                  {(riders as any[]).map((rider: any) => (
                     <TableRow key={rider.id}>
                       <TableCell className="font-medium">{rider.name}</TableCell>
                       <TableCell>{rider.vehicleType}</TableCell>
@@ -365,7 +365,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user: any) => (
+                  {(users as any[]).map((user: any) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.firstName} {user.lastName}</TableCell>
                       <TableCell>{user.email}</TableCell>
