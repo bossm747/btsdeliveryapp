@@ -1,10 +1,25 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { 
+  securityMiddlewareConfig,
+  errorHandler,
+  notFoundHandler,
+  requestLogger,
+  logger
+} from "./middleware";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', 1);
+
+// Apply basic security middleware first
+app.use(...securityMiddlewareConfig.basic);
+
+// Body parsing middleware (after security headers)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -39,13 +54,11 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  // 404 handler for undefined routes
+  app.use(notFoundHandler);
 
-    res.status(status).json({ message });
-    throw err;
-  });
+  // Global error handler (must be last)
+  app.use(errorHandler);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -61,11 +74,30 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  
+  // Graceful shutdown handling
+  process.on('SIGTERM', () => {
+    logger.info('Received SIGTERM, shutting down gracefully');
+    server.close(() => {
+      logger.info('Process terminated');
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGINT', () => {
+    logger.info('Received SIGINT, shutting down gracefully');
+    server.close(() => {
+      logger.info('Process terminated');
+      process.exit(0);
+    });
+  });
+
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
+    logger.info(`Server started successfully on port ${port}`);
     log(`serving on port ${port}`);
   });
 })();

@@ -423,7 +423,7 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
 
       // Calculate and display route
       if (directionsService && directionsRenderer && currentLocation) {
-        const waypoints = [];
+        const waypoints: google.maps.DirectionsWaypoint[] = [];
         let origin = currentLocation;
         let destination = activeDelivery.customer.location;
 

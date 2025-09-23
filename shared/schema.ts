@@ -13,6 +13,43 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Order Management Enums and Constants
+export const ORDER_TYPES = {
+  FOOD: 'food',
+  PABILI: 'pabili', 
+  PABAYAD: 'pabayad',
+  PARCEL: 'parcel'
+} as const;
+
+export const ORDER_STATUSES = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  PREPARING: 'preparing',
+  READY: 'ready',
+  PICKED_UP: 'picked_up',
+  IN_TRANSIT: 'in_transit',
+  DELIVERED: 'delivered',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled'
+} as const;
+
+export const PAYMENT_STATUSES = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  PAID: 'paid',
+  FAILED: 'failed',
+  REFUNDED: 'refunded',
+  CANCELLED: 'cancelled'
+} as const;
+
+export const NOTIFICATION_TYPES = {
+  EMAIL: 'email',
+  SMS: 'sms',
+  PUSH: 'push',
+  WHATSAPP: 'whatsapp',
+  VIBER: 'viber'
+} as const;
+
 // User Sessions for authentication
 export const userSessions = pgTable("user_sessions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -502,38 +539,269 @@ export const riders = pgTable("riders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Orders table
+// Enhanced Orders table for complete lifecycle management
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: uuid("customer_id").references(() => users.id).notNull(),
   restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
   riderId: uuid("rider_id").references(() => users.id),
   orderNumber: varchar("order_number", { length: 20 }).unique().notNull(),
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, confirmed, preparing, ready, picked_up, in_transit, delivered, cancelled
-  items: jsonb("items").notNull(), // Array of {itemId, name, price, quantity, specialInstructions}
+  
+  // Order Type and Status
+  orderType: varchar("order_type", { length: 20 }).notNull().default("food"), // food, pabili, pabayad, parcel
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, confirmed, preparing, ready, picked_up, in_transit, delivered, completed, cancelled
+  previousStatus: varchar("previous_status", { length: 20 }), // For rollback purposes
+  
+  // Items and Pricing
+  items: jsonb("items").notNull(), // Array of {itemId, name, price, quantity, specialInstructions, modifiers}
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   serviceFee: decimal("service_fee", { precision: 10, scale: 2 }).default("0"),
+  tax: decimal("tax", { precision: 10, scale: 2 }).default("0"),
+  tip: decimal("tip", { precision: 10, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 10, scale: 2 }).default("0"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Payment Information
   paymentMethod: varchar("payment_method", { length: 50 }).notNull().default("cash"), // cash, gcash, maya, card
-  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"), // pending, paid, failed, refunded
+  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"), // pending, processing, paid, failed, refunded, cancelled
   paymentTransactionId: varchar("payment_transaction_id", { length: 100 }),
-  deliveryAddress: jsonb("delivery_address").notNull(),
+  paymentProvider: varchar("payment_provider", { length: 50 }), // stripe, nexuspay, cash
+  
+  // Delivery Information
+  deliveryAddress: jsonb("delivery_address").notNull(), // Enhanced with coordinates, landmarks, etc.
+  pickupAddress: jsonb("pickup_address"), // For parcel orders or special pickup locations
   specialInstructions: text("special_instructions"),
+  customerNotes: text("customer_notes"), // Customer-specific notes
+  internalNotes: text("internal_notes"), // Admin/vendor internal notes
+  
+  // Timing and SLA Management
+  estimatedPreparationTime: integer("estimated_preparation_time"), // minutes
+  actualPreparationTime: integer("actual_preparation_time"), // minutes
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
+  deliveryTimeCommitment: timestamp("delivery_time_commitment"), // SLA commitment to customer
+  orderPriority: integer("order_priority").default(1), // 1-5, higher = more urgent
+  
+  // Vendor Management
+  vendorAcceptedAt: timestamp("vendor_accepted_at"),
+  vendorRejectedAt: timestamp("vendor_rejected_at"),
+  vendorRejectionReason: text("vendor_rejection_reason"),
+  vendorPreparationTimeEstimate: integer("vendor_preparation_time_estimate"), // minutes
+  autoAcceptDeadline: timestamp("auto_accept_deadline"), // Deadline for vendor acceptance
+  
+  // Rider Assignment and Tracking
+  riderAssignedAt: timestamp("rider_assigned_at"),
+  riderAcceptedAt: timestamp("rider_accepted_at"),
+  riderArrivedAt: timestamp("rider_arrived_at"),
+  pickedUpAt: timestamp("picked_up_at"),
+  riderNotes: text("rider_notes"),
+  proofOfDelivery: jsonb("proof_of_delivery"), // {type: 'photo', 'signature', data: 'base64...'}
+  deliveryConfirmationCode: varchar("delivery_confirmation_code", { length: 10 }),
+  
+  // Performance and Quality Tracking
+  isOnTime: boolean("is_on_time"),
+  qualityRating: decimal("quality_rating", { precision: 3, scale: 2 }), // Customer rating
+  deliveryRating: decimal("delivery_rating", { precision: 3, scale: 2 }), // Delivery experience rating
+  overallRating: decimal("overall_rating", { precision: 3, scale: 2 }), // Combined rating
+  
+  // Dispute and Issue Management
+  hasDispute: boolean("has_dispute").default(false),
+  disputeReason: varchar("dispute_reason", { length: 100 }),
+  disputeStatus: varchar("dispute_status", { length: 20 }), // open, investigating, resolved, escalated
+  adminNotes: text("admin_notes"),
+  resolutionNotes: text("resolution_notes"),
+  
+  // Notification Tracking
+  notificationsSent: jsonb("notifications_sent"), // Track which notifications were sent and when
+  customerContactPreference: varchar("customer_contact_preference", { length: 20 }).default("app"), // app, sms, call, email
+  
+  // Order Type Specific Fields
+  parcelInsuranceValue: decimal("parcel_insurance_value", { precision: 10, scale: 2 }), // For parcel orders
+  pabiliShoppingList: jsonb("pabili_shopping_list"), // For pabili orders - items to purchase
+  pabiliReceipts: jsonb("pabili_receipts"), // Receipts from shopping
+  pabayadBillDetails: jsonb("pabayad_bill_details"), // Bill payment details
+  pabayadConfirmationCode: varchar("pabayad_confirmation_code", { length: 50 }),
+  
+  // Analytics and Reporting
+  orderSource: varchar("order_source", { length: 50 }).default("app"), // app, web, phone, admin
+  customerDevice: varchar("customer_device", { length: 50 }), // mobile, desktop, tablet
+  peakHourOrder: boolean("peak_hour_order").default(false),
+  weekendOrder: boolean("weekend_order").default(false),
+  
+  // System Fields
+  isTest: boolean("is_test").default(false), // For testing purposes
+  migrationId: varchar("migration_id", { length: 50 }), // For data migration tracking
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Order status tracking
+// Enhanced Order status tracking with comprehensive details
 export const orderStatusHistory = pgTable("order_status_history", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").references(() => orders.id).notNull(),
-  status: varchar("status", { length: 20 }).notNull(),
-  timestamp: timestamp("timestamp").defaultNow(),
+  fromStatus: varchar("from_status", { length: 20 }),
+  toStatus: varchar("to_status", { length: 20 }).notNull(),
+  changedBy: uuid("changed_by").references(() => users.id), // Who made the status change
+  changedByRole: varchar("changed_by_role", { length: 20 }), // customer, vendor, rider, admin, system
+  reason: varchar("reason", { length: 100 }), // Reason for status change
   notes: text("notes"),
+  isAutomaticTransition: boolean("is_automatic_transition").default(false),
+  location: jsonb("location"), // GPS coordinates when status changed
+  metadata: jsonb("metadata"), // Additional context data
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// Order SLA Management - Track delivery commitments and performance
+export const orderSlaTracking = pgTable("order_sla_tracking", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  
+  // SLA Definitions
+  vendorAcceptanceSla: integer("vendor_acceptance_sla").default(300), // 5 minutes in seconds
+  preparationTimeSla: integer("preparation_time_sla"), // Expected preparation time in seconds
+  pickupTimeSla: integer("pickup_time_sla").default(600), // 10 minutes for pickup
+  deliveryTimeSla: integer("delivery_time_sla"), // Total delivery time commitment
+  
+  // Actual Performance
+  vendorAcceptanceTime: integer("vendor_acceptance_time"), // Actual time taken
+  preparationTime: integer("preparation_time"), // Actual time taken  
+  pickupTime: integer("pickup_time"), // Actual time taken
+  deliveryTime: integer("delivery_time"), // Actual total delivery time
+  
+  // SLA Status
+  vendorAcceptanceSlaBreached: boolean("vendor_acceptance_sla_breached").default(false),
+  preparationSlaBreached: boolean("preparation_sla_breached").default(false),
+  pickupSlaBreached: boolean("pickup_sla_breached").default(false),
+  deliverySlaBreached: boolean("delivery_sla_breached").default(false),
+  
+  // Customer Communication
+  customerNotifiedOfDelay: boolean("customer_notified_of_delay").default(false),
+  delayReason: varchar("delay_reason", { length: 200 }),
+  compensationOffered: jsonb("compensation_offered"), // {type, amount, description}
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Order Notifications - Track all notifications sent for each order
+export const orderNotifications = pgTable("order_notifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  recipientId: uuid("recipient_id").references(() => users.id).notNull(),
+  recipientRole: varchar("recipient_role", { length: 20 }).notNull(), // customer, vendor, rider, admin
+  
+  // Notification Details
+  notificationType: varchar("notification_type", { length: 20 }).notNull(), // email, sms, push, whatsapp, viber
+  trigger: varchar("trigger", { length: 50 }).notNull(), // order_placed, status_changed, rider_assigned, etc.
+  templateId: varchar("template_id", { length: 50 }),
+  subject: varchar("subject", { length: 200 }),
+  message: text("message"),
+  
+  // Delivery Status
+  status: varchar("status", { length: 20 }).default("pending"), // pending, sent, delivered, failed, read
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  failureReason: text("failure_reason"),
+  
+  // Channel Specific Data
+  channelData: jsonb("channel_data"), // Provider-specific data (message ID, etc.)
+  retryCount: integer("retry_count").default(0),
+  maxRetries: integer("max_retries").default(3),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Order Business Rules - Define automatic status transitions and business logic
+export const orderBusinessRules = pgTable("order_business_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  
+  // Rule Conditions
+  orderType: varchar("order_type", { length: 20 }), // Apply to specific order types
+  fromStatus: varchar("from_status", { length: 20 }).notNull(),
+  toStatus: varchar("to_status", { length: 20 }).notNull(),
+  triggerConditions: jsonb("trigger_conditions"), // Complex conditions in JSON
+  
+  // Rule Actions
+  actions: jsonb("actions"), // {notify: [], updateFields: {}, assignRider: true}
+  autoTransition: boolean("auto_transition").default(false),
+  transitionDelay: integer("transition_delay").default(0), // Delay in seconds
+  
+  // Rule Constraints
+  timeConstraints: jsonb("time_constraints"), // {validHours: [], validDays: []}
+  locationConstraints: jsonb("location_constraints"), // Specific to zones/areas
+  orderValueConstraints: jsonb("order_value_constraints"), // Min/max order values
+  
+  // Rule Status
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1), // 1-10, higher = more priority
+  
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Order Disputes - Handle customer complaints and dispute resolution
+export const orderDisputes = pgTable("order_disputes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  reportedBy: uuid("reported_by").references(() => users.id).notNull(),
+  reporterRole: varchar("reporter_role", { length: 20 }).notNull(), // customer, vendor, rider
+  
+  // Dispute Details
+  disputeType: varchar("dispute_type", { length: 50 }).notNull(), // wrong_order, late_delivery, quality_issue, payment_issue, damage, missing_items
+  category: varchar("category", { length: 50 }).notNull(), // delivery, food_quality, service, payment, other
+  severity: varchar("severity", { length: 20 }).default("medium"), // low, medium, high, critical
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description").notNull(),
+  evidence: jsonb("evidence"), // Photos, videos, documents
+  
+  // Resolution Process
+  status: varchar("status", { length: 20 }).default("open"), // open, investigating, escalated, resolved, closed
+  assignedTo: uuid("assigned_to").references(() => users.id), // Admin handling the dispute
+  priority: integer("priority").default(1), // 1-5, higher = more urgent
+  
+  // Communication
+  lastResponseAt: timestamp("last_response_at"),
+  responseTimeTarget: timestamp("response_time_target"),
+  resolutionTarget: timestamp("resolution_target"),
+  
+  // Resolution Details
+  resolutionType: varchar("resolution_type", { length: 50 }), // refund, replacement, credit, apology, no_action
+  resolutionAmount: decimal("resolution_amount", { precision: 10, scale: 2 }),
+  resolutionDescription: text("resolution_description"),
+  resolutionNotes: text("resolution_notes"),
+  resolvedBy: uuid("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  
+  // Customer Satisfaction
+  customerSatisfied: boolean("customer_satisfied"),
+  satisfactionRating: integer("satisfaction_rating"), // 1-5
+  satisfactionFeedback: text("satisfaction_feedback"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Order Dispute Messages - Communication thread for dispute resolution
+export const orderDisputeMessages = pgTable("order_dispute_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  disputeId: uuid("dispute_id").references(() => orderDisputes.id).notNull(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  senderRole: varchar("sender_role", { length: 20 }).notNull(),
+  
+  message: text("message").notNull(),
+  messageType: varchar("message_type", { length: 20 }).default("text"), // text, image, document, status_update
+  attachments: jsonb("attachments"), // File attachments
+  isInternal: boolean("is_internal").default(false), // Internal admin notes
+  
+  readBy: jsonb("read_by"), // Array of user IDs who read the message
+  
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Rider Location Tracking table
@@ -1050,6 +1318,102 @@ export const btsUndeclaredBookings = pgTable("bts_undeclared_bookings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Customer Payment Methods - for storing saved payment methods
+export const customerPaymentMethods = pgTable("customer_payment_methods", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: uuid("customer_id").references(() => users.id).notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // card, gcash, maya, bank_account
+  provider: varchar("provider", { length: 50 }).notNull(), // stripe, paymongo, nexuspay
+  
+  // Tokenized payment data (never store actual card details)
+  token: varchar("token", { length: 255 }).notNull(), // Provider token/ID
+  fingerprint: varchar("fingerprint", { length: 100 }), // Unique identifier for deduplication
+  
+  // Display information (safe to store)
+  displayName: varchar("display_name", { length: 100 }), // "Visa •••• 1234"
+  lastFour: varchar("last_four", { length: 4 }), // Last 4 digits for cards
+  expiryMonth: integer("expiry_month"), // For cards
+  expiryYear: integer("expiry_year"), // For cards
+  brand: varchar("brand", { length: 50 }), // visa, mastercard, gcash, maya
+  
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  metadata: jsonb("metadata"), // Provider-specific metadata
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payment Webhook Events - for tracking webhook notifications
+export const paymentWebhookEvents = pgTable("payment_webhook_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentId: uuid("payment_id").references(() => payments.id),
+  provider: varchar("provider", { length: 50 }).notNull(), // stripe, nexuspay, paymongo
+  eventType: varchar("event_type", { length: 100 }).notNull(), // payment_intent.succeeded, etc.
+  webhookId: varchar("webhook_id", { length: 255 }), // Provider webhook ID
+  
+  payload: jsonb("payload").notNull(), // Full webhook payload
+  signature: varchar("signature", { length: 255 }), // Webhook signature for verification
+  processed: boolean("processed").default(false),
+  processingError: text("processing_error"),
+  
+  receivedAt: timestamp("received_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+// Refunds - Enhanced refund management
+export const refunds = pgTable("refunds", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentId: uuid("payment_id").references(() => payments.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  customerId: uuid("customer_id").references(() => users.id).notNull(),
+  
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  reason: varchar("reason", { length: 100 }).notNull(), // customer_request, fraudulent, duplicate, etc.
+  description: text("description"),
+  
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed
+  provider: varchar("provider", { length: 50 }).notNull(),
+  providerRefundId: varchar("provider_refund_id", { length: 255 }),
+  
+  initiatedBy: uuid("initiated_by").references(() => users.id), // Admin/staff who initiated
+  approvedBy: uuid("approved_by").references(() => users.id), // Admin who approved
+  
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
+  metadata: jsonb("metadata"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payouts - For rider and vendor payouts
+export const payouts = pgTable("payouts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientId: uuid("recipient_id").references(() => users.id).notNull(), // rider or vendor
+  recipientType: varchar("recipient_type", { length: 20 }).notNull(), // rider, vendor
+  
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("PHP"),
+  
+  payoutMethod: varchar("payout_method", { length: 50 }).notNull(), // gcash, bank_transfer, maya
+  accountDetails: jsonb("account_details").notNull(), // encrypted account info
+  
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed
+  provider: varchar("provider", { length: 50 }).notNull(), // nexuspay, paymongo
+  providerPayoutId: varchar("provider_payout_id", { length: 255 }),
+  
+  batchId: varchar("batch_id", { length: 100 }), // For batch payouts
+  description: text("description"),
+  
+  scheduledFor: timestamp("scheduled_for"), // For scheduled payouts
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedRestaurants: many(restaurants),
@@ -1207,6 +1571,12 @@ export const insertRestaurantSchema = createInsertSchema(restaurants);
 export const insertMenuCategorySchema = createInsertSchema(menuCategories);
 export const insertMenuItemSchema = createInsertSchema(menuItems);
 export const insertOrderSchema = createInsertSchema(orders);
+export const insertOrderStatusHistorySchema = createInsertSchema(orderStatusHistory);
+export const insertOrderSlaTrackingSchema = createInsertSchema(orderSlaTracking);
+export const insertOrderNotificationSchema = createInsertSchema(orderNotifications);
+export const insertOrderBusinessRuleSchema = createInsertSchema(orderBusinessRules);
+export const insertOrderDisputeSchema = createInsertSchema(orderDisputes);
+export const insertOrderDisputeMessageSchema = createInsertSchema(orderDisputeMessages);
 export const insertRiderSchema = createInsertSchema(riders);
 export const insertReviewSchema = createInsertSchema(reviews);
 export const insertRiderLocationHistorySchema = createInsertSchema(riderLocationHistory);
@@ -1222,6 +1592,14 @@ export const insertUserAddressSchema = createInsertSchema(userAddresses);
 export const insertUserOnboardingProgressSchema = createInsertSchema(userOnboardingProgress);
 export const insertUserDietaryPreferencesSchema = createInsertSchema(userDietaryPreferences);
 export const insertUserNotificationPreferencesSchema = createInsertSchema(userNotificationPreferences);
+
+// Payment Types
+export const insertPaymentSchema = createInsertSchema(payments);
+export const insertPaymentStatusHistorySchema = createInsertSchema(paymentStatusHistory);
+export const insertCustomerPaymentMethodSchema = createInsertSchema(customerPaymentMethods);
+export const insertPaymentWebhookEventSchema = createInsertSchema(paymentWebhookEvents);
+export const insertRefundSchema = createInsertSchema(refunds);
+export const insertPayoutSchema = createInsertSchema(payouts);
 
 // Loyalty Types
 export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
@@ -1254,6 +1632,17 @@ export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
+export type InsertOrderStatusHistory = z.infer<typeof insertOrderStatusHistorySchema>;
+export type OrderSlaTracking = typeof orderSlaTracking.$inferSelect;
+export type InsertOrderSlaTracking = z.infer<typeof insertOrderSlaTrackingSchema>;
+export type OrderNotification = typeof orderNotifications.$inferSelect;
+export type InsertOrderNotification = z.infer<typeof insertOrderNotificationSchema>;
+export type OrderBusinessRule = typeof orderBusinessRules.$inferSelect;
+export type InsertOrderBusinessRule = z.infer<typeof insertOrderBusinessRuleSchema>;
+export type OrderDispute = typeof orderDisputes.$inferSelect;
+export type InsertOrderDispute = z.infer<typeof insertOrderDisputeSchema>;
+export type OrderDisputeMessage = typeof orderDisputeMessages.$inferSelect;
+export type InsertOrderDisputeMessage = z.infer<typeof insertOrderDisputeMessageSchema>;
 export type Rider = typeof riders.$inferSelect;
 export type InsertRider = z.infer<typeof insertRiderSchema>;
 export type Review = typeof reviews.$inferSelect;
@@ -1282,6 +1671,20 @@ export type UserDietaryPreferences = typeof userDietaryPreferences.$inferSelect;
 export type InsertUserDietaryPreferences = z.infer<typeof insertUserDietaryPreferencesSchema>;
 export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
+
+// Payment Types
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type PaymentStatusHistory = typeof paymentStatusHistory.$inferSelect;
+export type InsertPaymentStatusHistory = z.infer<typeof insertPaymentStatusHistorySchema>;
+export type CustomerPaymentMethod = typeof customerPaymentMethods.$inferSelect;
+export type InsertCustomerPaymentMethod = z.infer<typeof insertCustomerPaymentMethodSchema>;
+export type PaymentWebhookEvent = typeof paymentWebhookEvents.$inferSelect;
+export type InsertPaymentWebhookEvent = z.infer<typeof insertPaymentWebhookEventSchema>;
+export type Refund = typeof refunds.$inferSelect;
+export type InsertRefund = z.infer<typeof insertRefundSchema>;
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 
 export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
 export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;

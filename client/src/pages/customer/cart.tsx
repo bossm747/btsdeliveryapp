@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
@@ -18,9 +22,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
-import { PAYMENT_METHODS } from "@/lib/types";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
+// Enhanced validation schemas for comprehensive payment system
 const deliveryAddressSchema = z.object({
   street: z.string().min(1, "Street address is required"),
   barangay: z.string().min(1, "Barangay is required"),
@@ -31,11 +35,59 @@ const deliveryAddressSchema = z.object({
 
 const orderSchema = z.object({
   deliveryAddress: deliveryAddressSchema,
-  paymentMethod: z.enum(["cash", "gcash", "maya", "card"]),
+  paymentProvider: z.enum(['stripe', 'nexuspay', 'cod']).default('nexuspay'),
+  paymentMethodType: z.string().optional(),
   specialInstructions: z.string().optional(),
+  tip: z.number().min(0).optional(),
+  loyaltyPoints: z.number().min(0).optional(),
+  promoCode: z.string().optional(),
+  isInsured: z.boolean().default(false),
+  savePaymentMethod: z.boolean().default(false),
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
+
+// Interface for payment methods
+interface PaymentMethod {
+  provider: string;
+  type: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  enabled: boolean;
+}
+
+// Interface for pricing calculation
+interface PricingBreakdown {
+  itemsSubtotal: number;
+  deliveryFee: number;
+  serviceFee: number;
+  processingFee: number;
+  insuranceFee?: number;
+  tip?: number;
+  subtotalBeforeTax: number;
+  tax: number;
+  totalBeforeDiscounts: number;
+  totalDiscounts: number;
+  finalTotal: number;
+}
+
+// Interface for discounts
+interface DiscountInfo {
+  promotionalDiscount: number;
+  loyaltyPointsDiscount: number;
+  couponDiscount: number;
+  totalDiscounts: number;
+}
+
+// Interface for dynamic pricing
+interface DynamicPricing {
+  baseDeliveryFee: number;
+  currentMultiplier: number;
+  isHighDemand: boolean;
+  estimatedWaitTime: string;
+}
 
 export default function Cart() {
   const { items, updateQuantity, removeItem, clearCart, getTotalPrice, getCurrentRestaurantId } = useCartStore();
@@ -44,8 +96,44 @@ export default function Cart() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const [serviceFee] = useState(0);
-  const [deliveryFee] = useState(49);
+  // Enhanced state management for comprehensive payment system
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'stripe' | 'nexuspay' | 'cod'>('nexuspay');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [pricingCalculation, setPricingCalculation] = useState<any>(null);
+  const [isCalculatingPricing, setIsCalculatingPricing] = useState(false);
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string>('');
+  const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
+  const [tipAmount, setTipAmount] = useState(0);
+  const [isInsured, setIsInsured] = useState(false);
+  const [distance, setDistance] = useState(5); // Default 5km
+  const [currentCity, setCurrentCity] = useState('Manila'); // Default city
+
+  // API hooks for comprehensive payment system
+  const { data: availablePaymentMethods, isLoading: isLoadingPaymentMethods } = useQuery({
+    queryKey: ["/api/payment/methods/available"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/payment/methods/available");
+      return response.json();
+    }
+  });
+
+  const { data: dynamicPricing, isLoading: isLoadingDynamicPricing } = useQuery({
+    queryKey: ["/api/pricing/dynamic", currentCity, "food"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/pricing/dynamic/${currentCity}/food`);
+      return response.json();
+    },
+    enabled: !!currentCity
+  });
+
+  const { data: userLoyaltyPoints } = useQuery({
+    queryKey: ["/api/loyalty/points", user?.id],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/loyalty/points/${user?.id}`);
+      return response.json();
+    },
+    enabled: !!user?.id
+  });
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -53,54 +141,156 @@ export default function Cart() {
       deliveryAddress: {
         street: "",
         barangay: "",
-        city: "",
+        city: currentCity,
         province: "Batangas",
         zipCode: "",
       },
-      paymentMethod: "cash",
+      paymentProvider: "nexuspay",
+      paymentMethodType: "",
       specialInstructions: "",
+      tip: 0,
+      loyaltyPoints: 0,
+      promoCode: "",
+      isInsured: false,
+      savePaymentMethod: false,
     },
   });
 
+  // Enhanced pricing calculation hook
+  const calculatePricingMutation = useMutation({
+    mutationFn: async (params: any) => {
+      const response = await apiRequest("POST", "/api/pricing/calculate", params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setPricingCalculation(data.pricing);
+      setIsCalculatingPricing(false);
+    },
+    onError: (error) => {
+      console.error("Pricing calculation failed:", error);
+      setIsCalculatingPricing(false);
+    }
+  });
+
+  // Calculate pricing whenever relevant parameters change
+  useEffect(() => {
+    const subtotal = getTotalPrice();
+    if (subtotal > 0) {
+      setIsCalculatingPricing(true);
+      calculatePricingMutation.mutate({
+        orderType: "food", // Can be dynamic based on items
+        baseAmount: subtotal,
+        city: currentCity,
+        distance: distance,
+        isInsured: isInsured,
+        tip: tipAmount,
+        loyaltyPoints: loyaltyPointsToUse,
+        promoCode: appliedPromoCode
+      });
+    }
+  }, [getTotalPrice(), currentCity, distance, isInsured, tipAmount, loyaltyPointsToUse, appliedPromoCode]);
+
+  // Enhanced order creation mutation with comprehensive payment system
   const createOrderMutation = useMutation({
     mutationFn: async (orderData: any) => {
       // First create the order
       const orderResponse = await apiRequest("POST", "/api/orders", orderData);
       const order = await orderResponse.json();
       
-      // If payment method is not cash, create NexusPay payment
-      if (orderData.paymentMethod !== "cash") {
-        const paymentResponse = await apiRequest("POST", "/api/payment/create", {
-          amount: orderData.totalAmount,
-          orderId: order.id
+      // Handle different payment providers
+      if (orderData.paymentProvider === "cod") {
+        // Cash on delivery - no payment processing needed
+        return { order, paymentType: "cod" };
+        
+      } else if (orderData.paymentProvider === "stripe" || orderData.paymentProvider === "nexuspay") {
+        // Create payment with comprehensive pricing
+        const paymentResponse = await apiRequest("POST", "/api/payment/create-with-pricing", {
+          orderId: order.id,
+          orderType: "food",
+          baseAmount: orderData.itemsTotal,
+          city: orderData.deliveryAddress.city,
+          distance: distance,
+          paymentProvider: orderData.paymentProvider,
+          paymentMethodType: orderData.paymentMethodType,
+          isInsured: orderData.isInsured,
+          tip: orderData.tip || 0,
+          loyaltyPoints: orderData.loyaltyPoints || 0,
+          promoCode: orderData.promoCode,
+          metadata: {
+            customerName: `${user?.firstName} ${user?.lastName}`,
+            customerEmail: user?.email,
+            orderNumber: order.orderNumber
+          }
         });
+        
         const paymentData = await paymentResponse.json();
         
-        if (paymentData.success && paymentData.paymentLink) {
-          // Redirect to NexusPay payment page
-          window.location.href = paymentData.paymentLink;
-          return order;
+        if (paymentData.success) {
+          if (orderData.paymentProvider === "stripe") {
+            // Return Stripe payment intent for client-side confirmation
+            return { 
+              order, 
+              paymentType: "stripe", 
+              clientSecret: paymentData.clientSecret,
+              paymentIntentId: paymentData.paymentIntentId,
+              pricing: paymentData.pricing
+            };
+          } else {
+            // Redirect to NexusPay payment page
+            return { 
+              order, 
+              paymentType: "nexuspay", 
+              paymentLink: paymentData.paymentLink,
+              transactionId: paymentData.transactionId,
+              pricing: paymentData.pricing
+            };
+          }
+        } else {
+          throw new Error(paymentData.message || "Payment creation failed");
         }
       }
       
-      return order;
+      return { order, paymentType: "unknown" };
     },
-    onSuccess: async (order) => {
-      if (form.getValues("paymentMethod") === "cash") {
+    onSuccess: async (result) => {
+      const { order, paymentType } = result;
+      
+      if (paymentType === "cod") {
         toast({
           title: "Order placed successfully!",
-          description: `Your order #${order.orderNumber} has been placed.`,
+          description: `Your order #${order.orderNumber} will be paid on delivery.`,
         });
         clearCart();
         queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
         setLocation(`/order/${order.id}`);
+        
+      } else if (paymentType === "stripe") {
+        // Handle Stripe payment confirmation (would need Stripe Elements integration)
+        toast({
+          title: "Redirecting to payment...",
+          description: "Please complete your payment to confirm the order.",
+        });
+        // TODO: Integrate with Stripe Elements for client-side confirmation
+        // For now, redirect to order page
+        clearCart();
+        queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+        setLocation(`/order/${order.id}`);
+        
+      } else if (paymentType === "nexuspay") {
+        // Redirect to NexusPay payment page
+        if (result.paymentLink) {
+          toast({
+            title: "Redirecting to payment...",
+            description: "You'll be redirected to complete your payment.",
+          });
+          window.location.href = result.paymentLink;
+        }
       }
-      // For digital payments, user will be redirected to payment page
     },
     onError: (error) => {
       toast({
         title: "Failed to place order",
-        description: error.message,
+        description: error.message || "An error occurred while placing your order",
         variant: "destructive",
       });
     },

@@ -34,6 +34,8 @@ import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
+import { StripeProvider } from "./integrations/payment";
+import { pricingService, type OrderType } from "./services/pricing";
 import * as geminiAI from "./services/gemini";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -42,6 +44,7 @@ import { generatePlatformImages, generateDishImages, generateCategoryImages } fr
 import * as aiServices from "./ai-services";
 import { riderAssignmentService } from "./riderAssignmentService";
 import { emailService } from "./integrations/email";
+import { orderNotificationService, OrderNotificationService } from './services/notification-service.js';
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -56,6 +59,15 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is required");
+}
+
+// Initialize payment providers
+let stripeProvider: StripeProvider | null = null;
+try {
+  stripeProvider = new StripeProvider();
+  console.log('Stripe provider initialized successfully');
+} catch (error) {
+  console.warn('Stripe provider initialization failed:', error);
 }
 
 // Extend Express Request interface to include user property
@@ -82,7 +94,7 @@ declare global {
 }
 
 // Authentication middleware
-const authenticateToken = async (req: any, res: any, next: any) => {
+export const authenticateToken = async (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -140,7 +152,7 @@ const authenticateToken = async (req: any, res: any, next: any) => {
 };
 
 // Role-based access control middleware
-const requireRole = (allowedRoles: string[]) => {
+export const requireRole = (allowedRoles: string[]) => {
   return (req: any, res: any, next: any) => {
     if (!req.user) {
       return res.status(401).json({ message: "Authentication required" });
@@ -159,16 +171,16 @@ const requireRole = (allowedRoles: string[]) => {
 };
 
 // Admin-only middleware
-const requireAdmin = requireRole(['admin']);
+export const requireAdmin = requireRole(['admin']);
 
 // Admin or vendor middleware
-const requireAdminOrVendor = requireRole(['admin', 'vendor']);
+export const requireAdminOrVendor = requireRole(['admin', 'vendor']);
 
 // Admin or rider middleware  
-const requireAdminOrRider = requireRole(['admin', 'rider']);
+export const requireAdminOrRider = requireRole(['admin', 'rider']);
 
 // Audit logging middleware for admin actions
-const auditLog = (action: string, resource: string) => {
+export const auditLog = (action: string, resource: string) => {
   return async (req: any, res: any, next: any) => {
     const originalSend = res.send;
     
@@ -1086,37 +1098,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // NexusPay Payment Routes
-  app.post("/api/payment/create", async (req, res) => {
+  // ===================
+  // PAYMENT API ROUTES
+  // ===================
+
+  // Payment validation schemas
+  const createPaymentSchema = z.object({
+    amount: z.number().min(0.01).max(500000),
+    currency: z.string().default('php'),
+    orderId: z.string(),
+    paymentProvider: z.enum(['stripe', 'nexuspay']).default('nexuspay'),
+    paymentMethodType: z.string().optional(),
+    customerId: z.string().optional(),
+    metadata: z.record(z.any()).optional(),
+    // Order-specific data
+    orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']).optional(),
+    serviceFees: z.object({
+      deliveryFee: z.number().optional(),
+      serviceFee: z.number().optional(),
+      processingFee: z.number().optional(),
+      tip: z.number().optional(),
+      tax: z.number().optional(),
+    }).optional(),
+    discounts: z.object({
+      promotionalDiscount: z.number().optional(),
+      loyaltyPointsUsed: z.number().optional(),
+    }).optional(),
+  });
+
+  const confirmPaymentSchema = z.object({
+    paymentIntentId: z.string(),
+    paymentMethodId: z.string().optional(),
+    orderId: z.string(),
+  });
+
+  const refundPaymentSchema = z.object({
+    paymentIntentId: z.string(),
+    orderId: z.string(),
+    amount: z.number().optional(),
+    reason: z.string().optional(),
+  });
+
+  // Create Payment Intent - Enhanced with comprehensive features
+  app.post("/api/payment/create", authenticateToken, async (req, res) => {
     try {
-      const { amount, orderId } = req.body;
-      
-      // Create webhook URL for payment status updates
-      const webhookUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000'}/api/payment/webhook`;
-      const redirectUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000'}/order/${orderId}`;
-      
-      // Create payment with NexusPay
-      const payment = await nexusPayService.createCashInPayment(
-        amount,
-        webhookUrl,
-        redirectUrl
-      );
-      
-      // Store payment info in order
-      if (payment.transactionId) {
-        await storage.updateOrder(orderId, {
-          paymentTransactionId: payment.transactionId,
-          paymentStatus: 'pending'
+      const validatedData = createPaymentSchema.parse(req.body);
+      const { 
+        amount, 
+        currency, 
+        orderId, 
+        paymentProvider, 
+        paymentMethodType,
+        customerId,
+        metadata = {},
+        orderType,
+        serviceFees = {},
+        discounts = {}
+      } = validatedData;
+
+      // Calculate total amount with fees and discounts
+      const totalFees = Object.values(serviceFees).reduce((sum, fee) => sum + (fee || 0), 0);
+      const totalDiscounts = Object.values(discounts).reduce((sum, discount) => sum + (discount || 0), 0);
+      const finalAmount = amount + totalFees - totalDiscounts;
+
+      if (finalAmount <= 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Final payment amount must be greater than 0" 
         });
       }
-      
-      res.json({
-        success: true,
-        paymentLink: payment.link,
-        transactionId: payment.transactionId
-      });
+
+      // Enhanced metadata with comprehensive information
+      const enhancedMetadata = {
+        orderId,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
+        orderType: orderType || 'food',
+        originalAmount: amount,
+        serviceFees: JSON.stringify(serviceFees),
+        discounts: JSON.stringify(discounts),
+        finalAmount,
+        createdAt: new Date().toISOString(),
+        ...metadata
+      };
+
+      let paymentResult;
+
+      if (paymentProvider === 'stripe' && stripeProvider) {
+        // Create Stripe payment intent
+        paymentResult = await stripeProvider.createPaymentIntent(
+          finalAmount,
+          currency,
+          enhancedMetadata
+        );
+
+        // Store payment info in order
+        await storage.updateOrder(orderId, {
+          paymentTransactionId: paymentResult.id,
+          paymentStatus: 'pending',
+          paymentProvider: 'stripe',
+          totalAmount: finalAmount.toString()
+        });
+
+        res.json({
+          success: true,
+          paymentProvider: 'stripe',
+          clientSecret: paymentResult.client_secret,
+          paymentIntentId: paymentResult.id,
+          amount: paymentResult.amount / 100,
+          currency: paymentResult.currency,
+          metadata: paymentResult.metadata
+        });
+
+      } else {
+        // Create NexusPay payment
+        const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+        const webhookUrl = `${baseUrl}/api/payment/webhook`;
+        const redirectUrl = `${baseUrl}/order/${orderId}/payment-result`;
+
+        // Determine payment method code for NexusPay
+        let paymentMethodCode: string | undefined;
+        if (paymentMethodType && paymentMethodType in NEXUSPAY_CODES) {
+          paymentMethodCode = NEXUSPAY_CODES[paymentMethodType as keyof typeof NEXUSPAY_CODES];
+        }
+
+        paymentResult = await nexusPayService.createCashInPayment(
+          finalAmount,
+          webhookUrl,
+          redirectUrl,
+          paymentMethodCode,
+          enhancedMetadata
+        );
+
+        // Store payment info in order
+        await storage.updateOrder(orderId, {
+          paymentTransactionId: paymentResult.transactionId,
+          paymentStatus: 'pending',
+          paymentProvider: 'nexuspay',
+          totalAmount: finalAmount.toString()
+        });
+
+        res.json({
+          success: true,
+          paymentProvider: 'nexuspay',
+          paymentLink: paymentResult.link,
+          transactionId: paymentResult.transactionId,
+          amount: finalAmount,
+          currency: 'PHP'
+        });
+      }
+
     } catch (error: any) {
       console.error("Error creating payment:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid payment data",
+          errors: error.errors
+        });
+      }
+
       res.status(500).json({ 
         success: false,
         message: error.message || "Failed to create payment" 
@@ -1124,20 +1266,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payment webhook endpoint
+  // Enhanced Payment Webhook Endpoint - Supports both Stripe and NexusPay
   app.post("/api/payment/webhook", async (req, res) => {
     try {
-      const { transactionId, status, amount } = req.body;
+      const signature = req.headers['stripe-signature'] as string;
+      const nexusSignature = req.headers['x-nexuspay-signature'] as string;
       
-      // Find order with this transaction ID
-      const orders = await storage.getOrders();
-      const order = orders.find(o => o.paymentTransactionId === transactionId);
-      
-      if (order) {
-        // Update order payment status
-        await storage.updateOrder(order.id, {
-          paymentStatus: status === 'success' ? 'paid' : 'failed'
-        });
+      let paymentProvider: 'stripe' | 'nexuspay' = 'nexuspay';
+      let webhookEvent: any;
+
+      if (signature && stripeProvider) {
+        // Stripe webhook processing
+        paymentProvider = 'stripe';
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        
+        if (!webhookSecret) {
+          return res.status(400).json({ error: 'Stripe webhook secret not configured' });
+        }
+
+        try {
+          // Verify Stripe webhook signature
+          const isValid = stripeProvider.verifyWebhookSignature(req.body, signature, webhookSecret);
+          if (!isValid) {
+            return res.status(400).json({ error: 'Invalid webhook signature' });
+          }
+
+          webhookEvent = stripeProvider.constructWebhookEvent(req.body, signature, webhookSecret);
+        } catch (error) {
+          console.error('Stripe webhook signature verification failed:', error);
+          return res.status(400).json({ error: 'Webhook signature verification failed' });
+        }
+
+        // Handle Stripe webhook events
+        const { type, data } = webhookEvent;
+        const paymentIntent = data.object;
+
+        switch (type) {
+          case 'payment_intent.succeeded':
+            await handlePaymentSuccess(paymentIntent.id, paymentProvider, {
+              amount: paymentIntent.amount / 100,
+              currency: paymentIntent.currency,
+              metadata: paymentIntent.metadata
+            });
+            break;
+
+          case 'payment_intent.payment_failed':
+            await handlePaymentFailure(paymentIntent.id, paymentProvider, {
+              error: data.last_payment_error?.message || 'Payment failed'
+            });
+            break;
+
+          case 'payment_intent.canceled':
+            await handlePaymentCancellation(paymentIntent.id, paymentProvider);
+            break;
+
+          default:
+            console.log(`Unhandled Stripe event type: ${type}`);
+        }
+
+      } else if (nexusSignature || !signature) {
+        // NexusPay webhook processing
+        const { transactionId, status, amount, orderId } = req.body;
+
+        // Verify NexusPay webhook signature if provided
+        if (nexusSignature) {
+          const nexusWebhookSecret = process.env.NEXUSPAY_WEBHOOK_SECRET;
+          if (nexusWebhookSecret) {
+            const isValid = nexusPayService.verifyWebhookSignature(
+              JSON.stringify(req.body),
+              nexusSignature,
+              nexusWebhookSecret
+            );
+            
+            if (!isValid) {
+              return res.status(400).json({ error: 'Invalid NexusPay webhook signature' });
+            }
+          }
+        }
+
+        // Handle NexusPay webhook events
+        if (status === 'success' || status === 'paid') {
+          await handlePaymentSuccess(transactionId, paymentProvider, {
+            amount: parseFloat(amount),
+            currency: 'PHP',
+            orderId
+          });
+        } else if (status === 'failed' || status === 'declined') {
+          await handlePaymentFailure(transactionId, paymentProvider, {
+            error: 'Payment failed'
+          });
+        } else if (status === 'canceled' || status === 'cancelled') {
+          await handlePaymentCancellation(transactionId, paymentProvider);
+        }
       }
       
       res.json({ received: true });
@@ -1147,16 +1367,740 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Check payment status
+  // Helper functions for webhook event handling
+  async function handlePaymentSuccess(transactionId: string, provider: 'stripe' | 'nexuspay', data: any) {
+    try {
+      // Find order with this transaction ID
+      const orders = await storage.getOrders();
+      const order = orders.find(o => o.paymentTransactionId === transactionId);
+      
+      if (order) {
+        // Update order payment status
+        await storage.updateOrder(order.id, {
+          paymentStatus: 'paid',
+          paidAt: new Date().toISOString(),
+        });
+
+        // Broadcast payment success via WebSocket
+        broadcastToClients('payment_success', {
+          orderId: order.id,
+          transactionId,
+          amount: data.amount,
+          provider
+        });
+
+        console.log(`Payment successful for order ${order.id}: ${transactionId}`);
+      }
+    } catch (error) {
+      console.error('Error handling payment success:', error);
+    }
+  }
+
+  async function handlePaymentFailure(transactionId: string, provider: 'stripe' | 'nexuspay', data: any) {
+    try {
+      const orders = await storage.getOrders();
+      const order = orders.find(o => o.paymentTransactionId === transactionId);
+      
+      if (order) {
+        await storage.updateOrder(order.id, {
+          paymentStatus: 'failed',
+          paymentFailureReason: data.error,
+        });
+
+        // Broadcast payment failure via WebSocket
+        broadcastToClients('payment_failed', {
+          orderId: order.id,
+          transactionId,
+          error: data.error,
+          provider
+        });
+
+        console.log(`Payment failed for order ${order.id}: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error handling payment failure:', error);
+    }
+  }
+
+  async function handlePaymentCancellation(transactionId: string, provider: 'stripe' | 'nexuspay') {
+    try {
+      const orders = await storage.getOrders();
+      const order = orders.find(o => o.paymentTransactionId === transactionId);
+      
+      if (order) {
+        await storage.updateOrder(order.id, {
+          paymentStatus: 'canceled',
+        });
+
+        // Broadcast payment cancellation via WebSocket
+        broadcastToClients('payment_canceled', {
+          orderId: order.id,
+          transactionId,
+          provider
+        });
+
+        console.log(`Payment canceled for order ${order.id}`);
+      }
+    } catch (error) {
+      console.error('Error handling payment cancellation:', error);
+    }
+  }
+
+  // Enhanced Payment Status Check - Supports both providers
   app.get("/api/payment/status/:transactionId", async (req, res) => {
     try {
       const { transactionId } = req.params;
-      const status = await nexusPayService.getPaymentStatus(transactionId);
-      res.json(status);
+      
+      // Find the order to determine the payment provider
+      const orders = await storage.getOrders();
+      const order = orders.find(o => o.paymentTransactionId === transactionId);
+      
+      if (!order) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Transaction not found" 
+        });
+      }
+
+      let status, details;
+
+      if (order.paymentProvider === 'stripe' && stripeProvider) {
+        // Get Stripe payment status
+        status = await stripeProvider.getPaymentStatus(transactionId);
+        details = {
+          provider: 'stripe',
+          status,
+          orderId: order.id,
+          amount: order.totalAmount,
+          currency: 'PHP'
+        };
+      } else {
+        // Get NexusPay payment status
+        const nexusStatus = await nexusPayService.getTransactionDetails(transactionId);
+        status = nexusStatus.status || order.paymentStatus;
+        details = {
+          provider: 'nexuspay',
+          status,
+          orderId: order.id,
+          amount: order.totalAmount,
+          currency: 'PHP',
+          nexusDetails: nexusStatus
+        };
+      }
+
+      res.json({
+        success: true,
+        transactionId,
+        ...details
+      });
     } catch (error: any) {
       console.error("Error checking payment status:", error);
       res.status(500).json({ 
+        success: false,
         message: error.message || "Failed to check payment status" 
+      });
+    }
+  });
+
+  // Confirm Payment - For Stripe payments requiring client-side confirmation
+  app.post("/api/payment/confirm", authenticateToken, async (req, res) => {
+    try {
+      const validatedData = confirmPaymentSchema.parse(req.body);
+      const { paymentIntentId, paymentMethodId, orderId } = validatedData;
+
+      // Find the order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Order not found" 
+        });
+      }
+
+      if (order.userId !== req.user?.id) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Access denied" 
+        });
+      }
+
+      if (!stripeProvider) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Stripe not configured" 
+        });
+      }
+
+      // Confirm the payment with Stripe
+      const result = await stripeProvider.confirmPayment(paymentIntentId, paymentMethodId);
+
+      // Update order status based on payment result
+      if (result.status === 'succeeded') {
+        await storage.updateOrder(orderId, {
+          paymentStatus: 'paid',
+          paidAt: new Date().toISOString(),
+        });
+      } else if (result.status === 'requires_action') {
+        // Payment requires additional action (3D Secure, etc.)
+        await storage.updateOrder(orderId, {
+          paymentStatus: 'requires_action'
+        });
+      }
+
+      res.json({
+        success: true,
+        paymentStatus: result.status,
+        paymentIntent: result
+      });
+
+    } catch (error: any) {
+      console.error("Error confirming payment:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid payment confirmation data",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to confirm payment" 
+      });
+    }
+  });
+
+  // Process Refund - Supports both providers
+  app.post("/api/payment/refund", authenticateToken, async (req, res) => {
+    try {
+      const validatedData = refundPaymentSchema.parse(req.body);
+      const { paymentIntentId, orderId, amount, reason } = validatedData;
+
+      // Verify user has admin role or is the order owner
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Order not found" 
+        });
+      }
+
+      const isOwner = order.userId === req.user?.id;
+      const isAdmin = req.user?.role === 'admin';
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Access denied" 
+        });
+      }
+
+      if (order.paymentStatus !== 'paid') {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Order payment is not in paid status" 
+        });
+      }
+
+      let refundResult;
+
+      if (order.paymentProvider === 'stripe' && stripeProvider) {
+        // Process Stripe refund
+        refundResult = await stripeProvider.refund(paymentIntentId, amount, reason);
+      } else {
+        // Note: NexusPay refund functionality would need to be implemented
+        // For now, we'll create a manual refund record
+        refundResult = {
+          id: `refund_${nanoid()}`,
+          status: 'pending_manual_review',
+          amount: amount || parseFloat(order.totalAmount || '0'),
+          reason: reason || 'Customer request',
+        };
+      }
+
+      // Update order status
+      await storage.updateOrder(orderId, {
+        paymentStatus: refundResult.status === 'succeeded' ? 'refunded' : 'refund_pending',
+        refundedAt: refundResult.status === 'succeeded' ? new Date().toISOString() : undefined,
+      });
+
+      res.json({
+        success: true,
+        refund: refundResult,
+        message: order.paymentProvider === 'stripe' ? 
+          "Refund processed successfully" : 
+          "Refund request submitted for manual review"
+      });
+
+    } catch (error: any) {
+      console.error("Error processing refund:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid refund data",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to process refund" 
+      });
+    }
+  });
+
+  // Get Available Payment Methods
+  app.get("/api/payment/methods/available", async (req, res) => {
+    try {
+      const methods = [];
+
+      // Add Stripe methods if available
+      if (stripeProvider) {
+        methods.push({
+          provider: 'stripe',
+          type: 'card',
+          name: 'Credit/Debit Card',
+          description: 'Visa, Mastercard, and other major cards',
+          category: 'card',
+          icon: 'credit-card',
+          enabled: true
+        });
+      }
+
+      // Add NexusPay methods (Filipino payment options)
+      const nexusPayMethods = nexusPayService.getAvailablePaymentMethods();
+      methods.push(...nexusPayMethods.map(method => ({
+        provider: 'nexuspay',
+        type: method.code,
+        name: method.name,
+        description: method.description,
+        category: method.category,
+        icon: method.category === 'ewallet' ? 'smartphone' : 
+              method.category === 'online_banking' ? 'building-2' :
+              method.category === 'otc' ? 'store' : 'credit-card',
+        enabled: true
+      })));
+
+      // Add Cash on Delivery option
+      methods.push({
+        provider: 'cod',
+        type: 'cash',
+        name: 'Cash on Delivery',
+        description: 'Pay with cash when your order arrives',
+        category: 'cash',
+        icon: 'banknote',
+        enabled: true
+      });
+
+      res.json({
+        success: true,
+        methods,
+        total: methods.length
+      });
+    } catch (error: any) {
+      console.error("Error fetching payment methods:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to fetch payment methods" 
+      });
+    }
+  });
+
+  // Customer Payment Method Management
+  app.get("/api/payment/methods", authenticateToken, async (req, res) => {
+    try {
+      if (!stripeProvider) {
+        return res.json({
+          success: true,
+          methods: [],
+          message: "Payment method storage not available"
+        });
+      }
+
+      // Get or create Stripe customer
+      let customer;
+      try {
+        // Try to get existing customer (would need customer ID stored in user record)
+        const stripeCustomerId = req.user?.stripeCustomerId;
+        if (stripeCustomerId) {
+          customer = await stripeProvider.getCustomer(stripeCustomerId);
+        }
+      } catch (error) {
+        // Create new customer if not found
+        customer = await stripeProvider.createCustomer({
+          email: req.user?.email,
+          firstName: req.user?.firstName,
+          lastName: req.user?.lastName,
+          phone: req.user?.phone,
+          userId: req.user?.id,
+        });
+        
+        // TODO: Store stripeCustomerId in user record
+        // await storage.updateUser(req.user.id, { stripeCustomerId: customer.id });
+      }
+
+      // Get saved payment methods
+      const paymentMethods = await stripeProvider.listPaymentMethods(customer.id);
+
+      res.json({
+        success: true,
+        customerId: customer.id,
+        methods: paymentMethods
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching payment methods:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to fetch payment methods" 
+      });
+    }
+  });
+
+  // Create Setup Intent for saving payment methods
+  app.post("/api/payment/setup-intent", authenticateToken, async (req, res) => {
+    try {
+      if (!stripeProvider) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Payment method storage not available" 
+        });
+      }
+
+      // Get or create Stripe customer
+      let customer;
+      try {
+        const stripeCustomerId = req.user?.stripeCustomerId;
+        if (stripeCustomerId) {
+          customer = await stripeProvider.getCustomer(stripeCustomerId);
+        } else {
+          throw new Error('Customer not found');
+        }
+      } catch (error) {
+        customer = await stripeProvider.createCustomer({
+          email: req.user?.email,
+          firstName: req.user?.firstName,
+          lastName: req.user?.lastName,
+          phone: req.user?.phone,
+          userId: req.user?.id,
+        });
+      }
+
+      // Create setup intent
+      const setupIntent = await stripeProvider.createSetupIntent(customer.id, {
+        userId: req.user?.id,
+      });
+
+      res.json({
+        success: true,
+        setupIntent: {
+          id: setupIntent.id,
+          client_secret: setupIntent.client_secret,
+          status: setupIntent.status
+        },
+        customerId: customer.id
+      });
+
+    } catch (error: any) {
+      console.error("Error creating setup intent:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to create setup intent" 
+      });
+    }
+  });
+
+  // ===================
+  // PRICING API ROUTES
+  // ===================
+
+  // Calculate comprehensive pricing for any order type
+  app.post("/api/pricing/calculate", authenticateToken, async (req, res) => {
+    try {
+      const pricingSchema = z.object({
+        orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
+        baseAmount: z.number().min(0.01),
+        city: z.string(),
+        distance: z.number().optional(),
+        weight: z.number().optional(),
+        isInsured: z.boolean().optional(),
+        isPeakHour: z.boolean().optional(),
+        weatherCondition: z.string().optional(),
+        loyaltyPoints: z.number().optional(),
+        promoCode: z.string().optional(),
+        tip: z.number().optional(),
+        customServiceFeeRate: z.number().optional(),
+      });
+
+      const validatedData = pricingSchema.parse(req.body);
+      
+      // Calculate comprehensive pricing
+      const pricingCalculation = await pricingService.calculatePricing(validatedData);
+      
+      // Validate the calculation
+      const validation = pricingService.validatePricing(pricingCalculation);
+      
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: "Pricing calculation validation failed",
+          errors: validation.errors
+        });
+      }
+
+      res.json({
+        success: true,
+        pricing: pricingCalculation,
+        breakdown: pricingCalculation.breakdown,
+        discounts: pricingCalculation.discounts,
+        isValid: validation.isValid
+      });
+
+    } catch (error: any) {
+      console.error("Error calculating pricing:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid pricing parameters",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to calculate pricing" 
+      });
+    }
+  });
+
+  // Get dynamic pricing based on current conditions
+  app.get("/api/pricing/dynamic/:city/:orderType", async (req, res) => {
+    try {
+      const { city, orderType } = req.params;
+      
+      const validOrderType = z.enum(['food', 'pabili', 'pabayad', 'parcel']).parse(orderType);
+      
+      const dynamicPricing = await pricingService.getDynamicPricing(city, validOrderType);
+      
+      res.json({
+        success: true,
+        city,
+        orderType: validOrderType,
+        pricing: dynamicPricing,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching dynamic pricing:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get dynamic pricing" 
+      });
+    }
+  });
+
+  // Calculate commission breakdown
+  app.post("/api/pricing/commissions", authenticateToken, async (req, res) => {
+    try {
+      const commissionSchema = z.object({
+        orderTotal: z.number().min(0),
+        deliveryFee: z.number().min(0),
+        serviceFee: z.number().min(0),
+        orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
+      });
+
+      const validatedData = commissionSchema.parse(req.body);
+      
+      const commissions = pricingService.calculateCommissions(validatedData);
+      
+      res.json({
+        success: true,
+        commissions,
+        orderDetails: validatedData
+      });
+
+    } catch (error: any) {
+      console.error("Error calculating commissions:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid commission calculation parameters",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to calculate commissions" 
+      });
+    }
+  });
+
+  // Enhanced payment creation with integrated pricing
+  app.post("/api/payment/create-with-pricing", authenticateToken, async (req, res) => {
+    try {
+      const createWithPricingSchema = z.object({
+        // Order details
+        orderId: z.string(),
+        orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
+        baseAmount: z.number().min(0.01),
+        
+        // Location and delivery
+        city: z.string(),
+        distance: z.number().optional(),
+        weight: z.number().optional(),
+        
+        // Payment preferences
+        paymentProvider: z.enum(['stripe', 'nexuspay']).default('nexuspay'),
+        paymentMethodType: z.string().optional(),
+        
+        // Additional options
+        isInsured: z.boolean().optional(),
+        tip: z.number().optional(),
+        loyaltyPoints: z.number().optional(),
+        promoCode: z.string().optional(),
+        
+        // Customer info
+        customerId: z.string().optional(),
+        metadata: z.record(z.any()).optional(),
+      });
+
+      const validatedData = createWithPricingSchema.parse(req.body);
+      
+      // 1. Calculate comprehensive pricing first
+      const now = new Date();
+      const isPeakHour = (now.getHours() >= 11 && now.getHours() <= 14) || 
+                        (now.getHours() >= 18 && now.getHours() <= 21);
+      
+      const pricingCalculation = await pricingService.calculatePricing({
+        orderType: validatedData.orderType,
+        baseAmount: validatedData.baseAmount,
+        city: validatedData.city,
+        distance: validatedData.distance,
+        weight: validatedData.weight,
+        isInsured: validatedData.isInsured,
+        isPeakHour,
+        loyaltyPoints: validatedData.loyaltyPoints,
+        promoCode: validatedData.promoCode,
+        tip: validatedData.tip,
+      });
+
+      // 2. Validate pricing calculation
+      const validation = pricingService.validatePricing(pricingCalculation);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: "Pricing calculation failed",
+          errors: validation.errors
+        });
+      }
+
+      // 3. Create payment with calculated pricing
+      const finalAmount = pricingCalculation.finalTotal;
+      const enhancedMetadata = {
+        orderId: validatedData.orderId,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
+        orderType: validatedData.orderType,
+        baseAmount: validatedData.baseAmount,
+        pricingBreakdown: JSON.stringify(pricingCalculation.breakdown),
+        serviceFees: JSON.stringify(pricingCalculation.serviceFees),
+        discounts: JSON.stringify(pricingCalculation.discounts),
+        finalAmount,
+        calculatedAt: new Date().toISOString(),
+        ...validatedData.metadata
+      };
+
+      let paymentResult;
+
+      if (validatedData.paymentProvider === 'stripe' && stripeProvider) {
+        // Create Stripe payment intent
+        paymentResult = await stripeProvider.createPaymentIntent(
+          finalAmount,
+          'php',
+          enhancedMetadata
+        );
+
+        // Store comprehensive order info
+        await storage.updateOrder(validatedData.orderId, {
+          paymentTransactionId: paymentResult.id,
+          paymentStatus: 'pending',
+          paymentProvider: 'stripe',
+          totalAmount: finalAmount.toString(),
+          deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
+          serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
+          tax: pricingCalculation.serviceFees.tax.toString(),
+        });
+
+        res.json({
+          success: true,
+          paymentProvider: 'stripe',
+          clientSecret: paymentResult.client_secret,
+          paymentIntentId: paymentResult.id,
+          pricing: pricingCalculation,
+          finalAmount,
+          currency: 'PHP'
+        });
+
+      } else {
+        // Create NexusPay payment
+        const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+        const webhookUrl = `${baseUrl}/api/payment/webhook`;
+        const redirectUrl = `${baseUrl}/order/${validatedData.orderId}/payment-result`;
+
+        let paymentMethodCode: string | undefined;
+        if (validatedData.paymentMethodType && validatedData.paymentMethodType in NEXUSPAY_CODES) {
+          paymentMethodCode = NEXUSPAY_CODES[validatedData.paymentMethodType as keyof typeof NEXUSPAY_CODES];
+        }
+
+        paymentResult = await nexusPayService.createCashInPayment(
+          finalAmount,
+          webhookUrl,
+          redirectUrl,
+          paymentMethodCode,
+          enhancedMetadata
+        );
+
+        // Store comprehensive order info
+        await storage.updateOrder(validatedData.orderId, {
+          paymentTransactionId: paymentResult.transactionId,
+          paymentStatus: 'pending',
+          paymentProvider: 'nexuspay',
+          totalAmount: finalAmount.toString(),
+          deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
+          serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
+          tax: pricingCalculation.serviceFees.tax.toString(),
+        });
+
+        res.json({
+          success: true,
+          paymentProvider: 'nexuspay',
+          paymentLink: paymentResult.link,
+          transactionId: paymentResult.transactionId,
+          pricing: pricingCalculation,
+          finalAmount,
+          currency: 'PHP'
+        });
+      }
+
+    } catch (error: any) {
+      console.error("Error creating payment with pricing:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid payment and pricing data",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to create payment with pricing" 
       });
     }
   });
@@ -4688,6 +5632,1377 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error generating social media post:', error);
       res.status(500).json({ message: 'Failed to generate social media post' });
+    }
+  });
+
+  // ============= COMPREHENSIVE ORDER LIFECYCLE API ENDPOINTS =============
+  
+  // Enhanced Order Placement with Validation and Inventory Checking
+  app.post("/api/orders/place", authenticateToken, async (req, res) => {
+    try {
+      const { restaurantId, items, orderType, specialInstructions, deliveryAddress } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Validate order items and check inventory
+      const validation = await storage.validateOrderItems(restaurantId, items);
+      if (!validation.isValid) {
+        return res.status(400).json({ 
+          message: "Order validation failed", 
+          errors: validation.errors,
+          warnings: validation.warnings
+        });
+      }
+      
+      // Check inventory availability
+      const inventory = await storage.checkInventoryAvailability(restaurantId, items);
+      if (!inventory.isAvailable) {
+        return res.status(400).json({ 
+          message: "Some items are not available", 
+          unavailableItems: inventory.unavailableItems
+        });
+      }
+      
+      // Reserve inventory for the order
+      const reserved = await storage.reserveInventory(restaurantId, items);
+      if (!reserved) {
+        return res.status(400).json({ message: "Failed to reserve inventory" });
+      }
+      
+      // Calculate order totals (using existing pricing service)
+      const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      const deliveryFee = 50; // Base delivery fee
+      const serviceFee = Math.ceil(subtotal * 0.05); // 5% service fee
+      const totalAmount = subtotal + deliveryFee + serviceFee;
+      
+      // Create the order
+      const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      const order = await storage.createOrder({
+        customerId: req.user.id,
+        restaurantId,
+        orderNumber,
+        orderType: orderType || 'food',
+        items,
+        subtotal: subtotal.toString(),
+        deliveryFee: deliveryFee.toString(),
+        serviceFee: serviceFee.toString(),
+        totalAmount: totalAmount.toString(),
+        status: 'pending',
+        paymentMethod: 'cash',
+        paymentStatus: 'pending',
+        deliveryAddress,
+        specialInstructions
+      });
+      
+      // Create SLA tracking
+      await storage.createOrderSlaTracking({
+        orderId: order.id,
+        restaurantId,
+        deliveryTimeSla: 45 * 60, // 45 minutes
+        vendorAcceptanceSla: 5 * 60, // 5 minutes
+        preparationTimeSla: 20 * 60, // 20 minutes
+        pickupTimeSla: 10 * 60 // 10 minutes
+      });
+      
+      // Broadcast order creation
+      broadcastToSubscribers('new_order', {
+        orderId: order.id,
+        restaurantId,
+        orderType: order.orderType,
+        totalAmount: order.totalAmount
+      });
+      
+      res.status(201).json({
+        order,
+        validation: {
+          warnings: validation.warnings
+        }
+      });
+    } catch (error) {
+      console.error("Error placing enhanced order:", error);
+      res.status(500).json({ message: "Failed to place order" });
+    }
+  });
+
+  // Vendor Order Acceptance/Rejection
+  app.patch("/api/vendor/orders/:orderId/respond", authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { action, estimatedPrepTime, rejectionReason } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Verify order belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+      
+      const order = await storage.getOrder(orderId);
+      if (!order || order.restaurantId !== restaurants[0].id) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      let newStatus, notes;
+      if (action === 'accept') {
+        newStatus = 'confirmed';
+        notes = `Accepted by vendor. Estimated prep time: ${estimatedPrepTime || 20} minutes`;
+        
+        // Update SLA tracking
+        await storage.updateOrderSlaTracking(orderId, {
+          vendorAcceptedAt: new Date(),
+          estimatedPreparationCompletionAt: new Date(Date.now() + (estimatedPrepTime || 20) * 60000)
+        });
+      } else if (action === 'reject') {
+        newStatus = 'cancelled';
+        notes = `Rejected by vendor: ${rejectionReason}`;
+        
+        // Release reserved inventory
+        if (order.items) {
+          await storage.releaseInventory(order.restaurantId, order.items as any[]);
+        }
+      } else {
+        return res.status(400).json({ message: "Invalid action. Use 'accept' or 'reject'" });
+      }
+      
+      // Update order status
+      const updatedOrder = await storage.updateOrderStatus(orderId, newStatus, req.user.id, notes);
+      
+      // Broadcast vendor response
+      broadcastToSubscribers('vendor_response', {
+        orderId,
+        action,
+        status: newStatus,
+        estimatedPrepTime: estimatedPrepTime || null,
+        rejectionReason: rejectionReason || null
+      });
+      
+      res.json({
+        order: updatedOrder,
+        action,
+        message: action === 'accept' ? 'Order accepted successfully' : 'Order rejected'
+      });
+    } catch (error) {
+      console.error("Error responding to order:", error);
+      res.status(500).json({ message: "Failed to respond to order" });
+    }
+  });
+
+  // Advanced Order Assignment with Location-Based Matching
+  app.post("/api/orders/:orderId/assign-rider", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { riderId, lat, lng, radiusKm } = req.body;
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      let assignedRider;
+      
+      if (riderId) {
+        // Manual assignment
+        assignedRider = await storage.getRider(riderId);
+        if (!assignedRider || !assignedRider.isOnline) {
+          return res.status(400).json({ message: "Rider not available" });
+        }
+      } else if (lat && lng) {
+        // Auto assignment based on location
+        const availableRiders = await storage.getAvailableRiders(lat, lng, radiusKm || 5);
+        if (availableRiders.length === 0) {
+          return res.status(404).json({ message: "No available riders in the area" });
+        }
+        assignedRider = availableRiders[0]; // Assign to closest rider
+      } else {
+        return res.status(400).json({ message: "Either riderId or location coordinates required" });
+      }
+      
+      // Create rider assignment
+      const assignment = await storage.createRiderAssignment({
+        orderId,
+        assignedRiderId: assignedRider.id,
+        assignmentStatus: 'assigned',
+        assignedAt: new Date()
+      });
+      
+      // Update order with rider
+      await storage.updateOrder(orderId, { riderId: assignedRider.id });
+      
+      // Update SLA tracking
+      await storage.updateOrderSlaTracking(orderId, {
+        riderAssignedAt: new Date()
+      });
+      
+      // Broadcast assignment
+      broadcastToSubscribers('rider_assigned', {
+        orderId,
+        riderId: assignedRider.id,
+        assignmentId: assignment.id
+      });
+      
+      res.json({
+        assignment,
+        rider: assignedRider,
+        message: "Rider assigned successfully"
+      });
+    } catch (error) {
+      console.error("Error assigning rider:", error);
+      res.status(500).json({ message: "Failed to assign rider" });
+    }
+  });
+
+  // Order Analytics Endpoints
+  app.get("/api/analytics/orders/performance", authenticateToken, async (req, res) => {
+    try {
+      const { restaurantId, startDate, endDate } = req.query;
+      
+      // Check permissions - admin can see all, vendor can see their own
+      if (req.user?.role !== 'admin' && restaurantId) {
+        const restaurants = await storage.getRestaurantsByOwner(req.user!.id);
+        const ownsRestaurant = restaurants.some(r => r.id === restaurantId);
+        if (!ownsRestaurant) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
+      const metrics = await storage.getOrderPerformanceMetrics(
+        restaurantId as string, 
+        startDate as string, 
+        endDate as string
+      );
+      
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching performance metrics:", error);
+      res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
+  app.get("/api/analytics/orders/sla", authenticateToken, async (req, res) => {
+    try {
+      const { restaurantId, startDate, endDate } = req.query;
+      
+      // Check permissions
+      if (req.user?.role !== 'admin' && restaurantId) {
+        const restaurants = await storage.getRestaurantsByOwner(req.user!.id);
+        const ownsRestaurant = restaurants.some(r => r.id === restaurantId);
+        if (!ownsRestaurant) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
+      const slaMetrics = await storage.getOrderSlaPerformance(
+        restaurantId as string, 
+        startDate as string, 
+        endDate as string
+      );
+      
+      res.json(slaMetrics);
+    } catch (error) {
+      console.error("Error fetching SLA metrics:", error);
+      res.status(500).json({ message: "Failed to fetch SLA metrics" });
+    }
+  });
+
+  app.get("/api/analytics/orders/trends", authenticateToken, async (req, res) => {
+    try {
+      const { period = 'day', orderType } = req.query;
+      
+      if (!['day', 'week', 'month'].includes(period as string)) {
+        return res.status(400).json({ message: "Period must be 'day', 'week', or 'month'" });
+      }
+      
+      const trends = await storage.getOrderTrendAnalysis(
+        period as 'day' | 'week' | 'month',
+        orderType as string
+      );
+      
+      res.json(trends);
+    } catch (error) {
+      console.error("Error fetching order trends:", error);
+      res.status(500).json({ message: "Failed to fetch order trends" });
+    }
+  });
+
+  // Enhanced Order Cancellation with Smart Refund Processing
+  app.post("/api/orders/:orderId/cancel-with-refund", authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { reason, requestRefund } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Check if user can cancel this order
+      const isOwner = order.customerId === req.user.id;
+      const isAdmin = req.user.role === 'admin';
+      
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Check if order can be cancelled
+      if (['delivered', 'cancelled'].includes(order.status)) {
+        return res.status(400).json({ message: "Order cannot be cancelled" });
+      }
+      
+      // Cancel the order
+      const cancelledOrder = await storage.cancelOrder(orderId, reason, req.user.id);
+      
+      // Process refund if requested and payment was made
+      let refundResult = null;
+      if (requestRefund && order.paymentStatus === 'paid' && order.paymentTransactionId) {
+        try {
+          // Calculate refund amount based on order status
+          let refundAmount = parseFloat(order.totalAmount);
+          
+          if (order.status === 'preparing' || order.status === 'ready') {
+            // 50% refund if already being prepared
+            refundAmount = refundAmount * 0.5;
+          } else if (order.status === 'picked_up') {
+            // No refund if already picked up
+            refundAmount = 0;
+          }
+          
+          if (refundAmount > 0) {
+            // Process refund (this would use the existing refund endpoint logic)
+            await storage.updateOrder(orderId, {
+              paymentStatus: 'refund_pending',
+              refundAmount: refundAmount.toString(),
+              refundReason: reason
+            });
+            
+            refundResult = {
+              amount: refundAmount,
+              status: 'pending',
+              message: 'Refund request submitted for processing'
+            };
+          }
+        } catch (refundError) {
+          console.error("Error processing refund:", refundError);
+          // Continue with cancellation even if refund fails
+        }
+      }
+      
+      // Update SLA tracking
+      await storage.updateOrderSlaTracking(orderId, {
+        cancelledAt: new Date(),
+        cancellationReason: reason
+      });
+      
+      // Broadcast cancellation
+      broadcastToSubscribers('order_cancelled', {
+        orderId,
+        reason,
+        refundResult
+      });
+      
+      res.json({
+        order: cancelledOrder,
+        refund: refundResult,
+        message: "Order cancelled successfully"
+      });
+    } catch (error) {
+      console.error("Error cancelling order with refund:", error);
+      res.status(500).json({ message: "Failed to cancel order" });
+    }
+  });
+
+  // Real-time Order Status Updates with Enhanced Notifications
+  app.patch("/api/orders/:orderId/status-with-notifications", authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status, notes, location } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Update order status
+      const updatedOrder = await storage.updateOrderStatus(orderId, status, req.user.id, notes);
+      
+      // Update SLA tracking based on status
+      const slaUpdates: any = {};
+      switch (status) {
+        case 'preparing':
+          slaUpdates.preparationStartedAt = new Date();
+          break;
+        case 'ready':
+          slaUpdates.preparationCompletedAt = new Date();
+          break;
+        case 'picked_up':
+          slaUpdates.pickedUpAt = new Date();
+          break;
+        case 'delivered':
+          slaUpdates.deliveredAt = new Date();
+          break;
+      }
+      
+      if (Object.keys(slaUpdates).length > 0) {
+        await storage.updateOrderSlaTracking(orderId, slaUpdates);
+      }
+      
+      // Create notification
+      const notificationMessages: { [key: string]: string } = {
+        'confirmed': 'Your order has been confirmed by the restaurant!',
+        'preparing': 'Your order is now being prepared',
+        'ready': 'Your order is ready for pickup',
+        'picked_up': 'Your order has been picked up by the rider',
+        'on_the_way': 'Your order is on the way to you',
+        'delivered': 'Your order has been delivered. Enjoy your meal!',
+        'cancelled': 'Your order has been cancelled'
+      };
+      
+      const message = notificationMessages[status] || `Order status updated to ${status}`;
+      
+      await storage.createOrderNotification({
+        orderId,
+        recipientId: order.customerId,
+        recipientType: 'customer',
+        notificationType: 'order_status_update',
+        title: 'Order Update',
+        message,
+        isRead: false
+      });
+      
+      // Broadcast with enhanced data
+      broadcastToSubscribers('order_status_update', {
+        orderId,
+        status,
+        message,
+        location,
+        timestamp: new Date().toISOString(),
+        estimatedArrival: status === 'on_the_way' ? 
+          new Date(Date.now() + 15 * 60000).toISOString() : null
+      });
+      
+      res.json({
+        order: updatedOrder,
+        notification: {
+          message,
+          sent: true
+        }
+      });
+    } catch (error) {
+      console.error("Error updating order status with notifications:", error);
+      res.status(500).json({ message: "Failed to update order status" });
+    }
+  });
+
+  // Order Validation and Inventory Check Endpoint
+  app.post("/api/orders/validate", authenticateToken, async (req, res) => {
+    try {
+      const { restaurantId, items } = req.body;
+      
+      if (!restaurantId || !items || !Array.isArray(items)) {
+        return res.status(400).json({ message: "Restaurant ID and items array required" });
+      }
+      
+      // Validate order items
+      const validation = await storage.validateOrderItems(restaurantId, items);
+      
+      // Check inventory availability
+      const inventory = await storage.checkInventoryAvailability(restaurantId, items);
+      
+      res.json({
+        validation: {
+          isValid: validation.isValid,
+          errors: validation.errors,
+          warnings: validation.warnings
+        },
+        inventory: {
+          isAvailable: inventory.isAvailable,
+          unavailableItems: inventory.unavailableItems
+        },
+        canProceed: validation.isValid && inventory.isAvailable
+      });
+    } catch (error) {
+      console.error("Error validating order:", error);
+      res.status(500).json({ message: "Failed to validate order" });
+    }
+  });
+
+  // Bulk Order Operations for Admin
+  app.patch("/api/admin/orders/bulk-update", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { orderIds, status, notes } = req.body;
+      
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ message: "Order IDs array required" });
+      }
+      
+      const results = [];
+      
+      for (const orderId of orderIds) {
+        try {
+          const updatedOrder = await storage.updateOrderStatus(orderId, status, req.user!.id, notes);
+          if (updatedOrder) {
+            results.push({ orderId, success: true, order: updatedOrder });
+            
+            // Broadcast individual updates
+            broadcastToSubscribers('order_status_update', {
+              orderId,
+              status,
+              adminUpdate: true
+            });
+          } else {
+            results.push({ orderId, success: false, error: 'Order not found' });
+          }
+        } catch (error) {
+          results.push({ orderId, success: false, error: 'Update failed' });
+        }
+      }
+      
+      res.json({
+        processed: results.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        results
+      });
+    } catch (error) {
+      console.error("Error bulk updating orders:", error);
+      res.status(500).json({ message: "Failed to bulk update orders" });
+    }
+  });
+
+  // ============= COMPREHENSIVE ADMIN MANAGEMENT ROUTES =============
+
+  // ============= ENHANCED ANALYTICS AND DASHBOARD =============
+
+  // Advanced Analytics Dashboard
+  app.get("/api/admin/analytics/dashboard", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { timeRange = '7d', metrics = 'all' } = req.query;
+      
+      // Calculate time range
+      const now = new Date();
+      const days = parseInt(timeRange as string);
+      const startDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+
+      // Get comprehensive analytics
+      const [
+        orderStats,
+        revenueStats,
+        userStats,
+        riderStats,
+        restaurantStats,
+        orderTrends,
+        revenueTrends,
+        serviceBreakdown,
+        topRestaurants,
+        riderPerformance,
+        geographicData
+      ] = await Promise.all([
+        storage.getOrderAnalytics(startDate, now),
+        storage.getRevenueAnalytics(startDate, now),
+        storage.getUserAnalytics(startDate, now),
+        storage.getRiderAnalytics(startDate, now),
+        storage.getRestaurantAnalytics(startDate, now),
+        storage.getOrderTrends(startDate, now),
+        storage.getRevenueTrends(startDate, now),
+        storage.getServiceBreakdown(startDate, now),
+        storage.getTopRestaurants(startDate, now),
+        storage.getRiderPerformance(startDate, now),
+        storage.getGeographicAnalytics(startDate, now)
+      ]);
+
+      res.json({
+        timeRange,
+        analytics: {
+          orders: orderStats,
+          revenue: revenueStats,
+          users: userStats,
+          riders: riderStats,
+          restaurants: restaurantStats
+        },
+        trends: {
+          orders: orderTrends,
+          revenue: revenueTrends
+        },
+        breakdowns: {
+          services: serviceBreakdown,
+          topRestaurants,
+          riderPerformance,
+          geographic: geographicData
+        },
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching analytics dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch analytics dashboard" });
+    }
+  });
+
+  // Real-time Platform Metrics
+  app.get("/api/admin/analytics/realtime", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const [
+        activeOrders,
+        onlineRiders,
+        activeRestaurants,
+        liveRevenue,
+        systemHealth
+      ] = await Promise.all([
+        storage.getActiveOrdersCount(),
+        storage.getOnlineRidersCount(),
+        storage.getActiveRestaurantsCount(),
+        storage.getTodayRevenue(),
+        storage.getSystemHealthMetrics()
+      ]);
+
+      res.json({
+        realtime: {
+          activeOrders,
+          onlineRiders,
+          activeRestaurants,
+          liveRevenue,
+          systemHealth
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching realtime metrics:", error);
+      res.status(500).json({ message: "Failed to fetch realtime metrics" });
+    }
+  });
+
+  // Performance Monitoring
+  app.get("/api/admin/analytics/performance", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { timeRange = '24h' } = req.query;
+      
+      const performance = await storage.getPerformanceMetrics(timeRange as string);
+      
+      res.json({
+        performance,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching performance metrics:", error);
+      res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
+  // ============= ADVANCED ORDER MANAGEMENT =============
+
+  // Comprehensive Order Overview
+  app.get("/api/admin/orders/overview", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        status, 
+        orderType, 
+        timeRange = '7d',
+        page = 1, 
+        limit = 50,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      const result = await storage.getOrdersOverview({
+        status: status as string,
+        orderType: orderType as string,
+        timeRange: timeRange as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        search: search as string,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as string
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching orders overview:", error);
+      res.status(500).json({ message: "Failed to fetch orders overview" });
+    }
+  });
+
+  // Order Dispute Management
+  app.get("/api/admin/orders/disputes", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status = 'open', page = 1, limit = 20 } = req.query;
+      
+      const disputes = await storage.getOrderDisputes({
+        status: status as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(disputes);
+    } catch (error) {
+      console.error("Error fetching order disputes:", error);
+      res.status(500).json({ message: "Failed to fetch order disputes" });
+    }
+  });
+
+  // Create Order Dispute
+  app.post("/api/admin/orders/disputes", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { orderId, type, description, priority = 'medium' } = req.body;
+      
+      const dispute = await storage.createOrderDispute({
+        orderId,
+        type,
+        description,
+        priority,
+        reportedBy: req.user!.id,
+        status: 'open'
+      });
+
+      res.status(201).json(dispute);
+    } catch (error) {
+      console.error("Error creating order dispute:", error);
+      res.status(500).json({ message: "Failed to create order dispute" });
+    }
+  });
+
+  // Update Order Dispute
+  app.patch("/api/admin/orders/disputes/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, resolution, assignedTo } = req.body;
+      
+      const dispute = await storage.updateOrderDispute(id, {
+        status,
+        resolution,
+        assignedTo,
+        resolvedBy: req.user!.id,
+        resolvedAt: status === 'resolved' ? new Date() : null
+      });
+
+      res.json(dispute);
+    } catch (error) {
+      console.error("Error updating order dispute:", error);
+      res.status(500).json({ message: "Failed to update order dispute" });
+    }
+  });
+
+  // SLA Monitoring
+  app.get("/api/admin/orders/sla", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { timeRange = '24h' } = req.query;
+      
+      const slaMetrics = await storage.getSLAMetrics(timeRange as string);
+      
+      res.json(slaMetrics);
+    } catch (error) {
+      console.error("Error fetching SLA metrics:", error);
+      res.status(500).json({ message: "Failed to fetch SLA metrics" });
+    }
+  });
+
+  // Order Export
+  app.post("/api/admin/orders/export", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { format = 'csv', filters } = req.body;
+      
+      const exportData = await storage.exportOrders(filters, format);
+      
+      res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=orders_${new Date().toISOString().split('T')[0]}.${format}`);
+      res.send(exportData);
+    } catch (error) {
+      console.error("Error exporting orders:", error);
+      res.status(500).json({ message: "Failed to export orders" });
+    }
+  });
+
+  // ============= COMPREHENSIVE USER MANAGEMENT =============
+
+  // Enhanced User Overview
+  app.get("/api/admin/users/overview", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        role, 
+        status, 
+        verificationStatus,
+        page = 1, 
+        limit = 50,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      const result = await storage.getUsersOverview({
+        role: role as string,
+        status: status as string,
+        verificationStatus: verificationStatus as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        search: search as string,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as string
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching users overview:", error);
+      res.status(500).json({ message: "Failed to fetch users overview" });
+    }
+  });
+
+  // User KYC Management
+  app.get("/api/admin/users/kyc", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status = 'pending', page = 1, limit = 20 } = req.query;
+      
+      const kycRequests = await storage.getKYCRequests({
+        status: status as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(kycRequests);
+    } catch (error) {
+      console.error("Error fetching KYC requests:", error);
+      res.status(500).json({ message: "Failed to fetch KYC requests" });
+    }
+  });
+
+  // Approve/Reject KYC
+  app.patch("/api/admin/users/kyc/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+      
+      const kycRequest = await storage.updateKYCRequest(id, {
+        status,
+        notes,
+        reviewedBy: req.user!.id,
+        reviewedAt: new Date()
+      });
+
+      res.json(kycRequest);
+    } catch (error) {
+      console.error("Error updating KYC request:", error);
+      res.status(500).json({ message: "Failed to update KYC request" });
+    }
+  });
+
+  // User Account Actions
+  app.patch("/api/admin/users/:id/status", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body;
+      
+      const user = await storage.updateUserStatus(id, status, {
+        reason,
+        updatedBy: req.user!.id,
+        updatedAt: new Date()
+      });
+
+      // Log admin action
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: `user_status_change_${status}`,
+        resource: 'users',
+        resourceId: id,
+        details: { oldStatus: user.previousStatus, newStatus: status, reason },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      res.status(500).json({ message: "Failed to update user status" });
+    }
+  });
+
+  // ============= FINANCIAL MANAGEMENT =============
+
+  // Financial Dashboard
+  app.get("/api/admin/financial/dashboard", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { timeRange = '30d' } = req.query;
+      
+      const [
+        revenueMetrics,
+        commissionData,
+        payoutMetrics,
+        taxSummary,
+        financialTrends
+      ] = await Promise.all([
+        storage.getRevenueMetrics(timeRange as string),
+        storage.getCommissionData(timeRange as string),
+        storage.getPayoutMetrics(timeRange as string),
+        storage.getTaxSummary(timeRange as string),
+        storage.getFinancialTrends(timeRange as string)
+      ]);
+
+      res.json({
+        revenue: revenueMetrics,
+        commissions: commissionData,
+        payouts: payoutMetrics,
+        taxes: taxSummary,
+        trends: financialTrends,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching financial dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch financial dashboard" });
+    }
+  });
+
+  // Commission Rules Management
+  app.get("/api/admin/financial/commission-rules", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const rules = await storage.getCommissionRules();
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching commission rules:", error);
+      res.status(500).json({ message: "Failed to fetch commission rules" });
+    }
+  });
+
+  app.post("/api/admin/financial/commission-rules", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { serviceType, userType, percentage, fixedFee, minAmount, maxAmount, isActive } = req.body;
+      
+      const rule = await storage.createCommissionRule({
+        serviceType,
+        userType,
+        percentage,
+        fixedFee,
+        minAmount,
+        maxAmount,
+        isActive,
+        createdBy: req.user!.id
+      });
+
+      res.status(201).json(rule);
+    } catch (error) {
+      console.error("Error creating commission rule:", error);
+      res.status(500).json({ message: "Failed to create commission rule" });
+    }
+  });
+
+  // Payout Management
+  app.get("/api/admin/financial/payouts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, userType, page = 1, limit = 50 } = req.query;
+      
+      const payouts = await storage.getPayouts({
+        status: status as string,
+        userType: userType as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(payouts);
+    } catch (error) {
+      console.error("Error fetching payouts:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
+    }
+  });
+
+  app.post("/api/admin/financial/payouts/process", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { payoutIds } = req.body;
+      
+      const results = await storage.processPayouts(payoutIds, req.user!.id);
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Error processing payouts:", error);
+      res.status(500).json({ message: "Failed to process payouts" });
+    }
+  });
+
+  // Financial Reports
+  app.post("/api/admin/financial/reports", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { reportType, timeRange, format = 'pdf', filters } = req.body;
+      
+      const report = await storage.generateFinancialReport({
+        reportType,
+        timeRange,
+        format,
+        filters,
+        generatedBy: req.user!.id
+      });
+
+      res.json(report);
+    } catch (error) {
+      console.error("Error generating financial report:", error);
+      res.status(500).json({ message: "Failed to generate financial report" });
+    }
+  });
+
+  // ============= PLATFORM CONFIGURATION =============
+
+  // Platform Settings
+  app.get("/api/admin/config/platform", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const config = await storage.getPlatformConfig();
+      res.json(config);
+    } catch (error) {
+      console.error("Error fetching platform config:", error);
+      res.status(500).json({ message: "Failed to fetch platform config" });
+    }
+  });
+
+  app.patch("/api/admin/config/platform", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { key, value, description } = req.body;
+      
+      const config = await storage.updatePlatformConfig(key, value, {
+        description,
+        updatedBy: req.user!.id
+      });
+
+      // Log configuration change
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'platform_config_update',
+        resource: 'platform_config',
+        resourceId: key,
+        details: { key, value, description },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json(config);
+    } catch (error) {
+      console.error("Error updating platform config:", error);
+      res.status(500).json({ message: "Failed to update platform config" });
+    }
+  });
+
+  // Delivery Zones Management
+  app.get("/api/admin/config/delivery-zones", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const zones = await storage.getDeliveryZones();
+      res.json(zones);
+    } catch (error) {
+      console.error("Error fetching delivery zones:", error);
+      res.status(500).json({ message: "Failed to fetch delivery zones" });
+    }
+  });
+
+  app.post("/api/admin/config/delivery-zones", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { name, coordinates, baseFee, perKmFee, maxDistance, isActive } = req.body;
+      
+      const zone = await storage.createDeliveryZone({
+        name,
+        coordinates,
+        baseFee,
+        perKmFee,
+        maxDistance,
+        isActive,
+        createdBy: req.user!.id
+      });
+
+      res.status(201).json(zone);
+    } catch (error) {
+      console.error("Error creating delivery zone:", error);
+      res.status(500).json({ message: "Failed to create delivery zone" });
+    }
+  });
+
+  // ============= OPERATIONS AND DISPATCH =============
+
+  // Enhanced Dispatch Console
+  app.get("/api/admin/dispatch/console", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const [
+        activeOrders,
+        availableRiders,
+        systemAlerts,
+        performanceMetrics,
+        emergencyAlerts
+      ] = await Promise.all([
+        storage.getActiveOrdersForDispatch(),
+        storage.getAvailableRiders(),
+        storage.getActiveSystemAlerts(),
+        storage.getRealTimePerformanceMetrics(),
+        storage.getEmergencyAlerts()
+      ]);
+
+      res.json({
+        dispatch: {
+          activeOrders,
+          availableRiders,
+          systemAlerts,
+          performanceMetrics,
+          emergencyAlerts
+        },
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching dispatch console:", error);
+      res.status(500).json({ message: "Failed to fetch dispatch console" });
+    }
+  });
+
+  // Emergency Intervention
+  app.post("/api/admin/dispatch/emergency", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { orderId, interventionType, notes, priority = 'high' } = req.body;
+      
+      const intervention = await storage.createEmergencyIntervention({
+        orderId,
+        interventionType,
+        notes,
+        priority,
+        triggeredBy: req.user!.id
+      });
+
+      // Broadcast emergency alert
+      broadcastToSubscribers('emergency_intervention', {
+        orderId,
+        interventionType,
+        priority,
+        triggeredBy: req.user!.id
+      });
+
+      res.status(201).json(intervention);
+    } catch (error) {
+      console.error("Error creating emergency intervention:", error);
+      res.status(500).json({ message: "Failed to create emergency intervention" });
+    }
+  });
+
+  // Performance Alerts
+  app.get("/api/admin/dispatch/performance-alerts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status = 'active', severity, page = 1, limit = 20 } = req.query;
+      
+      const alerts = await storage.getPerformanceAlerts({
+        status: status as string,
+        severity: severity as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching performance alerts:", error);
+      res.status(500).json({ message: "Failed to fetch performance alerts" });
+    }
+  });
+
+  // ============= COMMUNICATION AND SUPPORT =============
+
+  // Support Tickets Management
+  app.get("/api/admin/support/tickets", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        status, 
+        priority, 
+        category,
+        assignedTo,
+        page = 1, 
+        limit = 50,
+        search
+      } = req.query;
+
+      const tickets = await storage.getSupportTickets({
+        status: status as string,
+        priority: priority as string,
+        category: category as string,
+        assignedTo: assignedTo as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        search: search as string
+      });
+
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching support tickets:", error);
+      res.status(500).json({ message: "Failed to fetch support tickets" });
+    }
+  });
+
+  // Update Support Ticket
+  app.patch("/api/admin/support/tickets/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, priority, assignedTo, internalNotes } = req.body;
+      
+      const ticket = await storage.updateSupportTicket(id, {
+        status,
+        priority,
+        assignedTo,
+        internalNotes,
+        updatedBy: req.user!.id
+      });
+
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error updating support ticket:", error);
+      res.status(500).json({ message: "Failed to update support ticket" });
+    }
+  });
+
+  // Broadcast Messages
+  app.get("/api/admin/communication/broadcasts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, targetAudience, page = 1, limit = 20 } = req.query;
+      
+      const broadcasts = await storage.getBroadcastMessages({
+        status: status as string,
+        targetAudience: targetAudience as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(broadcasts);
+    } catch (error) {
+      console.error("Error fetching broadcast messages:", error);
+      res.status(500).json({ message: "Failed to fetch broadcast messages" });
+    }
+  });
+
+  app.post("/api/admin/communication/broadcasts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        title, 
+        message, 
+        targetAudience, 
+        deliveryMethod,
+        scheduleFor,
+        isUrgent = false 
+      } = req.body;
+      
+      const broadcast = await storage.createBroadcastMessage({
+        title,
+        message,
+        targetAudience,
+        deliveryMethod,
+        scheduleFor,
+        isUrgent,
+        createdBy: req.user!.id
+      });
+
+      res.status(201).json(broadcast);
+    } catch (error) {
+      console.error("Error creating broadcast message:", error);
+      res.status(500).json({ message: "Failed to create broadcast message" });
+    }
+  });
+
+  // ============= REPORTING AND BUSINESS INTELLIGENCE =============
+
+  // Comprehensive Reports List
+  app.get("/api/admin/reports", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { category, page = 1, limit = 20 } = req.query;
+      
+      const reports = await storage.getAvailableReports({
+        category: category as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      res.status(500).json({ message: "Failed to fetch reports" });
+    }
+  });
+
+  // Generate Custom Report
+  app.post("/api/admin/reports/generate", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        reportType, 
+        timeRange, 
+        filters, 
+        format = 'pdf',
+        includeCharts = true,
+        deliveryMethod = 'download'
+      } = req.body;
+      
+      const report = await storage.generateCustomReport({
+        reportType,
+        timeRange,
+        filters,
+        format,
+        includeCharts,
+        deliveryMethod,
+        requestedBy: req.user!.id
+      });
+
+      res.json(report);
+    } catch (error) {
+      console.error("Error generating custom report:", error);
+      res.status(500).json({ message: "Failed to generate custom report" });
+    }
+  });
+
+  // Business Intelligence Insights
+  app.get("/api/admin/reports/insights", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { timeRange = '30d', category = 'all' } = req.query;
+      
+      const insights = await storage.getBusinessIntelligenceInsights({
+        timeRange: timeRange as string,
+        category: category as string
+      });
+
+      res.json(insights);
+    } catch (error) {
+      console.error("Error fetching business insights:", error);
+      res.status(500).json({ message: "Failed to fetch business insights" });
+    }
+  });
+
+  // ============= SYSTEM MONITORING =============
+
+  // System Health Monitoring
+  app.get("/api/admin/system/health", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const health = await storage.getSystemHealthStatus();
+      res.json(health);
+    } catch (error) {
+      console.error("Error fetching system health:", error);
+      res.status(500).json({ message: "Failed to fetch system health" });
+    }
+  });
+
+  // Audit Logs
+  app.get("/api/admin/audit-logs", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        action, 
+        resource, 
+        adminUser,
+        timeRange,
+        page = 1, 
+        limit = 50 
+      } = req.query;
+
+      const logs = await storage.getAdminAuditLogs({
+        action: action as string,
+        resource: resource as string,
+        adminUser: adminUser as string,
+        timeRange: timeRange as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching audit logs:", error);
+      res.status(500).json({ message: "Failed to fetch audit logs" });
     }
   });
 

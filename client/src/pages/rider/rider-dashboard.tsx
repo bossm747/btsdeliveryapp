@@ -17,7 +17,7 @@ import {
   Activity, Zap, Shield, Brain, BarChart3, User, Bell, 
   Settings, Wallet, ChevronRight, Menu, Home, Map,
   Truck, Target, Award, RotateCcw, Eye, LogOut,
-  WiFi, WifiOff, CircleDot, Plus, Minus
+  Wifi, WifiOff, CircleDot, Plus, Minus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -34,24 +34,29 @@ export default function RiderDashboard() {
   const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch rider data
-  const { data: riderData, isLoading: riderLoading } = useQuery({
+  const { data: riderData = {}, isLoading: riderLoading } = useQuery<{
+    id?: string;
+    todayEarnings?: number;
+    rating?: number;
+    [key: string]: any;
+  }>({
     queryKey: ["/api/rider/profile"],
     enabled: true
   });
 
   // Fetch active deliveries
-  const { data: activeDeliveries = [], isLoading: deliveriesLoading } = useQuery({
+  const { data: activeDeliveries = [], isLoading: deliveriesLoading } = useQuery<any[]>({
     queryKey: ["/api/rider/deliveries/active"],
     refetchInterval: 10000
   });
 
   // Fetch delivery history
-  const { data: deliveryHistory = [] } = useQuery({
+  const { data: deliveryHistory = [] } = useQuery<any[]>({
     queryKey: ["/api/rider/deliveries/history"]
   });
 
   // Fetch pending assignments
-  const { data: pendingAssignments = [] } = useQuery({
+  const { data: pendingAssignments = [] } = useQuery<any[]>({
     queryKey: [`/api/riders/${riderData?.id}/pending-assignments`],
     enabled: !!riderData?.id,
     refetchInterval: 5000
@@ -219,7 +224,7 @@ export default function RiderDashboard() {
           <div className="text-xs opacity-90">Today</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold">{activeDeliveries?.length || 0}</div>
+          <div className="text-lg font-bold">{Array.isArray(activeDeliveries) ? activeDeliveries.length : 0}</div>
           <div className="text-xs opacity-90">Active</div>
         </div>
         <div className="text-center">
@@ -265,13 +270,13 @@ export default function RiderDashboard() {
   // Pending Assignments Component
   const PendingAssignments = () => (
     <div className="px-4 py-3">
-      {pendingAssignments.length > 0 && (
+      {Array.isArray(pendingAssignments) && pendingAssignments.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-[#004225] flex items-center">
             <AlertCircle className="w-4 h-4 mr-2 text-orange-500" />
             New Delivery Requests
           </h3>
-          {pendingAssignments.map((assignment: any) => (
+          {Array.isArray(pendingAssignments) && pendingAssignments.map((assignment: any) => (
             <Card key={assignment.id} className="border-l-4 border-l-orange-500 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -313,13 +318,13 @@ export default function RiderDashboard() {
   // Active Deliveries Component
   const ActiveDeliveries = () => (
     <div className="px-4 py-3">
-      {activeDeliveries.length > 0 ? (
+      {Array.isArray(activeDeliveries) && activeDeliveries.length > 0 ? (
         <div className="space-y-3">
           <h3 className="font-semibold text-[#004225] flex items-center">
             <Truck className="w-4 h-4 mr-2 text-blue-500" />
             Active Deliveries
           </h3>
-          {activeDeliveries.map((delivery: any) => (
+          {Array.isArray(activeDeliveries) && activeDeliveries.map((delivery: any) => (
             <Card key={delivery.id} className="border-l-4 border-l-blue-500 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -410,7 +415,7 @@ export default function RiderDashboard() {
       case "map":
         return (
           <div className="pb-20 h-screen">
-            <RiderMapTracking />
+            <RiderMapTracking riderId={riderData?.id || ''} />
           </div>
         );
       case "deliveries":
@@ -425,7 +430,7 @@ export default function RiderDashboard() {
           <div className="pb-20 px-4 py-3">
             <h2 className="text-lg font-bold text-[#004225] mb-4">Delivery History</h2>
             <div className="space-y-3">
-              {deliveryHistory.map((delivery: any) => (
+              {Array.isArray(deliveryHistory) && deliveryHistory.map((delivery: any) => (
                 <Card key={delivery.id} className="shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">

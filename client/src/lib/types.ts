@@ -4,7 +4,9 @@ export interface CartItem {
   price: number;
   quantity: number;
   specialInstructions?: string;
+  modifiers?: string;
   restaurantId: string;
+  originalItemId?: string; // Reference to the base menu item
 }
 
 export interface DeliveryAddress {
