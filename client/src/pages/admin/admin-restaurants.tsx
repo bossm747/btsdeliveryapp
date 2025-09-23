@@ -22,12 +22,12 @@ export default function AdminRestaurants() {
   const { toast } = useToast();
 
   // Fetch restaurants
-  const { data: restaurants = [] } = useQuery({
+  const { data: restaurants = [], isLoading: restaurantsLoading, isError: restaurantsError } = useQuery({
     queryKey: ["/api/admin/restaurants"],
   });
 
   // Fetch stats
-  const { data: stats = {} } = useQuery({
+  const { data: stats = {}, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/admin/stats"],
   });
 
@@ -122,7 +122,12 @@ export default function AdminRestaurants() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                      <p className="text-2xl font-bold">₱{((stats as any)?.totalRevenue / 1000000).toFixed(1) || 0}M</p>
+                      <p className="text-2xl font-bold">
+                        {(() => {
+                          const totalRevenue = Number((stats as any)?.totalRevenue) || 0;
+                          return totalRevenue ? `₱${(totalRevenue / 1000000).toFixed(1)}M` : '₱0M';
+                        })()}
+                      </p>
                     </div>
                     <DollarSign className="h-8 w-8 text-green-600" />
                   </div>
@@ -159,31 +164,51 @@ export default function AdminRestaurants() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(restaurants as any[]).map((restaurant: any) => (
-                      <TableRow key={restaurant.id}>
-                        <TableCell className="font-medium">{restaurant.name}</TableCell>
-                        <TableCell>{restaurant.ownerName || "Restaurant Owner"}</TableCell>
-                        <TableCell>{restaurant.city || "Batangas City"}</TableCell>
-                        <TableCell>
-                          <Badge variant={restaurant.isActive ? "default" : "secondary"}>
-                            {restaurant.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{restaurant.rating || "N/A"}</TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleApproveRestaurant(restaurant.id)}
-                            >
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="ghost">Edit</Button>
-                          </div>
+                    {restaurantsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          Loading restaurants...
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : restaurantsError ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-red-600">
+                          Error loading restaurants
+                        </TableCell>
+                      </TableRow>
+                    ) : restaurants.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          No restaurants found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (restaurants as any[]).map((restaurant: any) => (
+                        <TableRow key={restaurant.id}>
+                          <TableCell className="font-medium">{restaurant.name || "N/A"}</TableCell>
+                          <TableCell>{restaurant.ownerName || "N/A"}</TableCell>
+                          <TableCell>{restaurant.city || "N/A"}</TableCell>
+                          <TableCell>
+                            <Badge variant={restaurant.isActive ? "default" : "secondary"}>
+                              {restaurant.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{restaurant.rating || "N/A"}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleApproveRestaurant(restaurant.id)}
+                              >
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="ghost">Edit</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>

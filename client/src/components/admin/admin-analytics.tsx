@@ -86,10 +86,12 @@ export default function AdminAnalytics({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.activeUsers || "15.2K"}</div>
+            <div className="text-2xl font-bold">
+              {stats?.activeUsers ? `${((stats as any).activeUsers / 1000).toFixed(1)}K` : 'No data'}
+            </div>
             <div className="flex items-center text-xs text-green-600">
               <TrendingUp className="h-3 w-3 mr-1" />
-              +23% this month
+              {(stats as any)?.activeUsersGrowth ? `+${(stats as any).activeUsersGrowth}% this month` : 'No growth data'}
             </div>
           </CardContent>
         </Card>
@@ -102,10 +104,12 @@ export default function AdminAnalytics({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">28 min</div>
+            <div className="text-2xl font-bold">
+              {(stats as any)?.avgDeliveryTime ? `${(stats as any).avgDeliveryTime} min` : 'No data'}
+            </div>
             <div className="flex items-center text-xs text-green-600">
               <TrendingDown className="h-3 w-3 mr-1" />
-              -2 min from last week
+              {(stats as any)?.avgDeliveryChange ? `${(stats as any).avgDeliveryChange} min from last week` : 'No change data'}
             </div>
           </CardContent>
         </Card>

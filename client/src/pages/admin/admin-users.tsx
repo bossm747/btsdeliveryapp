@@ -21,12 +21,12 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch users
-  const { data: users = [] } = useQuery({
-    queryKey: ["/api/admin/users", searchTerm],
+  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery({
+    queryKey: ["/api/admin/users", { search: searchTerm }],
   });
 
   // Fetch stats
-  const { data: stats = {} } = useQuery({
+  const { data: stats = {}, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/admin/stats"],
   });
 
@@ -153,24 +153,44 @@ export default function AdminUsers() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(users as any[]).map((user: any) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{user.role}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.status === "active" ? "default" : "secondary"}>
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="ghost">View</Button>
+                    {usersLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          Loading users...
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : usersError ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-red-600">
+                          Error loading users
+                        </TableCell>
+                      </TableRow>
+                    ) : users.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          No users found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (users as any[]).map((user: any) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">{user.firstName || 'N/A'} {user.lastName || ''}</TableCell>
+                          <TableCell>{user.email || 'N/A'}</TableCell>
+                          <TableCell>{user.phone || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{user.role || 'N/A'}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={user.status === "active" ? "default" : "secondary"}>
+                              {user.status || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="ghost">View</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>

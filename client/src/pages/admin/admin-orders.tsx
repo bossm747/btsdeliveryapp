@@ -27,12 +27,12 @@ export default function AdminOrders() {
   const [filterStatus, setFilterStatus] = useState("all");
 
   // Fetch orders
-  const { data: orders = [] } = useQuery({
-    queryKey: ["/api/admin/orders", filterStatus],
+  const { data: orders = [], isLoading: ordersLoading, isError: ordersError } = useQuery({
+    queryKey: ["/api/admin/orders", { status: filterStatus }],
   });
 
   // Fetch stats
-  const { data: stats = {} } = useQuery({
+  const { data: stats = {}, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/admin/stats"],
   });
 
@@ -171,22 +171,42 @@ export default function AdminOrders() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(orders as any[]).map((order: any) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-medium">{order.orderNumber}</TableCell>
-                        <TableCell>{order.customerName}</TableCell>
-                        <TableCell>{order.restaurantName}</TableCell>
-                        <TableCell>₱{order.totalAmount}</TableCell>
-                        <TableCell>
-                          <Badge variant={order.status === "delivered" ? "default" : "secondary"}>
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="ghost">View</Button>
+                    {ordersLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          Loading orders...
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : ordersError ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-red-600">
+                          Error loading orders
+                        </TableCell>
+                      </TableRow>
+                    ) : orders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          No orders found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (orders as any[]).map((order: any) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">{order.orderNumber}</TableCell>
+                          <TableCell>{order.customerName}</TableCell>
+                          <TableCell>{order.restaurantName}</TableCell>
+                          <TableCell>₱{order.totalAmount}</TableCell>
+                          <TableCell>
+                            <Badge variant={order.status === "delivered" ? "default" : "secondary"}>
+                              {order.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="ghost">View</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
