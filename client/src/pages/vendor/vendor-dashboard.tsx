@@ -30,9 +30,6 @@ import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
 import type { Order, Restaurant, MenuItem, MenuCategory } from "@shared/schema";
 
-// Mock restaurant ID - using actual seeded restaurant UUID
-const MOCK_RESTAURANT_ID = "5e07adaf-324d-429e-9727-9a91da7774ce";
-
 export default function VendorDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -51,24 +48,27 @@ export default function VendorDashboard() {
     description: ''
   });
 
-  // Fetch restaurant data
-  const { data: restaurant, isLoading: restaurantLoading } = useQuery<Restaurant>({
-    queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID],
+  // Fetch vendor's restaurant data
+  const { data: restaurant, isLoading: restaurantLoading } = useQuery<Restaurant | null>({
+    queryKey: ["/api/vendor/restaurant"],
   });
 
-  // Fetch restaurant orders
+  // Fetch vendor's orders
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
-    queryKey: [`/api/orders?restaurantId=${MOCK_RESTAURANT_ID}`],
+    queryKey: ["/api/vendor/orders"],
+    enabled: !!restaurant, // Only fetch when restaurant is loaded
   });
 
-  // Fetch menu items
+  // Fetch vendor's menu items
   const { data: menuItems, isLoading: menuLoading } = useQuery<MenuItem[]>({
-    queryKey: ["/api/restaurants", MOCK_RESTAURANT_ID, "menu"],
+    queryKey: ["/api/restaurants", restaurant?.id, "menu"],
+    enabled: !!restaurant?.id, // Only fetch when restaurant ID is available
   });
 
-  // Fetch categories
+  // Fetch vendor's categories
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<MenuCategory[]>({
     queryKey: ["/api/vendor/categories"],
+    enabled: !!restaurant, // Only fetch when restaurant is loaded
   });
 
   // Update order status mutation

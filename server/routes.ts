@@ -1624,10 +1624,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== VENDOR API ENDPOINTS ====================
   
   // Vendor Categories endpoints
-  app.get("/api/vendor/categories", async (req, res) => {
+  app.get("/api/vendor/categories", authenticateToken, async (req, res) => {
     try {
-      // In production, this would filter by vendor/restaurant ID from auth
-      const categories = await storage.getMenuCategories();
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant first
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const categories = await storage.getMenuCategories(restaurants[0].id);
       res.json(categories);
     } catch (error) {
       console.error("Error fetching vendor categories:", error);
@@ -1670,10 +1679,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Orders endpoints
-  app.get("/api/vendor/orders", async (req, res) => {
+  app.get("/api/vendor/orders", authenticateToken, async (req, res) => {
     try {
-      // In production, this would filter by vendor/restaurant ID from auth
-      const orders = await storage.getOrders();
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant first
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const orders = await storage.getOrdersByRestaurant(restaurants[0].id);
       res.json(orders);
     } catch (error) {
       console.error("Error fetching vendor orders:", error);
@@ -1694,10 +1712,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Restaurant endpoint
-  app.get("/api/vendor/restaurant", async (req, res) => {
+  app.get("/api/vendor/restaurant", authenticateToken, async (req, res) => {
     try {
-      // In production, this would get the restaurant from auth context
-      const restaurants = await storage.getRestaurants();
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get restaurants owned by the authenticated user
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
       const restaurant = restaurants.length > 0 ? restaurants[0] : null;
       res.json(restaurant);
     } catch (error) {
