@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { 
   MessageCircle, Send, Bot, User, X, MapPin, Receipt, 
   BarChart3, Table, Map, Package, Clock, DollarSign,
@@ -955,6 +955,9 @@ export default function AdvancedChatbot() {
               <Navigation className="h-5 w-5 text-orange-500" />
               Real-Time Delivery Tracking
             </DialogTitle>
+            <DialogDescription>
+              Track your delivery in real-time with live location updates and estimated arrival time.
+            </DialogDescription>
           </DialogHeader>
           {trackingOrderId && (
             <DeliveryLiveTracking

@@ -26,8 +26,19 @@ import Parcel from "@/pages/shared/parcel";
 // Role-specific dashboards
 import CustomerDashboard from "@/pages/customer/customer-dashboard";
 import RiderDashboard from "@/pages/rider/rider-dashboard";
-import VendorDashboard from "@/pages/vendor/vendor-dashboard";
+
+// Vendor components
+import VendorLayout from "@/pages/vendor/vendor-layout";
+import VendorOverview from "@/pages/vendor/overview";
+import VendorOrders from "@/pages/vendor/orders";
+import VendorMenu from "@/pages/vendor/menu";
+import VendorPromotions from "@/pages/vendor/promotions";
+import VendorStaff from "@/pages/vendor/staff";
+import VendorInventory from "@/pages/vendor/inventory";
+import VendorEarnings from "@/pages/vendor/earnings";
+import VendorProfile from "@/pages/vendor/profile";
 import AIAssistant from "@/pages/vendor/ai-assistant";
+
 import AdminDashboard from "@/pages/admin/admin-dashboard";
 import AdminDispatch from "@/pages/admin/admin-dispatch";
 import AdminAnalyticsPage from "@/pages/admin/admin-analytics";
@@ -174,12 +185,68 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Vendor Dashboard - protected for vendors only */}
+      {/* Vendor Routes - protected for vendors only */}
       <Route path="/vendor-dashboard">
         <ProtectedRoute allowedRoles={["vendor"]}>
-          <DashboardLayout>
-            <VendorDashboard />
-          </DashboardLayout>
+          <VendorLayout>
+            <VendorOverview />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/orders">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorOrders />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/menu">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorMenu />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/promotions">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorPromotions />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/staff">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorStaff />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/inventory">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorInventory />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/earnings">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorEarnings />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/profile">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorProfile />
+          </VendorLayout>
         </ProtectedRoute>
       </Route>
 

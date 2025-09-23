@@ -42,7 +42,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
-import type { Order, Restaurant, MenuItem, MenuCategory, Promotion, VendorEarning, RestaurantStaff, InventoryItem } from "@shared/schema";
+import type { Order, Restaurant, MenuItem, MenuCategory, Promotion, VendorEarnings, RestaurantStaff, InventoryItem } from "@shared/schema";
 
 export default function VendorDashboard() {
   const { toast } = useToast();
@@ -62,7 +62,8 @@ export default function VendorDashboard() {
   });
   const [newCategory, setNewCategory] = useState({
     name: '',
-    description: ''
+    description: '',
+    restaurant_id: ''
   });
 
   const handleLogout = () => {
@@ -215,13 +216,13 @@ export default function VendorDashboard() {
 
   // Create category mutation
   const createCategoryMutation = useMutation({
-    mutationFn: async (category: { name: string; description: string }) => {
+    mutationFn: async (category: { name: string; description: string; restaurant_id: string }) => {
       const response = await apiRequest('POST', '/api/vendor/categories', category);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
-      setNewCategory({ name: '', description: '' });
+      setNewCategory({ name: '', description: '', restaurant_id: '' });
       setIsAddCategoryOpen(false);
       toast({ title: 'Success', description: 'Category created successfully' });
     },
@@ -243,7 +244,8 @@ export default function VendorDashboard() {
   const handleCreateCategory = () => {
     if (newCategory.name.trim()) {
       createCategoryMutation.mutate({
-        ...newCategory,
+        name: newCategory.name,
+        description: newCategory.description,
         restaurant_id: restaurant?.id || ''
       });
     }
@@ -282,7 +284,7 @@ export default function VendorDashboard() {
   const filteredOrders = orders?.filter(order => {
     const matchesSearch = searchFilter === "" || 
       order.id.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      order.customerName?.toLowerCase().includes(searchFilter.toLowerCase());
+      order.orderNumber?.toLowerCase().includes(searchFilter.toLowerCase());
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   }) || [];
@@ -554,7 +556,7 @@ export default function VendorDashboard() {
                             <div>
                               <p className="font-semibold text-gray-900 dark:text-white">Order #{order.id.slice(-8)}</p>
                               <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {order.customerName || 'Customer'} • ₱{parseFloat(order.totalAmount).toFixed(2)}
+                                Customer Order • ₱{parseFloat(order.totalAmount).toFixed(2)}
                               </p>
                             </div>
                           </div>
@@ -636,7 +638,7 @@ export default function VendorDashboard() {
                             </Badge>
                             <div className="text-right">
                               <p className="text-sm text-gray-500">Discount</p>
-                              <p className="font-semibold text-primary">{promotion.discountValue}{promotion.discountType === 'percentage' ? '%' : '₱'}</p>
+                              <p className="font-semibold text-primary">{promotion.discountValue}{promotion.type === 'percentage' ? '%' : '₱'}</p>
                             </div>
                           </div>
                           <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{promotion.name}</h3>
@@ -681,12 +683,12 @@ export default function VendorDashboard() {
                             <div className="flex items-center space-x-4">
                               <Avatar className="h-12 w-12">
                                 <AvatarFallback className="bg-primary text-primary-foreground">
-                                  {member.name.split(' ').map(n => n[0]).join('')}
+                                  {member.role.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white">{member.name}</h3>
-                                <p className="text-sm text-gray-500">{member.email} • {member.phone}</p>
+                                <h3 className="font-semibold text-gray-900 dark:text-white">Staff Member</h3>
+                                <p className="text-sm text-gray-500">Employee ID: {member.employeeId || 'N/A'}</p>
                               </div>
                             </div>
                             <div className="flex items-center space-x-3">
@@ -743,18 +745,18 @@ export default function VendorDashboard() {
                 ) : (
                   <div className="space-y-4">
                     {inventory.map((item) => (
-                      <Card key={item.id} className={`${item.quantity <= item.minStock ? 'border-l-4 border-l-orange-500' : ''}`} data-testid={`card-inventory-${item.id}`}>
+                      <Card key={item.id} className={`${Number(item.currentStock) <= Number(item.minimumStock) ? 'border-l-4 border-l-orange-500' : ''}`} data-testid={`card-inventory-${item.id}`}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div>
                               <h3 className="font-semibold text-gray-900 dark:text-white">{item.name}</h3>
-                              <p className="text-sm text-gray-500">Unit: {item.unit} • Min Stock: {item.minStock}</p>
+                              <p className="text-sm text-gray-500">Unit: {item.unit} • Min Stock: {Number(item.minimumStock)}</p>
                             </div>
                             <div className="flex items-center space-x-4">
                               <div className="text-right">
                                 <p className="text-sm text-gray-500">Current Stock</p>
-                                <p className={`font-semibold ${item.quantity <= item.minStock ? 'text-orange-600' : 'text-green-600'}`}>
-                                  {item.quantity}
+                                <p className={`font-semibold ${Number(item.currentStock) <= Number(item.minimumStock) ? 'text-orange-600' : 'text-green-600'}`}>
+                                  {Number(item.currentStock)}
                                 </p>
                               </div>
                               <div className="text-right">
@@ -781,14 +783,14 @@ export default function VendorDashboard() {
                   </Button>
                 </div>
 
-                {earningsSummary && (
+                {earningsSummary && typeof earningsSummary === 'object' && (
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <Card data-testid="card-gross-earnings">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Gross Earnings</p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{earningsSummary.total_gross?.toFixed(2) || '0.00'}</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{(earningsSummary as any).total_gross?.toFixed(2) || '0.00'}</p>
                           </div>
                           <div className="bg-green-500/10 p-3 rounded-xl">
                             <DollarSign className="h-8 w-8 text-green-600 dark:text-green-400" />
@@ -802,7 +804,7 @@ export default function VendorDashboard() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Platform Commission</p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{earningsSummary.total_commission?.toFixed(2) || '0.00'}</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{(earningsSummary as any).total_commission?.toFixed(2) || '0.00'}</p>
                           </div>
                           <div className="bg-red-500/10 p-3 rounded-xl">
                             <TrendingUp className="h-8 w-8 text-red-600 dark:text-red-400" />
@@ -816,7 +818,7 @@ export default function VendorDashboard() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Net Earnings</p>
-                            <p className="text-3xl font-bold text-primary">₱{earningsSummary.total_net?.toFixed(2) || '0.00'}</p>
+                            <p className="text-3xl font-bold text-primary">₱{(earningsSummary as any).total_net?.toFixed(2) || '0.00'}</p>
                           </div>
                           <div className="bg-primary/10 p-3 rounded-xl">
                             <CheckCircle className="h-8 w-8 text-primary" />
@@ -830,7 +832,7 @@ export default function VendorDashboard() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Transactions</p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">{earningsSummary.total_transactions || 0}</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">{(earningsSummary as any).total_transactions || 0}</p>
                           </div>
                           <div className="bg-blue-500/10 p-3 rounded-xl">
                             <Activity className="h-8 w-8 text-blue-600 dark:text-blue-400" />
