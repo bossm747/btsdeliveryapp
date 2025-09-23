@@ -58,12 +58,7 @@ export default function VendorDashboard() {
 
   // Fetch restaurant orders
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
-    queryKey: ["/api/orders", { restaurantId: MOCK_RESTAURANT_ID }],
-    queryFn: async () => {
-      const response = await fetch(`/api/orders?restaurantId=${MOCK_RESTAURANT_ID}`);
-      if (!response.ok) throw new Error('Failed to fetch orders');
-      return response.json();
-    }
+    queryKey: [`/api/orders?restaurantId=${MOCK_RESTAURANT_ID}`],
   });
 
   // Fetch menu items
