@@ -1769,10 +1769,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/categories", async (req, res) => {
+  app.post("/api/vendor/categories", authenticateToken, async (req, res) => {
     try {
-      const categoryData = insertMenuCategorySchema.parse(req.body);
-      const category = await storage.createMenuCategory(categoryData);
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant first
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const categoryData = {
+        ...req.body,
+        restaurantId: restaurants[0].id
+      };
+      
+      const validatedData = insertMenuCategorySchema.parse(categoryData);
+      const category = await storage.createMenuCategory(validatedData);
       res.json(category);
     } catch (error) {
       console.error("Error creating vendor category:", error);
@@ -1781,10 +1796,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Menu Items endpoints
-  app.get("/api/vendor/menu-items", async (req, res) => {
+  app.get("/api/vendor/menu-items", authenticateToken, async (req, res) => {
     try {
-      // In production, this would filter by vendor/restaurant ID from auth
-      const menuItems = await storage.getMenuItems();
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant first
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const menuItems = await storage.getMenuItems(restaurants[0].id);
       res.json(menuItems);
     } catch (error) {
       console.error("Error fetching vendor menu items:", error);
@@ -1792,10 +1816,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/menu-items", async (req, res) => {
+  app.post("/api/vendor/menu-items", authenticateToken, async (req, res) => {
     try {
-      const menuItemData = insertMenuItemSchema.parse(req.body);
-      const menuItem = await storage.createMenuItem(menuItemData);
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant first
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const menuItemData = {
+        ...req.body,
+        restaurantId: restaurants[0].id
+      };
+      
+      const validatedData = insertMenuItemSchema.parse(menuItemData);
+      const menuItem = await storage.createMenuItem(validatedData);
       res.json(menuItem);
     } catch (error) {
       console.error("Error creating vendor menu item:", error);
@@ -1824,15 +1863,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/orders/:orderId", async (req, res) => {
+  app.patch("/api/vendor/orders/:orderId", authenticateToken, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
       const { orderId } = req.params;
-      const { status } = req.body;
-      const order = await storage.updateOrderStatus(parseInt(orderId), status);
+      const { status, notes } = req.body;
+      
+      // Verify order belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const order = await storage.updateOrderStatus(parseInt(orderId), status, notes);
       res.json(order);
     } catch (error) {
       console.error("Error updating vendor order:", error);
       res.status(400).json({ error: "Failed to update order" });
+    }
+  });
+
+  // Additional CRUD endpoints for Menu Items
+  app.patch("/api/vendor/menu-items/:itemId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { itemId } = req.params;
+      const updates = req.body;
+      
+      // Verify menu item belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const updatedMenuItem = await storage.updateMenuItem(itemId, updates);
+      if (!updatedMenuItem) {
+        return res.status(404).json({ message: "Menu item not found" });
+      }
+      
+      res.json(updatedMenuItem);
+    } catch (error) {
+      console.error("Error updating menu item:", error);
+      res.status(500).json({ message: "Failed to update menu item" });
+    }
+  });
+
+  app.delete("/api/vendor/menu-items/:itemId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { itemId } = req.params;
+      
+      // Verify menu item belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      await storage.deleteMenuItem(itemId);
+      res.json({ message: "Menu item deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting menu item:", error);
+      res.status(500).json({ message: "Failed to delete menu item" });
+    }
+  });
+
+  // Additional CRUD endpoints for Categories
+  app.patch("/api/vendor/categories/:categoryId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { categoryId } = req.params;
+      const updates = req.body;
+      
+      // Verify category belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const updatedCategory = await storage.updateMenuCategory(categoryId, updates);
+      if (!updatedCategory) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      
+      res.json(updatedCategory);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ message: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/vendor/categories/:categoryId", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { categoryId } = req.params;
+      
+      // Verify category belongs to vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      await storage.deleteMenuCategory(categoryId);
+      res.json({ message: "Category deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ message: "Failed to delete category" });
+    }
+  });
+
+  // Restaurant profile management
+  app.patch("/api/vendor/restaurant", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const updates = req.body;
+      
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const updatedRestaurant = await storage.updateRestaurant(restaurants[0].id, updates);
+      if (!updatedRestaurant) {
+        return res.status(404).json({ message: "Failed to update restaurant" });
+      }
+      
+      res.json(updatedRestaurant);
+    } catch (error) {
+      console.error("Error updating restaurant:", error);
+      res.status(500).json({ message: "Failed to update restaurant" });
     }
   });
 

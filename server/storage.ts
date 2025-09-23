@@ -94,6 +94,9 @@ export interface IStorage {
   createMenuCategory(category: InsertMenuCategory): Promise<MenuCategory>;
   createMenuItem(item: InsertMenuItem): Promise<MenuItem>;
   updateMenuItem(id: string, updates: Partial<MenuItem>): Promise<MenuItem | undefined>;
+  deleteMenuItem(id: string): Promise<void>;
+  updateMenuCategory(id: string, updates: Partial<MenuCategory>): Promise<MenuCategory | undefined>;
+  deleteMenuCategory(id: string): Promise<void>;
 
   // Order operations
   getOrders(): Promise<Order[]>;
