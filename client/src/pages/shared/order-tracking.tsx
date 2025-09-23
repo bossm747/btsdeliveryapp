@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
-import DeliveryLiveTracking from "@/components/delivery-live-tracking";
-import RealTimeTracking from "@/components/real-time-tracking";
+import DeliveryLiveTracking from "@/components/shared/delivery-live-tracking";
+import RealTimeTracking from "@/components/shared/real-time-tracking";
 import type { Order } from "@shared/schema";
 import btsLogo from "@assets/bts-logo-transparent.png";
 

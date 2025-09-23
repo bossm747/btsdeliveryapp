@@ -7,27 +7,27 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Public pages
-import Landing from "@/pages/landing";
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
-import NotFound from "@/pages/not-found";
+import Landing from "@/pages/shared/landing";
+import Login from "@/pages/shared/login";
+import Signup from "@/pages/shared/signup";
+import NotFound from "@/pages/shared/not-found";
 
 // Customer pages
-import Home from "@/pages/home";
-import Restaurants from "@/pages/restaurants";
-import RestaurantDetail from "@/pages/restaurant-detail";
-import Cart from "@/pages/cart";
-import OrderTracking from "@/pages/order-tracking";
-import CustomerOrders from "@/pages/customer-orders";
-import Pabili from "@/pages/pabili";
-import Pabayad from "@/pages/pabayad";
-import Parcel from "@/pages/parcel";
+import Home from "@/pages/shared/home";
+import Restaurants from "@/pages/shared/restaurants";
+import RestaurantDetail from "@/pages/shared/restaurant-detail";
+import Cart from "@/pages/customer/cart";
+import OrderTracking from "@/pages/shared/order-tracking";
+import CustomerOrders from "@/pages/customer/customer-orders";
+import Pabili from "@/pages/shared/pabili";
+import Pabayad from "@/pages/shared/pabayad";
+import Parcel from "@/pages/shared/parcel";
 
 // Role-specific dashboards
-import CustomerDashboard from "@/pages/customer-dashboard";
-import RiderDashboard from "@/pages/rider-dashboard";
-import VendorDashboard from "@/pages/vendor-dashboard-mobile";
-import AdminDashboard from "@/pages/admin-dashboard-mobile";
+import CustomerDashboard from "@/pages/customer/customer-dashboard";
+import RiderDashboard from "@/pages/rider/rider-dashboard";
+import VendorDashboard from "@/pages/vendor/vendor-dashboard-mobile";
+import AdminDashboard from "@/pages/admin/admin-dashboard-mobile";
 
 // Customer layout components
 import Navbar from "@/components/navbar";

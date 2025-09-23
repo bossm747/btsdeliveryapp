@@ -11,9 +11,9 @@ import {
   AlertTriangle, RefreshCw, Maximize2,
   Navigation2, Gauge, TrendingUp, AlertCircle
 } from "lucide-react";
-import DeliveryLiveTracking from "@/components/delivery-live-tracking";
-import RiderMapTracking from "@/components/rider-map-tracking";
-import GoogleMapsTracking from "@/components/google-maps-tracking";
+import DeliveryLiveTracking from "@/components/shared/delivery-live-tracking";
+import RiderMapTracking from "@/components/rider/rider-map-tracking";
+import GoogleMapsTracking from "@/components/shared/google-maps-tracking";
 
 export default function MapTrackingDemo() {
   const [selectedTab, setSelectedTab] = useState("google-maps");

@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import RiderMapTracking from "@/components/rider-map-tracking";
+import RiderMapTracking from "@/components/rider/rider-map-tracking";
 import { 
   MapPin, Package, Clock, DollarSign, Star, TrendingUp, 
   Navigation, Phone, CheckCircle, XCircle, AlertCircle,
