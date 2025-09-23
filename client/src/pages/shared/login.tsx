@@ -44,7 +44,7 @@ export default function Login() {
     },
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const handleLogin = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
@@ -54,7 +54,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ email, password }),
       });
 
       const result = await response.json();
@@ -96,6 +96,16 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const onSubmit = async (data: LoginForm) => {
+    await handleLogin(data.email, data.password);
+  };
+
+  const handleDemoLogin = async (email: string, password: string) => {
+    form.setValue("email", email);
+    form.setValue("password", password);
+    await handleLogin(email, password);
   };
 
   return (
@@ -253,30 +263,62 @@ export default function Login() {
                 </Button>
               </Link>
 
-              {/* Demo Accounts */}
+              {/* Demo Login Buttons */}
               <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                <p className="text-xs font-medium text-gray-700 text-center">Demo Accounts (for testing)</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-white p-2 rounded border">
-                    <p className="font-medium text-blue-600">Customer</p>
-                    <p className="text-gray-600">customer@demo.com</p>
-                    <p className="text-gray-600">password123</p>
-                  </div>
-                  <div className="bg-white p-2 rounded border">
-                    <p className="font-medium text-green-600">Vendor</p>
-                    <p className="text-gray-600">vendor@demo.com</p>
-                    <p className="text-gray-600">password123</p>
-                  </div>
-                  <div className="bg-white p-2 rounded border">
-                    <p className="font-medium text-orange-600">Rider</p>
-                    <p className="text-gray-600">rider@demo.com</p>
-                    <p className="text-gray-600">password123</p>
-                  </div>
-                  <div className="bg-white p-2 rounded border">
-                    <p className="font-medium text-purple-600">Admin</p>
-                    <p className="text-gray-600">admin@demo.com</p>
-                    <p className="text-gray-600">password123</p>
-                  </div>
+                <p className="text-xs font-medium text-gray-700 text-center">Try Demo Accounts</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs p-3 border-blue-200 text-blue-700 hover:bg-blue-50"
+                    onClick={() => handleDemoLogin("maria.santos@gmail.com", "password123")}
+                    disabled={isLoading}
+                    data-testid="button-demo-customer"
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="font-medium">Customer</span>
+                      <span className="text-xs opacity-70">Maria Santos</span>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs p-3 border-green-200 text-green-700 hover:bg-green-50"
+                    onClick={() => handleDemoLogin("chef.mang.tomas@gmail.com", "password123")}
+                    disabled={isLoading}
+                    data-testid="button-demo-vendor"
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="font-medium">Vendor</span>
+                      <span className="text-xs opacity-70">Chef Tomas</span>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs p-3 border-orange-200 text-orange-700 hover:bg-orange-50"
+                    onClick={() => handleDemoLogin("rider.mark.santos@gmail.com", "password123")}
+                    disabled={isLoading}
+                    data-testid="button-demo-rider"
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="font-medium">Rider</span>
+                      <span className="text-xs opacity-70">Mark Santos</span>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs p-3 border-purple-200 text-purple-700 hover:bg-purple-50"
+                    onClick={() => handleDemoLogin("admin.supervisor@btsdelivery.com", "password123")}
+                    disabled={isLoading}
+                    data-testid="button-demo-admin"
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="font-medium">Admin</span>
+                      <span className="text-xs opacity-70">Patrick Santiago</span>
+                    </div>
+                  </Button>
                 </div>
               </div>
             </CardContent>
