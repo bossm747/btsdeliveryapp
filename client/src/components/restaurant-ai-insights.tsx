@@ -37,19 +37,9 @@ export default function RestaurantAIInsights({
   const { data: forecast, isLoading: forecastLoading } = useQuery({
     queryKey: ["ai-forecast", restaurantId],
     queryFn: async () => {
-      // Generate sample historical data for demo
-      const historicalData = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (30 - i));
-        return {
-          date,
-          dayOfWeek: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()],
-          orderCount: Math.floor(Math.random() * 50) + 20,
-          totalRevenue: Math.floor(Math.random() * 5000) + 2000,
-          weather: Math.random() > 0.7 ? "rain" : "clear",
-          hasPromo: Math.random() > 0.8
-        };
-      });
+      // Fetch actual historical data from the API
+      const historicalResponse = await apiRequest("GET", `/api/restaurants/${restaurantId}/analytics/historical`);
+      const historicalData = historicalResponse || [];
 
       const response = await apiRequest("POST", "/api/ai/demand-forecast", {
         restaurantId,

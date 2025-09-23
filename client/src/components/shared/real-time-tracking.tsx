@@ -238,7 +238,6 @@ export default function RealTimeTracking({
         // Attempt to reconnect after 3 seconds
         setTimeout(() => {
           if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-            console.log("Attempting to reconnect WebSocket...");
             // Recursive call to reconnect
             const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
             const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -247,7 +246,6 @@ export default function RealTimeTracking({
               wsRef.current = new WebSocket(wsUrl);
               wsRef.current.onopen = () => {
                 setIsConnected(true);
-                console.log("WebSocket reconnected successfully");
                 
                 // Re-authenticate with JWT token
                 const token = localStorage.getItem('token') || '';

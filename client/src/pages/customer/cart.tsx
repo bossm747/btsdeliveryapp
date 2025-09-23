@@ -14,6 +14,7 @@ import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft } from "lucide-react
 import { Link, useLocation } from "wouter";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
@@ -39,6 +40,7 @@ type OrderFormData = z.infer<typeof orderSchema>;
 export default function Cart() {
   const { items, updateQuantity, removeItem, clearCart, getTotalPrice, getCurrentRestaurantId } = useCart();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
@@ -128,7 +130,7 @@ export default function Cart() {
     const total = subtotal + deliveryFee + serviceFee;
 
     const orderData = {
-      customerId: "customer-id", // This would come from auth context
+      customerId: user?.id || "", // Get from authenticated user
       restaurantId,
       items: items.map(item => ({
         itemId: item.id,

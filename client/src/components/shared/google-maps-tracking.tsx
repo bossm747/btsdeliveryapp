@@ -244,11 +244,7 @@ export default function GoogleMapsTracking({
         response.rows.forEach((row, i) => {
           row.elements.forEach((element, j) => {
             if (element.status === "OK") {
-              console.log(`Distance from origin ${i} to destination ${j}: ${element.distance.text}`);
-              console.log(`Duration: ${element.duration.text}`);
-              if (element.duration_in_traffic) {
-                console.log(`Duration in traffic: ${element.duration_in_traffic.text}`);
-              }
+              // Distance and duration calculations completed
             }
           });
         });

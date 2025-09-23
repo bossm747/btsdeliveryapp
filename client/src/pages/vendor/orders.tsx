@@ -65,7 +65,6 @@ export default function VendorOrders() {
 
       wsRef.current.onopen = () => {
         setIsConnected(true);
-        console.log('WebSocket connected');
       };
 
       wsRef.current.onmessage = (event) => {

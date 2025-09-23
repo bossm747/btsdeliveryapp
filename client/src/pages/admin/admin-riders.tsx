@@ -57,7 +57,6 @@ export default function AdminRiders() {
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      console.log("Admin WebSocket connected");
       // Subscribe to rider location updates
       socket.send(JSON.stringify({
         type: "subscribe",

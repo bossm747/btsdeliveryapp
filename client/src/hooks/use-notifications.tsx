@@ -54,13 +54,11 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
-    console.log("Connecting to WebSocket:", wsUrl);
     
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
       setConnected(true);
       reconnectAttemptsRef.current = 0;
 
@@ -85,15 +83,12 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log("WebSocket message received:", data);
 
         switch (data.type) {
           case "connection":
-            console.log("Connection established:", data);
             break;
             
           case "auth":
-            console.log("Authentication successful:", data);
             break;
             
           case "order_update":

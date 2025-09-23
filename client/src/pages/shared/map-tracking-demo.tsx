@@ -93,7 +93,7 @@ export default function MapTrackingDemo() {
                   orderId={demoOrderId}
                   userRole="customer"
                   onLocationUpdate={(location) => {
-                    console.log("Customer view location update:", location);
+                    // Location updates are handled internally
                   }}
                 />
               </CardContent>

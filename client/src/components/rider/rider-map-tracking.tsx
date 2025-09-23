@@ -207,7 +207,6 @@ export default function RiderMapTracking({ riderId }: RiderMapTrackingProps) {
   useEffect(() => {
     const initializeMap = () => {
       if (!mapRef.current || !window.google) {
-        console.log("Map initialization failed: container or google not available");
         return;
       }
 

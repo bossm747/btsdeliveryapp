@@ -14,7 +14,6 @@ const db = drizzle(pool, { schema });
 
 async function seedRestaurantData() {
   try {
-    console.log('Seeding restaurant data...');
 
     // Create test owner user first
     const [testOwner] = await db.insert(schema.users).values({
@@ -25,7 +24,6 @@ async function seedRestaurantData() {
       role: 'vendor'
     }).onConflictDoNothing().returning();
 
-    console.log('✅ Test owner user created/exists');
 
     // Check if restaurant already exists
     const existingRestaurants = await db.select().from(schema.restaurants);
@@ -61,7 +59,6 @@ async function seedRestaurantData() {
         rating: '4.8',
         totalOrders: 150
       }).returning();
-      console.log('✅ Test restaurant created with ID:', restaurant.id);
       
       global.testRestaurantId = restaurant.id;
       
@@ -95,7 +92,6 @@ async function seedRestaurantData() {
           displayOrder: 3
         }
       ]).returning();
-      console.log('✅ Test categories created');
       
       global.categoryIds = categories.map(c => c.id);
     } else {
@@ -145,7 +141,6 @@ async function seedRestaurantData() {
           preparationTime: 5
         }
       ]);
-      console.log('✅ Test menu items created');
     }
 
     // Check if orders exist
@@ -207,15 +202,9 @@ async function seedRestaurantData() {
           ]
         }
       ]);
-      console.log('✅ Test orders created');
     }
 
-    console.log('🎉 Restaurant data seeding completed successfully!');
-    console.log('📊 Database now contains:');
-    console.log(`   - Restaurants: ${(await db.select().from(schema.restaurants)).length}`);
-    console.log(`   - Categories: ${(await db.select().from(schema.menuCategories)).length}`);
-    console.log(`   - Menu Items: ${(await db.select().from(schema.menuItems)).length}`);
-    console.log(`   - Orders: ${(await db.select().from(schema.orders)).length}`);
+    // Seeding completed successfully
 
   } catch (error) {
     console.error('❌ Error seeding restaurant data:', error);
