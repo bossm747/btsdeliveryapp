@@ -27,6 +27,7 @@ import Parcel from "@/pages/shared/parcel";
 import CustomerDashboard from "@/pages/customer/customer-dashboard";
 import RiderDashboard from "@/pages/rider/rider-dashboard";
 import VendorDashboard from "@/pages/vendor/vendor-dashboard";
+import AIAssistant from "@/pages/vendor/ai-assistant";
 import AdminDashboard from "@/pages/admin/admin-dashboard";
 import AdminDispatch from "@/pages/admin/admin-dispatch";
 import AdminAnalyticsPage from "@/pages/admin/admin-analytics";
@@ -178,6 +179,15 @@ function Router() {
         <ProtectedRoute allowedRoles={["vendor"]}>
           <DashboardLayout>
             <VendorDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* AI Assistant - protected for vendors only */}
+      <Route path="/ai-assistant">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <DashboardLayout>
+            <AIAssistant />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

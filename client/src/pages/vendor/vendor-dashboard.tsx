@@ -34,7 +34,8 @@ import {
   BarChart3,
   Calendar,
   Filter,
-  Search
+  Search,
+  Sparkles
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import { useToast } from "@/hooks/use-toast";
@@ -311,6 +312,10 @@ export default function VendorDashboard() {
                   <DropdownMenuItem>
                     <Settings className="mr-2 h-4 w-4" />
                     Restaurant Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = "/ai-assistant"}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    AI Assistant
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
