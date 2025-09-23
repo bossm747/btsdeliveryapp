@@ -320,6 +320,194 @@ export const redemptions = pgTable("redemptions", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+// ==================== ADMIN BACK OFFICE SYSTEM TABLES ====================
+// Comprehensive admin dashboard and back office management
+
+// Admin Audit Logs - Track all admin actions for security and compliance
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: uuid("admin_user_id").references(() => users.id).notNull(),
+  action: varchar("action", { length: 100 }).notNull(), // create, update, delete, approve, suspend, etc.
+  resource: varchar("resource", { length: 50 }).notNull(), // users, orders, restaurants, riders, etc.
+  resourceId: varchar("resource_id", { length: 255 }), // ID of the affected resource
+  details: jsonb("details"), // Full details of what was changed
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// Commission Rules - Configurable commission structure
+export const commissionRules = pgTable("commission_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  serviceType: varchar("service_type", { length: 50 }).notNull(), // food_delivery, pabili, pabayad, parcel
+  ruleType: varchar("rule_type", { length: 50 }).notNull(), // percentage, fixed, tiered
+  value: decimal("value", { precision: 10, scale: 4 }).notNull(), // Commission percentage or fixed amount
+  minOrderValue: decimal("min_order_value", { precision: 10, scale: 2 }),
+  maxOrderValue: decimal("max_order_value", { precision: 10, scale: 2 }),
+  restaurantCategory: varchar("restaurant_category", { length: 100 }),
+  zoneRestrictions: jsonb("zone_restrictions"), // {includedZones: [], excludedZones: []}
+  timeRestrictions: jsonb("time_restrictions"), // {validHours: [], validDays: []}
+  isActive: boolean("is_active").default(true),
+  effectiveDate: timestamp("effective_date").defaultNow(),
+  expiryDate: timestamp("expiry_date"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// System Alerts - Platform-wide alerts and notifications
+export const systemAlerts = pgTable("system_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  alertType: varchar("alert_type", { length: 50 }).notNull(), // sla_breach, payment_failure, system_error, high_traffic
+  severity: varchar("severity", { length: 20 }).notNull(), // low, medium, high, critical
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  affectedService: varchar("affected_service", { length: 50 }),
+  affectedZones: jsonb("affected_zones"),
+  metadata: jsonb("metadata"), // Additional context data
+  status: varchar("status", { length: 20 }).notNull().default("active"), // active, acknowledged, resolved
+  acknowledgedBy: uuid("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: uuid("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  autoResolve: boolean("auto_resolve").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Support Tickets - Customer and merchant support system
+export const supportTickets = pgTable("support_tickets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketNumber: varchar("ticket_number", { length: 20 }).unique().notNull(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id),
+  category: varchar("category", { length: 100 }).notNull(), // payment_issue, delivery_problem, app_bug, account_issue
+  priority: varchar("priority", { length: 20 }).notNull().default("medium"), // low, medium, high, urgent
+  status: varchar("status", { length: 20 }).notNull().default("open"), // open, in_progress, resolved, closed
+  subject: varchar("subject", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  assignedTo: uuid("assigned_to").references(() => users.id),
+  attachments: jsonb("attachments"), // Array of file URLs
+  customerSatisfaction: integer("customer_satisfaction"), // 1-5 rating
+  internalNotes: jsonb("internal_notes"), // Array of admin notes
+  resolutionTime: integer("resolution_time"), // minutes from creation to resolution
+  firstResponseTime: integer("first_response_time"), // minutes to first admin response
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Support Messages - Conversation history for tickets
+export const supportMessages = pgTable("support_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: uuid("ticket_id").references(() => supportTickets.id).notNull(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  message: text("message").notNull(),
+  isInternal: boolean("is_internal").default(false), // Internal admin notes vs customer-visible messages
+  attachments: jsonb("attachments"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// Zones Management - Philippines barangay/city level zone configuration
+export const deliveryZones = pgTable("delivery_zones", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }).unique().notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // barangay, city, district
+  parentZoneId: uuid("parent_zone_id").references(() => deliveryZones.id),
+  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon
+  isActive: boolean("is_active").default(true),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }),
+  surgeMultiplier: decimal("surge_multiplier", { precision: 3, scale: 2 }).default("1.00"),
+  estimatedDeliveryTime: integer("estimated_delivery_time").default(30), // minutes
+  weatherRestrictions: jsonb("weather_restrictions"), // Rain level restrictions etc
+  operatingHours: jsonb("operating_hours"),
+  maxRiders: integer("max_riders"),
+  currentRiders: integer("current_riders").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Platform Configuration - Global settings and feature toggles
+export const platformConfig = pgTable("platform_config", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  configKey: varchar("config_key", { length: 100 }).unique().notNull(),
+  configValue: jsonb("config_value").notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }).notNull(), // payment, delivery, surge, notification
+  dataType: varchar("data_type", { length: 20 }).notNull(), // string, number, boolean, json
+  isEditable: boolean("is_editable").default(true),
+  requiresRestart: boolean("requires_restart").default(false),
+  lastModifiedBy: uuid("last_modified_by").references(() => users.id),
+  validationRules: jsonb("validation_rules"), // Schema for validating config values
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Financial Settlements - Track commission settlements with vendors/riders
+export const financialSettlements = pgTable("financial_settlements", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  settlementNumber: varchar("settlement_number", { length: 30 }).unique().notNull(),
+  entityType: varchar("entity_type", { length: 20 }).notNull(), // vendor, rider
+  entityId: uuid("entity_id").notNull(), // References users.id
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  totalOrders: integer("total_orders").default(0),
+  grossRevenue: decimal("gross_revenue", { precision: 12, scale: 2 }).default("0"),
+  commissionAmount: decimal("commission_amount", { precision: 12, scale: 2 }).default("0"),
+  fees: decimal("fees", { precision: 10, scale: 2 }).default("0"),
+  adjustments: decimal("adjustments", { precision: 10, scale: 2 }).default("0"),
+  netAmount: decimal("net_amount", { precision: 12, scale: 2 }).default("0"),
+  codAmount: decimal("cod_amount", { precision: 12, scale: 2 }).default("0"), // Cash on delivery
+  remittanceAmount: decimal("remittance_amount", { precision: 12, scale: 2 }).default("0"),
+  outstandingBalance: decimal("outstanding_balance", { precision: 12, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, paid, disputed
+  paymentMethod: varchar("payment_method", { length: 50 }),
+  paymentReference: varchar("payment_reference", { length: 100 }),
+  paidAt: timestamp("paid_at"),
+  notes: text("notes"),
+  generatedBy: uuid("generated_by").references(() => users.id).notNull(),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// System Health Monitoring - Track API and service health
+export const systemHealthMetrics = pgTable("system_health_metrics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  service: varchar("service", { length: 100 }).notNull(), // api, database, payments, maps, sms
+  endpoint: varchar("endpoint", { length: 255 }),
+  responseTime: integer("response_time"), // milliseconds
+  statusCode: integer("status_code"),
+  isHealthy: boolean("is_healthy").default(true),
+  errorMessage: text("error_message"),
+  errorCount: integer("error_count").default(0),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// Broadcast Messages - Platform-wide communications
+export const broadcastMessages = pgTable("broadcast_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  messageType: varchar("message_type", { length: 50 }).notNull(), // announcement, maintenance, promotion, warning
+  targetAudience: varchar("target_audience", { length: 50 }).notNull(), // all, customers, vendors, riders
+  targetZones: jsonb("target_zones"), // Specific zones if targeted
+  targetUserSegment: jsonb("target_user_segment"), // Specific user criteria
+  deliveryMethod: jsonb("delivery_method").notNull(), // {email: true, sms: false, push: true, in_app: true}
+  priority: varchar("priority", { length: 20 }).notNull().default("normal"), // low, normal, high, urgent
+  scheduledAt: timestamp("scheduled_at"),
+  status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, scheduled, sent, cancelled
+  sentCount: integer("sent_count").default(0),
+  deliveredCount: integer("delivered_count").default(0),
+  openedCount: integer("opened_count").default(0),
+  clickedCount: integer("clicked_count").default(0),
+  sentAt: timestamp("sent_at"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ==================== BTS OPERATIONAL SYSTEM TABLES ====================
 // These tables are based on actual BTS Excel spreadsheet data analysis
 
@@ -566,6 +754,57 @@ export const btsAuditReportsRelations = relations(btsAuditReports, ({ one }) => 
 export const btsUndeclaredBookingsRelations = relations(btsUndeclaredBookings, ({ one }) => ({
   rider: one(btsRiders, { fields: [btsUndeclaredBookings.riderId], references: [btsRiders.id] }),
 }));
+
+// Zod schemas for admin back office tables
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs);
+export const selectAdminAuditLogSchema = adminAuditLogs.$inferSelect;
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
+export type SelectAdminAuditLog = typeof adminAuditLogs.$inferSelect;
+
+export const insertCommissionRuleSchema = createInsertSchema(commissionRules);
+export const selectCommissionRuleSchema = commissionRules.$inferSelect;
+export type InsertCommissionRule = z.infer<typeof insertCommissionRuleSchema>;
+export type SelectCommissionRule = typeof commissionRules.$inferSelect;
+
+export const insertSystemAlertSchema = createInsertSchema(systemAlerts);
+export const selectSystemAlertSchema = systemAlerts.$inferSelect;
+export type InsertSystemAlert = z.infer<typeof insertSystemAlertSchema>;
+export type SelectSystemAlert = typeof systemAlerts.$inferSelect;
+
+export const insertSupportTicketSchema = createInsertSchema(supportTickets);
+export const selectSupportTicketSchema = supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+export type SelectSupportTicket = typeof supportTickets.$inferSelect;
+
+export const insertSupportMessageSchema = createInsertSchema(supportMessages);
+export const selectSupportMessageSchema = supportMessages.$inferSelect;
+export type InsertSupportMessage = z.infer<typeof insertSupportMessageSchema>;
+export type SelectSupportMessage = typeof supportMessages.$inferSelect;
+
+export const insertDeliveryZoneSchema = createInsertSchema(deliveryZones);
+export const selectDeliveryZoneSchema = deliveryZones.$inferSelect;
+export type InsertDeliveryZone = z.infer<typeof insertDeliveryZoneSchema>;
+export type SelectDeliveryZone = typeof deliveryZones.$inferSelect;
+
+export const insertPlatformConfigSchema = createInsertSchema(platformConfig);
+export const selectPlatformConfigSchema = platformConfig.$inferSelect;
+export type InsertPlatformConfig = z.infer<typeof insertPlatformConfigSchema>;
+export type SelectPlatformConfig = typeof platformConfig.$inferSelect;
+
+export const insertFinancialSettlementSchema = createInsertSchema(financialSettlements);
+export const selectFinancialSettlementSchema = financialSettlements.$inferSelect;
+export type InsertFinancialSettlement = z.infer<typeof insertFinancialSettlementSchema>;
+export type SelectFinancialSettlement = typeof financialSettlements.$inferSelect;
+
+export const insertSystemHealthMetricSchema = createInsertSchema(systemHealthMetrics);
+export const selectSystemHealthMetricSchema = systemHealthMetrics.$inferSelect;
+export type InsertSystemHealthMetric = z.infer<typeof insertSystemHealthMetricSchema>;
+export type SelectSystemHealthMetric = typeof systemHealthMetrics.$inferSelect;
+
+export const insertBroadcastMessageSchema = createInsertSchema(broadcastMessages);
+export const selectBroadcastMessageSchema = broadcastMessages.$inferSelect;
+export type InsertBroadcastMessage = z.infer<typeof insertBroadcastMessageSchema>;
+export type SelectBroadcastMessage = typeof broadcastMessages.$inferSelect;
 
 // Zod schemas for validation  
 export const insertUserSchema = createInsertSchema(users);
