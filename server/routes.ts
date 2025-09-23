@@ -34,6 +34,7 @@ import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
+import * as aiServices from "./ai-services";
 import { riderAssignmentService } from "./riderAssignmentService";
 
 interface ExtendedWebSocket extends WebSocket {
@@ -2027,6 +2028,188 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching vendor restaurant:", error);
       res.status(500).json({ error: "Failed to fetch restaurant" });
+    }
+  });
+
+  // ==================== AI-POWERED VENDOR FEATURES ====================
+  
+  // AI Menu Description Generator
+  app.post("/api/ai/menu-description", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { itemName, category, ingredients } = req.body;
+      
+      if (!itemName || !category) {
+        return res.status(400).json({ message: "Item name and category are required" });
+      }
+
+      const description = await aiServices.generateMenuItemDescription(itemName, category, ingredients);
+      res.json({ description });
+    } catch (error) {
+      console.error("Error generating menu description:", error);
+      res.status(500).json({ message: "Failed to generate description" });
+    }
+  });
+
+  // AI Business Description Generator
+  app.post("/api/ai/business-description", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { businessName, cuisineType, specialties } = req.body;
+      
+      if (!businessName || !cuisineType) {
+        return res.status(400).json({ message: "Business name and cuisine type are required" });
+      }
+
+      const description = await aiServices.generateBusinessDescription(businessName, cuisineType, specialties || []);
+      res.json({ description });
+    } catch (error) {
+      console.error("Error generating business description:", error);
+      res.status(500).json({ message: "Failed to generate business description" });
+    }
+  });
+
+  // AI Image Generation for Menu Items
+  app.post("/api/ai/menu-image", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { itemName, description } = req.body;
+      
+      if (!itemName || !description) {
+        return res.status(400).json({ message: "Item name and description are required" });
+      }
+
+      const imageUrl = await aiServices.generateMenuItemImage(itemName, description);
+      res.json({ imageUrl });
+    } catch (error) {
+      console.error("Error generating menu item image:", error);
+      res.status(500).json({ message: "Failed to generate image" });
+    }
+  });
+
+  // AI Promotional Banner Generator
+  app.post("/api/ai/promotional-banner", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { businessName, promotion, colors } = req.body;
+      
+      if (!businessName || !promotion) {
+        return res.status(400).json({ message: "Business name and promotion details are required" });
+      }
+
+      const imageUrl = await aiServices.generatePromotionalBanner(businessName, promotion, colors);
+      res.json({ imageUrl });
+    } catch (error) {
+      console.error("Error generating promotional banner:", error);
+      res.status(500).json({ message: "Failed to generate promotional banner" });
+    }
+  });
+
+  // AI Sales Analytics
+  app.post("/api/ai/sales-analysis", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { period } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      // Get sales data for the restaurant
+      const orders = await storage.getOrdersByRestaurant(restaurants[0].id);
+      
+      const analysis = await aiServices.analyzeSalesData(orders, period || 'week');
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing sales data:", error);
+      res.status(500).json({ message: "Failed to analyze sales data" });
+    }
+  });
+
+  // AI Pricing Recommendations
+  app.post("/api/ai/pricing-recommendations", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { menuItemId, competitorPrices, marketData } = req.body;
+      
+      if (!menuItemId) {
+        return res.status(400).json({ message: "Menu item ID is required" });
+      }
+
+      const menuItem = await storage.getMenuItem(menuItemId);
+      if (!menuItem) {
+        return res.status(404).json({ message: "Menu item not found" });
+      }
+
+      const recommendations = await aiServices.generatePricingRecommendations(
+        menuItem, 
+        competitorPrices || [], 
+        marketData || {}
+      );
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Error generating pricing recommendations:", error);
+      res.status(500).json({ message: "Failed to generate pricing recommendations" });
+    }
+  });
+
+  // AI Social Media Post Generator
+  app.post("/api/ai/social-media-post", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { businessName, postType, content } = req.body;
+      
+      if (!businessName || !postType) {
+        return res.status(400).json({ message: "Business name and post type are required" });
+      }
+
+      const post = await aiServices.generateSocialMediaPost(businessName, postType, content || {});
+      res.json(post);
+    } catch (error) {
+      console.error("Error generating social media post:", error);
+      res.status(500).json({ message: "Failed to generate social media post" });
+    }
+  });
+
+  // AI Review Response Generator
+  app.post("/api/ai/review-response", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { reviewText, rating, businessName } = req.body;
+      
+      if (!reviewText || !rating || !businessName) {
+        return res.status(400).json({ message: "Review text, rating, and business name are required" });
+      }
+
+      const response = await aiServices.generateReviewResponse(reviewText, rating, businessName);
+      res.json({ response });
+    } catch (error) {
+      console.error("Error generating review response:", error);
+      res.status(500).json({ message: "Failed to generate review response" });
+    }
+  });
+
+  // AI Demand Prediction
+  app.post("/api/ai/demand-prediction", authenticateToken, requireAdminOrVendor, async (req, res) => {
+    try {
+      const { timeframe } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      // Get historical order data
+      const orders = await storage.getOrdersByRestaurant(restaurants[0].id);
+      
+      const predictions = await aiServices.predictDemand(orders, timeframe || '1day');
+      res.json(predictions);
+    } catch (error) {
+      console.error("Error predicting demand:", error);
+      res.status(500).json({ message: "Failed to predict demand" });
     }
   });
 
