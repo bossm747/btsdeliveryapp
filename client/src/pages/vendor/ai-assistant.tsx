@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,11 @@ import {
 export default function AIAssistant() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("content");
+
+  // Get vendor restaurant for context - MUST come first
+  const { data: restaurant } = useQuery({
+    queryKey: ["/api/vendor/restaurant"],
+  });
 
   // Content Generation State
   const [menuForm, setMenuForm] = useState({
@@ -66,21 +71,18 @@ export default function AIAssistant() {
   });
 
   // Update forms when restaurant data loads
-  if (restaurant && socialForm.businessName === "") {
-    setSocialForm(prev => ({ ...prev, businessName: restaurant.name }));
-  }
-  if (restaurant && reviewForm.businessName === "") {
-    setReviewForm(prev => ({ ...prev, businessName: restaurant.name }));
-  }
+  useEffect(() => {
+    if (restaurant && socialForm.businessName === "") {
+      setSocialForm(prev => ({ ...prev, businessName: restaurant.name }));
+    }
+    if (restaurant && reviewForm.businessName === "") {
+      setReviewForm(prev => ({ ...prev, businessName: restaurant.name }));
+    }
+  }, [restaurant]);
 
   // Analytics State
   const [analyticsForm, setAnalyticsForm] = useState({
     period: "week"
-  });
-
-  // Get vendor restaurant for context
-  const { data: restaurant } = useQuery({
-    queryKey: ["/api/vendor/restaurant"],
   });
 
   // AI API Mutations

@@ -2031,6 +2031,274 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== MERCHANT PANEL API ENDPOINTS ====================
+
+  // Menu Modifiers Management
+  app.get("/api/vendor/modifiers", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const modifiers = await storage.getMenuModifiers(restaurants[0].id);
+      res.json(modifiers);
+    } catch (error) {
+      console.error("Error fetching modifiers:", error);
+      res.status(500).json({ message: "Failed to fetch modifiers" });
+    }
+  });
+
+  app.post("/api/vendor/modifiers", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const modifierData = insertMenuModifierSchema.parse({
+        ...req.body,
+        restaurantId: restaurants[0].id
+      });
+
+      const modifier = await storage.createMenuModifier(modifierData);
+      res.status(201).json(modifier);
+    } catch (error) {
+      console.error("Error creating modifier:", error);
+      res.status(400).json({ message: "Failed to create modifier" });
+    }
+  });
+
+  // Modifier Options Management
+  app.get("/api/vendor/modifiers/:modifierId/options", authenticateToken, async (req, res) => {
+    try {
+      const { modifierId } = req.params;
+      const options = await storage.getModifierOptions(modifierId);
+      res.json(options);
+    } catch (error) {
+      console.error("Error fetching modifier options:", error);
+      res.status(500).json({ message: "Failed to fetch modifier options" });
+    }
+  });
+
+  app.post("/api/vendor/modifiers/:modifierId/options", authenticateToken, async (req, res) => {
+    try {
+      const { modifierId } = req.params;
+      const optionData = insertModifierOptionSchema.parse({
+        ...req.body,
+        modifierId
+      });
+
+      const option = await storage.createModifierOption(optionData);
+      res.status(201).json(option);
+    } catch (error) {
+      console.error("Error creating modifier option:", error);
+      res.status(400).json({ message: "Failed to create modifier option" });
+    }
+  });
+
+  // Promotions Management
+  app.get("/api/vendor/promotions", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const promotions = await storage.getPromotions(restaurants[0].id);
+      res.json(promotions);
+    } catch (error) {
+      console.error("Error fetching promotions:", error);
+      res.status(500).json({ message: "Failed to fetch promotions" });
+    }
+  });
+
+  app.post("/api/vendor/promotions", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const promotionData = insertPromotionSchema.parse({
+        ...req.body,
+        restaurantId: restaurants[0].id
+      });
+
+      const promotion = await storage.createPromotion(promotionData);
+      res.status(201).json(promotion);
+    } catch (error) {
+      console.error("Error creating promotion:", error);
+      res.status(400).json({ message: "Failed to create promotion" });
+    }
+  });
+
+  app.patch("/api/vendor/promotions/:promotionId", authenticateToken, async (req, res) => {
+    try {
+      const { promotionId } = req.params;
+      const updates = req.body;
+
+      const updatedPromotion = await storage.updatePromotion(promotionId, updates);
+      if (!updatedPromotion) {
+        return res.status(404).json({ message: "Promotion not found" });
+      }
+
+      res.json(updatedPromotion);
+    } catch (error) {
+      console.error("Error updating promotion:", error);
+      res.status(500).json({ message: "Failed to update promotion" });
+    }
+  });
+
+  // Financial Management - Vendor Earnings
+  app.get("/api/vendor/earnings", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const { startDate, endDate } = req.query;
+      const earnings = await storage.getVendorEarnings(
+        restaurants[0].id, 
+        startDate as string, 
+        endDate as string
+      );
+
+      res.json(earnings);
+    } catch (error) {
+      console.error("Error fetching earnings:", error);
+      res.status(500).json({ message: "Failed to fetch earnings" });
+    }
+  });
+
+  app.get("/api/vendor/earnings/summary", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json({ total_gross: 0, total_commission: 0, total_net: 0, total_transactions: 0 });
+      }
+
+      const { period = 'week' } = req.query;
+      const summary = await storage.getEarningsSummary(
+        restaurants[0].id, 
+        period as 'day' | 'week' | 'month'
+      );
+
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching earnings summary:", error);
+      res.status(500).json({ message: "Failed to fetch earnings summary" });
+    }
+  });
+
+  // Staff Management
+  app.get("/api/vendor/staff", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const staff = await storage.getRestaurantStaff(restaurants[0].id);
+      res.json(staff);
+    } catch (error) {
+      console.error("Error fetching staff:", error);
+      res.status(500).json({ message: "Failed to fetch staff" });
+    }
+  });
+
+  app.post("/api/vendor/staff", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const staffData = insertRestaurantStaffSchema.parse({
+        ...req.body,
+        restaurantId: restaurants[0].id
+      });
+
+      const staff = await storage.createStaffMember(staffData);
+      res.status(201).json(staff);
+    } catch (error) {
+      console.error("Error creating staff member:", error);
+      res.status(400).json({ message: "Failed to create staff member" });
+    }
+  });
+
+  // Inventory Management
+  app.get("/api/vendor/inventory", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const inventory = await storage.getInventoryItems(restaurants[0].id);
+      res.json(inventory);
+    } catch (error) {
+      console.error("Error fetching inventory:", error);
+      res.status(500).json({ message: "Failed to fetch inventory" });
+    }
+  });
+
+  app.get("/api/vendor/inventory/low-stock", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const lowStockItems = await storage.getLowStockItems(restaurants[0].id);
+      res.json(lowStockItems);
+    } catch (error) {
+      console.error("Error fetching low stock items:", error);
+      res.status(500).json({ message: "Failed to fetch low stock items" });
+    }
+  });
+
   // ==================== AI-POWERED VENDOR FEATURES ====================
   
   // AI Menu Description Generator

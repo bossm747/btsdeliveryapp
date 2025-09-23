@@ -42,7 +42,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
-import type { Order, Restaurant, MenuItem, MenuCategory } from "@shared/schema";
+import type { Order, Restaurant, MenuItem, MenuCategory, Promotion, VendorEarning, RestaurantStaff, InventoryItem } from "@shared/schema";
 
 export default function VendorDashboard() {
   const { toast } = useToast();
@@ -91,6 +91,36 @@ export default function VendorDashboard() {
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<MenuCategory[]>({
     queryKey: ["/api/vendor/categories"],
     enabled: !!restaurant, // Only fetch when restaurant is loaded
+  });
+
+  // Fetch promotions
+  const { data: promotions = [], isLoading: promotionsLoading } = useQuery<Promotion[]>({
+    queryKey: ["/api/vendor/promotions"],
+    enabled: !!restaurant,
+  });
+
+  // Fetch staff members
+  const { data: staff = [], isLoading: staffLoading } = useQuery<RestaurantStaff[]>({
+    queryKey: ["/api/vendor/staff"],
+    enabled: !!restaurant,
+  });
+
+  // Fetch inventory items
+  const { data: inventory = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/vendor/inventory"],
+    enabled: !!restaurant,
+  });
+
+  // Fetch earnings summary
+  const { data: earningsSummary } = useQuery({
+    queryKey: ["/api/vendor/earnings/summary"],
+    enabled: !!restaurant,
+  });
+
+  // Fetch low stock items
+  const { data: lowStockItems = [] } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/vendor/inventory/low-stock"],
+    enabled: !!restaurant,
   });
 
   // Update order status mutation
@@ -438,7 +468,7 @@ export default function VendorDashboard() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
-              <TabsList className="grid w-full grid-cols-4 bg-slate-100 dark:bg-slate-800">
+              <TabsList className="grid w-full grid-cols-8 bg-slate-100 dark:bg-slate-800">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Overview
@@ -450,6 +480,22 @@ export default function VendorDashboard() {
                 <TabsTrigger value="menu" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
                   <Package className="h-4 w-4 mr-2" />
                   Menu
+                </TabsTrigger>
+                <TabsTrigger value="promotions" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <Star className="h-4 w-4 mr-2" />
+                  Promotions
+                </TabsTrigger>
+                <TabsTrigger value="staff" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <User className="h-4 w-4 mr-2" />
+                  Staff
+                </TabsTrigger>
+                <TabsTrigger value="inventory" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <Package className="h-4 w-4 mr-2" />
+                  Inventory
+                </TabsTrigger>
+                <TabsTrigger value="earnings" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Earnings
                 </TabsTrigger>
                 <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
                   <Store className="h-4 w-4 mr-2" />
@@ -556,6 +602,249 @@ export default function VendorDashboard() {
                 <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Menu Management</h3>
                 <p className="text-gray-500 dark:text-gray-400">Menu management features will be available here</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="promotions" className="p-6" data-testid="promotions-tab">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Promotions</h2>
+                  <Button className="bg-primary hover:bg-primary/90" data-testid="button-create-promotion">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Promotion
+                  </Button>
+                </div>
+
+                {promotionsLoading ? (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-48" />)}
+                  </div>
+                ) : promotions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Star className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Active Promotions</h3>
+                    <p className="text-gray-500 dark:text-gray-400">Create your first promotion to attract more customers</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {promotions.map((promotion) => (
+                      <Card key={promotion.id} className="hover:shadow-lg transition-shadow" data-testid={`card-promotion-${promotion.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <Badge variant={promotion.isActive ? "default" : "secondary"}>
+                              {promotion.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">Discount</p>
+                              <p className="font-semibold text-primary">{promotion.discountValue}{promotion.discountType === 'percentage' ? '%' : '₱'}</p>
+                            </div>
+                          </div>
+                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{promotion.name}</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{promotion.description}</p>
+                          <div className="text-xs text-gray-400">
+                            Valid: {new Date(promotion.startDate).toLocaleDateString()} - {new Date(promotion.endDate).toLocaleDateString()}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="staff" className="p-6" data-testid="staff-tab">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Staff Management</h2>
+                  <Button className="bg-primary hover:bg-primary/90" data-testid="button-add-staff">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Staff Member
+                  </Button>
+                </div>
+
+                {staffLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+                  </div>
+                ) : staff.length === 0 ? (
+                  <div className="text-center py-12">
+                    <User className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Staff Members</h3>
+                    <p className="text-gray-500 dark:text-gray-400">Add your first staff member to manage your restaurant team</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {staff.map((member) => (
+                      <Card key={member.id} data-testid={`card-staff-${member.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <Avatar className="h-12 w-12">
+                                <AvatarFallback className="bg-primary text-primary-foreground">
+                                  {member.name.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h3 className="font-semibold text-gray-900 dark:text-white">{member.name}</h3>
+                                <p className="text-sm text-gray-500">{member.email} • {member.phone}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <Badge variant={member.role === 'manager' ? 'default' : 'secondary'}>
+                                {member.role}
+                              </Badge>
+                              <Badge variant={member.isActive ? 'default' : 'destructive'}>
+                                {member.isActive ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="inventory" className="p-6" data-testid="inventory-tab">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory Management</h2>
+                  <Button className="bg-primary hover:bg-primary/90" data-testid="button-add-inventory">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Item
+                  </Button>
+                </div>
+
+                {lowStockItems.length > 0 && (
+                  <Card className="border-l-4 border-l-orange-500" data-testid="card-low-stock-alert">
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-2">
+                        <Bell className="h-5 w-5 text-orange-500" />
+                        <h3 className="font-semibold text-orange-800 dark:text-orange-200">Low Stock Alert</h3>
+                      </div>
+                      <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                        {lowStockItems.length} items are running low on stock
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {inventoryLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-16" />)}
+                  </div>
+                ) : inventory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Inventory Items</h3>
+                    <p className="text-gray-500 dark:text-gray-400">Start tracking your restaurant inventory to manage stock levels</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {inventory.map((item) => (
+                      <Card key={item.id} className={`${item.quantity <= item.minStock ? 'border-l-4 border-l-orange-500' : ''}`} data-testid={`card-inventory-${item.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold text-gray-900 dark:text-white">{item.name}</h3>
+                              <p className="text-sm text-gray-500">Unit: {item.unit} • Min Stock: {item.minStock}</p>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <div className="text-right">
+                                <p className="text-sm text-gray-500">Current Stock</p>
+                                <p className={`font-semibold ${item.quantity <= item.minStock ? 'text-orange-600' : 'text-green-600'}`}>
+                                  {item.quantity}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-gray-500">Cost per Unit</p>
+                                <p className="font-semibold text-gray-900 dark:text-white">₱{item.unitCost}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="earnings" className="p-6" data-testid="earnings-tab">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Earnings Dashboard</h2>
+                  <Button variant="outline" data-testid="button-view-detailed-earnings">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    View Details
+                  </Button>
+                </div>
+
+                {earningsSummary && (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <Card data-testid="card-gross-earnings">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Gross Earnings</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{earningsSummary.total_gross?.toFixed(2) || '0.00'}</p>
+                          </div>
+                          <div className="bg-green-500/10 p-3 rounded-xl">
+                            <DollarSign className="h-8 w-8 text-green-600 dark:text-green-400" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card data-testid="card-platform-commission">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Platform Commission</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">₱{earningsSummary.total_commission?.toFixed(2) || '0.00'}</p>
+                          </div>
+                          <div className="bg-red-500/10 p-3 rounded-xl">
+                            <TrendingUp className="h-8 w-8 text-red-600 dark:text-red-400" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card data-testid="card-net-earnings">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Net Earnings</p>
+                            <p className="text-3xl font-bold text-primary">₱{earningsSummary.total_net?.toFixed(2) || '0.00'}</p>
+                          </div>
+                          <div className="bg-primary/10 p-3 rounded-xl">
+                            <CheckCircle className="h-8 w-8 text-primary" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card data-testid="card-total-transactions">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Transactions</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">{earningsSummary.total_transactions || 0}</p>
+                          </div>
+                          <div className="bg-blue-500/10 p-3 rounded-xl">
+                            <Activity className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                <div className="text-center py-8">
+                  <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500 dark:text-gray-400">Detailed earnings analytics and charts coming soon</p>
+                </div>
               </div>
             </TabsContent>
 

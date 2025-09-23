@@ -54,54 +54,323 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Restaurants/Vendors table
+// Restaurants/Vendors table - Enhanced for complete merchant panel
 export const restaurants = pgTable("restaurants", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   ownerId: uuid("owner_id").references(() => users.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 100 }), // Filipino Food, Fast Food, Chinese, etc.
-  imageUrl: varchar("image_url", { length: 500 }),
+  
+  // Media Assets
+  logoUrl: varchar("logo_url", { length: 500 }), // Business logo
+  imageUrl: varchar("image_url", { length: 500 }), // Cover/hero image
+  galleryImages: jsonb("gallery_images"), // Array of additional images
+  
+  // Contact Information  
   address: jsonb("address").notNull(), // {street, barangay, city, province, zipCode}
   phone: varchar("phone", { length: 20 }),
-  operatingHours: jsonb("operating_hours"), // {monday: {open: "08:00", close: "22:00"}, ...}
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
-  totalOrders: integer("total_orders").default(0),
+  email: varchar("email", { length: 255 }),
+  website: varchar("website", { length: 255 }),
+  socialMedia: jsonb("social_media"), // {facebook, instagram, twitter}
+  
+  // Operating Information
+  operatingHours: jsonb("operating_hours"), // {monday: {open: "08:00", close: "22:00", isClosed: false}, ...}
+  holidayHours: jsonb("holiday_hours"), // Special hours/closures for holidays
+  serviceAreas: jsonb("service_areas"), // Delivery zones and coverage areas
+  services: jsonb("services").default("[]"), // ["food", "mart", "express", "parcel"]
+  
+  // Business Settings
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0"),
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).default("0"),
   estimatedDeliveryTime: integer("estimated_delivery_time").default(30), // minutes
+  maxOrdersPerHour: integer("max_orders_per_hour").default(50),
+  preparationBuffer: integer("preparation_buffer").default(5), // minutes
+  
+  // Business Status
   isActive: boolean("is_active").default(true),
   isFeatured: boolean("is_featured").default(false),
+  isAcceptingOrders: boolean("is_accepting_orders").default(true),
+  pauseUntil: timestamp("pause_until"), // Temporary pause
+  
+  // Legal & Tax Information
+  businessLicense: varchar("business_license", { length: 100 }),
+  taxId: varchar("tax_id", { length: 50 }),
+  vatRegistered: boolean("vat_registered").default(false),
+  
+  // Performance Metrics
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  totalOrders: integer("total_orders").default(0),
+  totalReviews: integer("total_reviews").default(0),
+  
+  // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Menu categories for organizing items
+// Menu categories for organizing items - Enhanced
 export const menuCategories = pgTable("menu_categories", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  imageUrl: varchar("image_url", { length: 500 }),
   displayOrder: integer("display_order").default(0),
   isActive: boolean("is_active").default(true),
+  isVisible: boolean("is_visible").default(true), // Hide/show category
+  availableHours: jsonb("available_hours"), // Time-based availability
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Menu items
+// Menu items - Enhanced for advanced management
 export const menuItems = pgTable("menu_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
   categoryId: uuid("category_id").references(() => menuCategories.id),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  shortDescription: varchar("short_description", { length: 150 }),
+  
+  // Pricing & Availability
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  imageUrl: varchar("image_url", { length: 500 }),
+  compareAtPrice: decimal("compare_at_price", { precision: 10, scale: 2 }), // Original/crossed-out price
+  costPrice: decimal("cost_price", { precision: 10, scale: 2 }), // For profit analysis
   isAvailable: boolean("is_available").default(true),
-  preparationTime: integer("preparation_time").default(15), // minutes
-  isSpicy: boolean("is_spicy").default(false),
-  isVegetarian: boolean("is_vegetarian").default(false),
+  availableHours: jsonb("available_hours"), // Time-based availability
+  
+  // Media & Presentation
+  imageUrl: varchar("image_url", { length: 500 }),
+  galleryImages: jsonb("gallery_images"), // Multiple images
   displayOrder: integer("display_order").default(0),
+  
+  // Preparation & Kitchen
+  preparationTime: integer("preparation_time").default(15), // minutes
+  kitchenNotes: text("kitchen_notes"), // Internal preparation notes
+  
+  // Dietary & Allergen Information
+  tags: jsonb("tags"), // ["spicy", "vegetarian", "gluten-free", "bestseller"]
+  allergens: jsonb("allergens"), // ["nuts", "dairy", "gluten"]
+  nutritionalInfo: jsonb("nutritional_info"), // calories, protein, etc
+  
+  // Inventory Management
+  stockQuantity: integer("stock_quantity").default(-1), // -1 = unlimited
+  lowStockThreshold: integer("low_stock_threshold").default(5),
+  isTrackingStock: boolean("is_tracking_stock").default(false),
+  
+  // Performance Metrics
+  totalOrders: integer("total_orders").default(0),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  totalReviews: integer("total_reviews").default(0),
+  
+  // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Menu item modifiers/options for customization
+export const menuModifiers = pgTable("menu_modifiers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // "Size", "Add-ons", "Spice Level"
+  type: varchar("type", { length: 20 }).notNull(), // "single", "multiple"
+  isRequired: boolean("is_required").default(false),
+  minSelections: integer("min_selections").default(0),
+  maxSelections: integer("max_selections").default(1),
+  displayOrder: integer("display_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Individual options within modifiers
+export const modifierOptions = pgTable("modifier_options", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  modifierId: uuid("modifier_id").references(() => menuModifiers.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // "Large", "Extra Cheese", "Mild"
+  priceAdjustment: decimal("price_adjustment", { precision: 10, scale: 2 }).default("0"),
+  isDefault: boolean("is_default").default(false),
+  isAvailable: boolean("is_available").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Link menu items to their available modifiers
+export const menuItemModifiers = pgTable("menu_item_modifiers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  menuItemId: uuid("menu_item_id").references(() => menuItems.id).notNull(),
+  modifierId: uuid("modifier_id").references(() => menuModifiers.id).notNull(),
+  isRequired: boolean("is_required").default(false), // Override modifier's default
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Promotions and marketing campaigns
+export const promotions = pgTable("promotions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  type: varchar("type", { length: 20 }).notNull(), // "percentage", "fixed_amount", "bogo", "bundle"
+  code: varchar("code", { length: 50 }).unique(), // Promo code (optional for automatic promotions)
+  
+  // Discount Configuration
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
+  minimumOrderAmount: decimal("minimum_order_amount", { precision: 10, scale: 2 }).default("0"),
+  maximumDiscountAmount: decimal("maximum_discount_amount", { precision: 10, scale: 2 }),
+  
+  // Applicability
+  applicableItems: jsonb("applicable_items"), // Array of menu item IDs (null = all items)
+  applicableCategories: jsonb("applicable_categories"), // Array of category IDs
+  
+  // Usage Limits
+  usageLimit: integer("usage_limit"), // Total usage limit (null = unlimited)
+  usageLimitPerUser: integer("usage_limit_per_user").default(1),
+  currentUsageCount: integer("current_usage_count").default(0),
+  
+  // Time Constraints
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  availableHours: jsonb("available_hours"), // Time-based availability
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  isAutoApply: boolean("is_auto_apply").default(false), // Apply automatically without code
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Financial records - Earnings, payouts, and fee breakdowns
+export const vendorEarnings = pgTable("vendor_earnings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id),
+  
+  // Revenue Breakdown
+  grossAmount: decimal("gross_amount", { precision: 10, scale: 2 }).notNull(),
+  commissionAmount: decimal("commission_amount", { precision: 10, scale: 2 }).notNull(),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).notNull(), // Percentage
+  processingFeeAmount: decimal("processing_fee_amount", { precision: 10, scale: 2 }).default("0"),
+  netAmount: decimal("net_amount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Payout Information
+  payoutStatus: varchar("payout_status", { length: 20 }).default("pending"), // pending, processed, failed
+  payoutDate: timestamp("payout_date"),
+  payoutReference: varchar("payout_reference", { length: 100 }),
+  
+  // Transaction Details
+  transactionType: varchar("transaction_type", { length: 20 }).notNull(), // "order", "adjustment", "fee"
+  description: text("description"),
+  
+  recordDate: timestamp("record_date").defaultNow(),
+});
+
+// Staff management for restaurant teams
+export const restaurantStaff = pgTable("restaurant_staff", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  
+  // Role and Permissions
+  role: varchar("role", { length: 50 }).notNull(), // "owner", "manager", "staff", "cashier"
+  permissions: jsonb("permissions"), // {orders: true, menu: true, analytics: false, settings: false}
+  
+  // Employment Details
+  employeeId: varchar("employee_id", { length: 50 }),
+  hourlyWage: decimal("hourly_wage", { precision: 10, scale: 2 }),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"), // null if still active
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  canLogin: boolean("can_login").default(true),
+  lastShiftStart: timestamp("last_shift_start"),
+  lastShiftEnd: timestamp("last_shift_end"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Enhanced reviews system for customer relationship management
+export const reviewResponses = pgTable("review_responses", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  reviewId: uuid("review_id").references(() => reviews.id).notNull(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  staffUserId: uuid("staff_user_id").references(() => users.id), // Who responded
+  
+  responseText: text("response_text").notNull(),
+  isPublic: boolean("is_public").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Customer relationship management
+export const customerNotes = pgTable("customer_notes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  customerId: uuid("customer_id").references(() => users.id).notNull(),
+  staffUserId: uuid("staff_user_id").references(() => users.id).notNull(),
+  
+  noteText: text("note_text").notNull(),
+  type: varchar("type", { length: 20 }).default("general"), // "general", "complaint", "preference", "allergy"
+  isPrivate: boolean("is_private").default(false),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Inventory management
+export const inventoryItems = pgTable("inventory_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  sku: varchar("sku", { length: 100 }),
+  unit: varchar("unit", { length: 20 }).notNull(), // "pieces", "kg", "liters", etc.
+  
+  // Stock Information
+  currentStock: decimal("current_stock", { precision: 10, scale: 2 }).default("0"),
+  minimumStock: decimal("minimum_stock", { precision: 10, scale: 2 }).default("0"),
+  maximumStock: decimal("maximum_stock", { precision: 10, scale: 2 }),
+  
+  // Pricing
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
+  
+  // Tracking
+  isActive: boolean("is_active").default(true),
+  isTrackStock: boolean("is_track_stock").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Audit trail for important actions
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  
+  action: varchar("action", { length: 100 }).notNull(), // "order_status_changed", "menu_item_updated", etc.
+  resource: varchar("resource", { length: 50 }).notNull(), // "order", "menu_item", "user", etc.
+  resourceId: uuid("resource_id"),
+  
+  oldValues: jsonb("old_values"), // Previous state
+  newValues: jsonb("new_values"), // New state
+  metadata: jsonb("metadata"), // Additional context
+  
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// User favorites for restaurants
+export const userFavorites = pgTable("user_favorites", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Riders table - Enhanced for advanced tracking
@@ -824,6 +1093,19 @@ export const insertPointsTransactionSchema = createInsertSchema(pointsTransactio
 export const insertRewardSchema = createInsertSchema(rewards);
 export const insertRedemptionSchema = createInsertSchema(redemptions);
 
+// Merchant Panel Types
+export const insertMenuModifierSchema = createInsertSchema(menuModifiers);
+export const insertModifierOptionSchema = createInsertSchema(modifierOptions);
+export const insertMenuItemModifierSchema = createInsertSchema(menuItemModifiers);
+export const insertPromotionSchema = createInsertSchema(promotions);
+export const insertVendorEarningsSchema = createInsertSchema(vendorEarnings);
+export const insertRestaurantStaffSchema = createInsertSchema(restaurantStaff);
+export const insertReviewResponseSchema = createInsertSchema(reviewResponses);
+export const insertCustomerNoteSchema = createInsertSchema(customerNotes);
+export const insertInventoryItemSchema = createInsertSchema(inventoryItems);
+export const insertAuditLogSchema = createInsertSchema(auditLogs);
+export const insertUserFavoritesSchema = createInsertSchema(userFavorites);
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -855,6 +1137,30 @@ export type Reward = typeof rewards.$inferSelect;
 export type InsertReward = z.infer<typeof insertRewardSchema>;
 export type Redemption = typeof redemptions.$inferSelect;
 export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
+
+// Merchant Panel Types  
+export type MenuModifier = typeof menuModifiers.$inferSelect;
+export type InsertMenuModifier = z.infer<typeof insertMenuModifierSchema>;
+export type ModifierOption = typeof modifierOptions.$inferSelect;
+export type InsertModifierOption = z.infer<typeof insertModifierOptionSchema>;
+export type MenuItemModifier = typeof menuItemModifiers.$inferSelect;
+export type InsertMenuItemModifier = z.infer<typeof insertMenuItemModifierSchema>;
+export type Promotion = typeof promotions.$inferSelect;
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
+export type VendorEarnings = typeof vendorEarnings.$inferSelect;
+export type InsertVendorEarnings = z.infer<typeof insertVendorEarningsSchema>;
+export type RestaurantStaff = typeof restaurantStaff.$inferSelect;
+export type InsertRestaurantStaff = z.infer<typeof insertRestaurantStaffSchema>;
+export type ReviewResponse = typeof reviewResponses.$inferSelect;
+export type InsertReviewResponse = z.infer<typeof insertReviewResponseSchema>;
+export type CustomerNote = typeof customerNotes.$inferSelect;
+export type InsertCustomerNote = z.infer<typeof insertCustomerNoteSchema>;
+export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type UserFavorite = typeof userFavorites.$inferSelect;
+export type InsertUserFavorite = z.infer<typeof insertUserFavoritesSchema>;
 
 // BTS System Types
 export type BtsRider = typeof btsRiders.$inferSelect;

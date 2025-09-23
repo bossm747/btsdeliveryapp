@@ -20,6 +20,18 @@ import {
   financialSettlements,
   systemHealthMetrics,
   broadcastMessages,
+  // Merchant Panel Tables
+  menuModifiers,
+  modifierOptions,
+  menuItemModifiers,
+  promotions,
+  vendorEarnings,
+  restaurantStaff,
+  reviewResponses,
+  customerNotes,
+  inventoryItems,
+  auditLogs,
+  userFavorites,
   type User, 
   type InsertUser,
   type Restaurant,
@@ -60,7 +72,28 @@ import {
   type SelectSystemHealthMetric,
   type InsertSystemHealthMetric,
   type SelectBroadcastMessage,
-  type InsertBroadcastMessage
+  type InsertBroadcastMessage,
+  // Merchant Panel Types
+  type MenuModifier,
+  type InsertMenuModifier,
+  type ModifierOption,
+  type InsertModifierOption,
+  type MenuItemModifier,
+  type InsertMenuItemModifier,
+  type Promotion,
+  type InsertPromotion,
+  type VendorEarnings,
+  type InsertVendorEarnings,
+  type RestaurantStaff,
+  type InsertRestaurantStaff,
+  type ReviewResponse,
+  type InsertReviewResponse,
+  type CustomerNote,
+  type InsertCustomerNote,
+  type InventoryItem,
+  type InsertInventoryItem,
+  type AuditLog,
+  type InsertAuditLog
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -148,6 +181,68 @@ export interface IStorage {
   getDeliveryTracking(orderId: string): Promise<DeliveryTracking | undefined>;
   
   getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]>;
+
+  // Merchant Panel Operations
+  
+  // Menu Modifiers Operations
+  getMenuModifiers(restaurantId: string): Promise<MenuModifier[]>;
+  getMenuModifier(id: string): Promise<MenuModifier | undefined>;
+  createMenuModifier(modifier: InsertMenuModifier): Promise<MenuModifier>;
+  updateMenuModifier(id: string, updates: Partial<MenuModifier>): Promise<MenuModifier | undefined>;
+  deleteMenuModifier(id: string): Promise<void>;
+  
+  getModifierOptions(modifierId: string): Promise<ModifierOption[]>;
+  createModifierOption(option: InsertModifierOption): Promise<ModifierOption>;
+  updateModifierOption(id: string, updates: Partial<ModifierOption>): Promise<ModifierOption | undefined>;
+  deleteModifierOption(id: string): Promise<void>;
+  
+  getMenuItemModifiers(menuItemId: string): Promise<MenuItemModifier[]>;
+  createMenuItemModifier(itemModifier: InsertMenuItemModifier): Promise<MenuItemModifier>;
+  deleteMenuItemModifier(id: string): Promise<void>;
+  
+  // Promotions Operations
+  getPromotions(restaurantId: string): Promise<Promotion[]>;
+  getPromotion(id: string): Promise<Promotion | undefined>;
+  getPromotionByCode(code: string): Promise<Promotion | undefined>;
+  createPromotion(promotion: InsertPromotion): Promise<Promotion>;
+  updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion | undefined>;
+  deletePromotion(id: string): Promise<void>;
+  
+  // Financial Operations
+  getVendorEarnings(restaurantId: string, startDate?: string, endDate?: string): Promise<VendorEarnings[]>;
+  createVendorEarnings(earnings: InsertVendorEarnings): Promise<VendorEarnings>;
+  getEarningsSummary(restaurantId: string, period: 'day' | 'week' | 'month'): Promise<any>;
+  
+  // Staff Management Operations
+  getRestaurantStaff(restaurantId: string): Promise<RestaurantStaff[]>;
+  getStaffMember(id: string): Promise<RestaurantStaff | undefined>;
+  createStaffMember(staff: InsertRestaurantStaff): Promise<RestaurantStaff>;
+  updateStaffMember(id: string, updates: Partial<RestaurantStaff>): Promise<RestaurantStaff | undefined>;
+  deleteStaffMember(id: string): Promise<void>;
+  
+  // Review Management Operations
+  getReviewResponses(reviewId: string): Promise<ReviewResponse[]>;
+  createReviewResponse(response: InsertReviewResponse): Promise<ReviewResponse>;
+  updateReviewResponse(id: string, updates: Partial<ReviewResponse>): Promise<ReviewResponse | undefined>;
+  deleteReviewResponse(id: string): Promise<void>;
+  
+  // Customer Relationship Management
+  getCustomerNotes(restaurantId: string, customerId?: string): Promise<CustomerNote[]>;
+  createCustomerNote(note: InsertCustomerNote): Promise<CustomerNote>;
+  updateCustomerNote(id: string, updates: Partial<CustomerNote>): Promise<CustomerNote | undefined>;
+  deleteCustomerNote(id: string): Promise<void>;
+  
+  // Inventory Management Operations
+  getInventoryItems(restaurantId: string): Promise<InventoryItem[]>;
+  getInventoryItem(id: string): Promise<InventoryItem | undefined>;
+  createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
+  updateInventoryItem(id: string, updates: Partial<InventoryItem>): Promise<InventoryItem | undefined>;
+  deleteInventoryItem(id: string): Promise<void>;
+  getLowStockItems(restaurantId: string): Promise<InventoryItem[]>;
+  
+  // Audit Log Operations
+  getAuditLogs(restaurantId?: string, userId?: string): Promise<AuditLog[]>;
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -641,6 +736,306 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(riderPerformanceMetrics)
       .where(and(...whereConditions))
       .orderBy(desc(riderPerformanceMetrics.date));
+  }
+
+  // Merchant Panel Operations Implementation
+  
+  // Menu Modifiers Operations
+  async getMenuModifiers(restaurantId: string): Promise<MenuModifier[]> {
+    return await db.select().from(menuModifiers)
+      .where(eq(menuModifiers.restaurantId, restaurantId))
+      .orderBy(menuModifiers.displayOrder);
+  }
+
+  async getMenuModifier(id: string): Promise<MenuModifier | undefined> {
+    const [modifier] = await db.select().from(menuModifiers).where(eq(menuModifiers.id, id));
+    return modifier;
+  }
+
+  async createMenuModifier(modifier: InsertMenuModifier): Promise<MenuModifier> {
+    const [record] = await db.insert(menuModifiers).values(modifier).returning();
+    return record;
+  }
+
+  async updateMenuModifier(id: string, updates: Partial<MenuModifier>): Promise<MenuModifier | undefined> {
+    const [updated] = await db.update(menuModifiers)
+      .set(updates)
+      .where(eq(menuModifiers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMenuModifier(id: string): Promise<void> {
+    await db.delete(menuModifiers).where(eq(menuModifiers.id, id));
+  }
+
+  async getModifierOptions(modifierId: string): Promise<ModifierOption[]> {
+    return await db.select().from(modifierOptions)
+      .where(eq(modifierOptions.modifierId, modifierId))
+      .orderBy(modifierOptions.displayOrder);
+  }
+
+  async createModifierOption(option: InsertModifierOption): Promise<ModifierOption> {
+    const [record] = await db.insert(modifierOptions).values(option).returning();
+    return record;
+  }
+
+  async updateModifierOption(id: string, updates: Partial<ModifierOption>): Promise<ModifierOption | undefined> {
+    const [updated] = await db.update(modifierOptions)
+      .set(updates)
+      .where(eq(modifierOptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteModifierOption(id: string): Promise<void> {
+    await db.delete(modifierOptions).where(eq(modifierOptions.id, id));
+  }
+
+  async getMenuItemModifiers(menuItemId: string): Promise<MenuItemModifier[]> {
+    return await db.select().from(menuItemModifiers)
+      .where(eq(menuItemModifiers.menuItemId, menuItemId))
+      .orderBy(menuItemModifiers.displayOrder);
+  }
+
+  async createMenuItemModifier(itemModifier: InsertMenuItemModifier): Promise<MenuItemModifier> {
+    const [record] = await db.insert(menuItemModifiers).values(itemModifier).returning();
+    return record;
+  }
+
+  async deleteMenuItemModifier(id: string): Promise<void> {
+    await db.delete(menuItemModifiers).where(eq(menuItemModifiers.id, id));
+  }
+
+  // Promotions Operations
+  async getPromotions(restaurantId: string): Promise<Promotion[]> {
+    return await db.select().from(promotions)
+      .where(eq(promotions.restaurantId, restaurantId))
+      .orderBy(desc(promotions.createdAt));
+  }
+
+  async getPromotion(id: string): Promise<Promotion | undefined> {
+    const [promotion] = await db.select().from(promotions).where(eq(promotions.id, id));
+    return promotion;
+  }
+
+  async getPromotionByCode(code: string): Promise<Promotion | undefined> {
+    const [promotion] = await db.select().from(promotions)
+      .where(and(
+        eq(promotions.code, code),
+        eq(promotions.isActive, true)
+      ));
+    return promotion;
+  }
+
+  async createPromotion(promotion: InsertPromotion): Promise<Promotion> {
+    const [record] = await db.insert(promotions).values(promotion).returning();
+    return record;
+  }
+
+  async updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion | undefined> {
+    const [updated] = await db.update(promotions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(promotions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePromotion(id: string): Promise<void> {
+    await db.delete(promotions).where(eq(promotions.id, id));
+  }
+
+  // Financial Operations
+  async getVendorEarnings(restaurantId: string, startDate?: string, endDate?: string): Promise<VendorEarnings[]> {
+    let query = db.select().from(vendorEarnings).where(eq(vendorEarnings.restaurantId, restaurantId));
+    
+    if (startDate && endDate) {
+      query = query.where(and(
+        eq(vendorEarnings.restaurantId, restaurantId),
+        sql`${vendorEarnings.recordDate} >= ${startDate}`,
+        sql`${vendorEarnings.recordDate} <= ${endDate}`
+      ));
+    }
+    
+    return await query.orderBy(desc(vendorEarnings.recordDate));
+  }
+
+  async createVendorEarnings(earnings: InsertVendorEarnings): Promise<VendorEarnings> {
+    const [record] = await db.insert(vendorEarnings).values(earnings).returning();
+    return record;
+  }
+
+  async getEarningsSummary(restaurantId: string, period: 'day' | 'week' | 'month'): Promise<any> {
+    let dateFilter = '';
+    switch (period) {
+      case 'day':
+        dateFilter = "record_date >= NOW() - INTERVAL '1 day'";
+        break;
+      case 'week':
+        dateFilter = "record_date >= NOW() - INTERVAL '1 week'";
+        break;
+      case 'month':
+        dateFilter = "record_date >= NOW() - INTERVAL '1 month'";
+        break;
+    }
+
+    const result = await db.execute(sql`
+      SELECT 
+        SUM(gross_amount) as total_gross,
+        SUM(commission_amount) as total_commission,
+        SUM(net_amount) as total_net,
+        COUNT(*) as total_transactions
+      FROM vendor_earnings 
+      WHERE restaurant_id = ${restaurantId} 
+        AND ${sql.raw(dateFilter)}
+    `);
+    
+    return result.rows[0];
+  }
+
+  // Staff Management Operations
+  async getRestaurantStaff(restaurantId: string): Promise<RestaurantStaff[]> {
+    return await db.select().from(restaurantStaff)
+      .where(eq(restaurantStaff.restaurantId, restaurantId))
+      .orderBy(restaurantStaff.role);
+  }
+
+  async getStaffMember(id: string): Promise<RestaurantStaff | undefined> {
+    const [staff] = await db.select().from(restaurantStaff).where(eq(restaurantStaff.id, id));
+    return staff;
+  }
+
+  async createStaffMember(staff: InsertRestaurantStaff): Promise<RestaurantStaff> {
+    const [record] = await db.insert(restaurantStaff).values(staff).returning();
+    return record;
+  }
+
+  async updateStaffMember(id: string, updates: Partial<RestaurantStaff>): Promise<RestaurantStaff | undefined> {
+    const [updated] = await db.update(restaurantStaff)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(restaurantStaff.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMember(id: string): Promise<void> {
+    await db.delete(restaurantStaff).where(eq(restaurantStaff.id, id));
+  }
+
+  // Review Management Operations
+  async getReviewResponses(reviewId: string): Promise<ReviewResponse[]> {
+    return await db.select().from(reviewResponses)
+      .where(eq(reviewResponses.reviewId, reviewId))
+      .orderBy(desc(reviewResponses.createdAt));
+  }
+
+  async createReviewResponse(response: InsertReviewResponse): Promise<ReviewResponse> {
+    const [record] = await db.insert(reviewResponses).values(response).returning();
+    return record;
+  }
+
+  async updateReviewResponse(id: string, updates: Partial<ReviewResponse>): Promise<ReviewResponse | undefined> {
+    const [updated] = await db.update(reviewResponses)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(reviewResponses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReviewResponse(id: string): Promise<void> {
+    await db.delete(reviewResponses).where(eq(reviewResponses.id, id));
+  }
+
+  // Customer Relationship Management
+  async getCustomerNotes(restaurantId: string, customerId?: string): Promise<CustomerNote[]> {
+    let query = db.select().from(customerNotes).where(eq(customerNotes.restaurantId, restaurantId));
+    
+    if (customerId) {
+      query = query.where(and(
+        eq(customerNotes.restaurantId, restaurantId),
+        eq(customerNotes.customerId, customerId)
+      ));
+    }
+    
+    return await query.orderBy(desc(customerNotes.createdAt));
+  }
+
+  async createCustomerNote(note: InsertCustomerNote): Promise<CustomerNote> {
+    const [record] = await db.insert(customerNotes).values(note).returning();
+    return record;
+  }
+
+  async updateCustomerNote(id: string, updates: Partial<CustomerNote>): Promise<CustomerNote | undefined> {
+    const [updated] = await db.update(customerNotes)
+      .set(updates)
+      .where(eq(customerNotes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCustomerNote(id: string): Promise<void> {
+    await db.delete(customerNotes).where(eq(customerNotes.id, id));
+  }
+
+  // Inventory Management Operations
+  async getInventoryItems(restaurantId: string): Promise<InventoryItem[]> {
+    return await db.select().from(inventoryItems)
+      .where(eq(inventoryItems.restaurantId, restaurantId))
+      .orderBy(inventoryItems.name);
+  }
+
+  async getInventoryItem(id: string): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
+    return item;
+  }
+
+  async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
+    const [record] = await db.insert(inventoryItems).values(item).returning();
+    return record;
+  }
+
+  async updateInventoryItem(id: string, updates: Partial<InventoryItem>): Promise<InventoryItem | undefined> {
+    const [updated] = await db.update(inventoryItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(inventoryItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteInventoryItem(id: string): Promise<void> {
+    await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
+  }
+
+  async getLowStockItems(restaurantId: string): Promise<InventoryItem[]> {
+    return await db.select().from(inventoryItems)
+      .where(and(
+        eq(inventoryItems.restaurantId, restaurantId),
+        sql`${inventoryItems.currentStock} <= ${inventoryItems.minimumStock}`
+      ))
+      .orderBy(inventoryItems.name);
+  }
+
+  // Audit Log Operations
+  async getAuditLogs(restaurantId?: string, userId?: string): Promise<AuditLog[]> {
+    let whereConditions = [];
+    
+    if (restaurantId) {
+      whereConditions.push(eq(auditLogs.restaurantId, restaurantId));
+    }
+    if (userId) {
+      whereConditions.push(eq(auditLogs.userId, userId));
+    }
+    
+    const query = whereConditions.length > 0 
+      ? db.select().from(auditLogs).where(and(...whereConditions))
+      : db.select().from(auditLogs);
+    
+    return await query.orderBy(desc(auditLogs.createdAt));
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [record] = await db.insert(auditLogs).values(log).returning();
+    return record;
   }
 }
 
