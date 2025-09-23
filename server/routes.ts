@@ -25,7 +25,7 @@ import {
   orders,
   restaurants
 } from "@shared/schema";
-import { eq, sql, and, isNull } from "drizzle-orm";
+import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
@@ -44,8 +44,12 @@ interface ExtendedWebSocket extends WebSocket {
   subscriptions?: Set<string>;
 }
 
-// JWT secret - in production this should be from environment variables
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-here-please-change-in-production";
+// JWT secret - loaded from environment variables
+const JWT_SECRET = process.env.JWT_SECRET!;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
 
 // Authentication middleware
 const authenticateToken = async (req: any, res: any, next: any) => {
@@ -1316,9 +1320,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
       // Filter orders by time periods
-      const todayOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= today);
-      const thisWeekOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= thisWeekStart);
-      const thisMonthOrders = deliveredOrders.filter(o => new Date(o.deliveredAt!) >= thisMonthStart);
+      const todayOrders = deliveredOrders.filter(o => o.actualDeliveryTime && new Date(o.actualDeliveryTime) >= today);
+      const thisWeekOrders = deliveredOrders.filter(o => o.actualDeliveryTime && new Date(o.actualDeliveryTime) >= thisWeekStart);
+      const thisMonthOrders = deliveredOrders.filter(o => o.actualDeliveryTime && new Date(o.actualDeliveryTime) >= thisMonthStart);
 
       // Calculate earnings (assuming 20% commission)
       const calculateEarnings = (orders: any[]) => 
