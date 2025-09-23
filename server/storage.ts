@@ -32,6 +32,13 @@ import {
   inventoryItems,
   auditLogs,
   userFavorites,
+  // User Management Tables
+  emailVerificationTokens,
+  passwordResetTokens,
+  userAddresses,
+  userOnboardingProgress,
+  userDietaryPreferences,
+  userNotificationPreferences,
   type User, 
   type InsertUser,
   type Restaurant,
@@ -93,7 +100,20 @@ import {
   type InventoryItem,
   type InsertInventoryItem,
   type AuditLog,
-  type InsertAuditLog
+  type InsertAuditLog,
+  // User Management Types
+  type EmailVerificationToken,
+  type InsertEmailVerificationToken,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
+  type UserAddress,
+  type InsertUserAddress,
+  type UserOnboardingProgress,
+  type InsertUserOnboardingProgress,
+  type UserDietaryPreferences,
+  type InsertUserDietaryPreferences,
+  type UserNotificationPreferences,
+  type InsertUserNotificationPreferences
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -243,6 +263,41 @@ export interface IStorage {
   // Delivery Tracking Operations
   updateDeliveryTracking(orderId: string, updates: any): Promise<any>;
   getDeliveryTracking(orderId: string): Promise<any>;
+
+  // Email Verification Operations
+  createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken>;
+  getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined>;
+  markEmailVerificationTokenUsed(token: string): Promise<EmailVerificationToken | undefined>;
+  deleteExpiredEmailVerificationTokens(): Promise<void>;
+
+  // Password Reset Operations
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(token: string): Promise<PasswordResetToken | undefined>;
+  deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // User Address Management
+  getUserAddresses(userId: string): Promise<UserAddress[]>;
+  getUserAddress(id: string): Promise<UserAddress | undefined>;
+  createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
+  updateUserAddress(id: string, updates: Partial<UserAddress>): Promise<UserAddress | undefined>;
+  deleteUserAddress(id: string): Promise<void>;
+  setDefaultAddress(userId: string, addressId: string): Promise<void>;
+
+  // User Onboarding Progress
+  getUserOnboardingProgress(userId: string): Promise<UserOnboardingProgress[]>;
+  updateOnboardingStep(userId: string, step: string, stepData?: any): Promise<UserOnboardingProgress>;
+  completeOnboardingStep(userId: string, step: string): Promise<UserOnboardingProgress>;
+
+  // User Dietary Preferences
+  getUserDietaryPreferences(userId: string): Promise<UserDietaryPreferences | undefined>;
+  createUserDietaryPreferences(preferences: InsertUserDietaryPreferences): Promise<UserDietaryPreferences>;
+  updateUserDietaryPreferences(userId: string, preferences: Partial<UserDietaryPreferences>): Promise<UserDietaryPreferences | undefined>;
+
+  // User Notification Preferences
+  getUserNotificationPreferences(userId: string): Promise<UserNotificationPreferences | undefined>;
+  createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
+  updateUserNotificationPreferences(userId: string, preferences: Partial<UserNotificationPreferences>): Promise<UserNotificationPreferences | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1080,6 +1135,205 @@ export class DatabaseStorage implements IStorage {
       console.error("Error getting delivery tracking:", error);
       throw error;
     }
+  }
+
+  // Email Verification Operations
+  async createEmailVerificationToken(insertToken: InsertEmailVerificationToken): Promise<EmailVerificationToken> {
+    const [token] = await db.insert(emailVerificationTokens).values(insertToken).returning();
+    return token;
+  }
+
+  async getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined> {
+    const [tokenRecord] = await db.select().from(emailVerificationTokens)
+      .where(and(
+        eq(emailVerificationTokens.token, token),
+        eq(emailVerificationTokens.isUsed, false)
+      ));
+    return tokenRecord;
+  }
+
+  async markEmailVerificationTokenUsed(token: string): Promise<EmailVerificationToken | undefined> {
+    const [tokenRecord] = await db.update(emailVerificationTokens)
+      .set({ isUsed: true })
+      .where(eq(emailVerificationTokens.token, token))
+      .returning();
+    return tokenRecord;
+  }
+
+  async deleteExpiredEmailVerificationTokens(): Promise<void> {
+    await db.delete(emailVerificationTokens)
+      .where(sql`${emailVerificationTokens.expiresAt} < NOW()`);
+  }
+
+  // Password Reset Operations
+  async createPasswordResetToken(insertToken: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const [token] = await db.insert(passwordResetTokens).values(insertToken).returning();
+    return token;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [tokenRecord] = await db.select().from(passwordResetTokens)
+      .where(and(
+        eq(passwordResetTokens.token, token),
+        eq(passwordResetTokens.isUsed, false)
+      ));
+    return tokenRecord;
+  }
+
+  async markPasswordResetTokenUsed(token: string): Promise<PasswordResetToken | undefined> {
+    const [tokenRecord] = await db.update(passwordResetTokens)
+      .set({ isUsed: true })
+      .where(eq(passwordResetTokens.token, token))
+      .returning();
+    return tokenRecord;
+  }
+
+  async deleteExpiredPasswordResetTokens(): Promise<void> {
+    await db.delete(passwordResetTokens)
+      .where(sql`${passwordResetTokens.expiresAt} < NOW()`);
+  }
+
+  // User Address Management
+  async getUserAddresses(userId: string): Promise<UserAddress[]> {
+    return await db.select().from(userAddresses)
+      .where(and(
+        eq(userAddresses.userId, userId),
+        eq(userAddresses.isActive, true)
+      ))
+      .orderBy(desc(userAddresses.isDefault), userAddresses.title);
+  }
+
+  async getUserAddress(id: string): Promise<UserAddress | undefined> {
+    const [address] = await db.select().from(userAddresses).where(eq(userAddresses.id, id));
+    return address;
+  }
+
+  async createUserAddress(insertAddress: InsertUserAddress): Promise<UserAddress> {
+    const [address] = await db.insert(userAddresses).values(insertAddress).returning();
+    return address;
+  }
+
+  async updateUserAddress(id: string, updates: Partial<UserAddress>): Promise<UserAddress | undefined> {
+    const [address] = await db.update(userAddresses)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userAddresses.id, id))
+      .returning();
+    return address;
+  }
+
+  async deleteUserAddress(id: string): Promise<void> {
+    await db.delete(userAddresses).where(eq(userAddresses.id, id));
+  }
+
+  async setDefaultAddress(userId: string, addressId: string): Promise<void> {
+    // First, unset all default addresses for the user
+    await db.update(userAddresses)
+      .set({ isDefault: false })
+      .where(eq(userAddresses.userId, userId));
+    
+    // Then set the specified address as default
+    await db.update(userAddresses)
+      .set({ isDefault: true })
+      .where(eq(userAddresses.id, addressId));
+  }
+
+  // User Onboarding Progress
+  async getUserOnboardingProgress(userId: string): Promise<UserOnboardingProgress[]> {
+    return await db.select().from(userOnboardingProgress)
+      .where(eq(userOnboardingProgress.userId, userId))
+      .orderBy(userOnboardingProgress.createdAt);
+  }
+
+  async updateOnboardingStep(userId: string, step: string, stepData?: any): Promise<UserOnboardingProgress> {
+    // Check if step already exists
+    const [existing] = await db.select().from(userOnboardingProgress)
+      .where(and(
+        eq(userOnboardingProgress.userId, userId),
+        eq(userOnboardingProgress.step, step)
+      ));
+
+    if (existing) {
+      const [updated] = await db.update(userOnboardingProgress)
+        .set({ stepData, updatedAt: new Date() })
+        .where(eq(userOnboardingProgress.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(userOnboardingProgress).values({
+        userId,
+        step,
+        stepData
+      }).returning();
+      return created;
+    }
+  }
+
+  async completeOnboardingStep(userId: string, step: string): Promise<UserOnboardingProgress> {
+    const [existing] = await db.select().from(userOnboardingProgress)
+      .where(and(
+        eq(userOnboardingProgress.userId, userId),
+        eq(userOnboardingProgress.step, step)
+      ));
+
+    if (existing) {
+      const [updated] = await db.update(userOnboardingProgress)
+        .set({ 
+          isCompleted: true, 
+          completedAt: new Date(),
+          updatedAt: new Date() 
+        })
+        .where(eq(userOnboardingProgress.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(userOnboardingProgress).values({
+        userId,
+        step,
+        isCompleted: true,
+        completedAt: new Date()
+      }).returning();
+      return created;
+    }
+  }
+
+  // User Dietary Preferences
+  async getUserDietaryPreferences(userId: string): Promise<UserDietaryPreferences | undefined> {
+    const [preferences] = await db.select().from(userDietaryPreferences)
+      .where(eq(userDietaryPreferences.userId, userId));
+    return preferences;
+  }
+
+  async createUserDietaryPreferences(insertPreferences: InsertUserDietaryPreferences): Promise<UserDietaryPreferences> {
+    const [preferences] = await db.insert(userDietaryPreferences).values(insertPreferences).returning();
+    return preferences;
+  }
+
+  async updateUserDietaryPreferences(userId: string, updates: Partial<UserDietaryPreferences>): Promise<UserDietaryPreferences | undefined> {
+    const [preferences] = await db.update(userDietaryPreferences)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userDietaryPreferences.userId, userId))
+      .returning();
+    return preferences;
+  }
+
+  // User Notification Preferences
+  async getUserNotificationPreferences(userId: string): Promise<UserNotificationPreferences | undefined> {
+    const [preferences] = await db.select().from(userNotificationPreferences)
+      .where(eq(userNotificationPreferences.userId, userId));
+    return preferences;
+  }
+
+  async createUserNotificationPreferences(insertPreferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences> {
+    const [preferences] = await db.insert(userNotificationPreferences).values(insertPreferences).returning();
+    return preferences;
+  }
+
+  async updateUserNotificationPreferences(userId: string, updates: Partial<UserNotificationPreferences>): Promise<UserNotificationPreferences | undefined> {
+    const [preferences] = await db.update(userNotificationPreferences)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userNotificationPreferences.userId, userId))
+      .returning();
+    return preferences;
   }
 }
 

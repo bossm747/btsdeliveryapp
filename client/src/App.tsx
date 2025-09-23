@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "@/pages/shared/landing";
 import Login from "@/pages/shared/login";
 import Signup from "@/pages/shared/signup";
+import MultiStepSignup from "@/pages/shared/multistep-signup";
 import NotFound from "@/pages/shared/not-found";
 
 // Customer pages
@@ -84,7 +85,8 @@ function Router() {
     <Switch>
       {/* Public routes - available to everyone */}
       <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
+      <Route path="/signup" component={MultiStepSignup} />
+      <Route path="/signup-basic" component={Signup} />
       
       {/* Root route - redirect based on auth status */}
       <Route path="/">

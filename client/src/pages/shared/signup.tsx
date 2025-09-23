@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { 
   Eye, 
   EyeOff, 
@@ -21,16 +24,23 @@ import {
   Truck, 
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Loader2,
   ShoppingBag,
   Store,
   Shield,
-  UserCheck
+  UserCheck,
+  MapPin,
+  Settings,
+  CheckCircle,
+  Camera,
+  Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
-const signupSchema = z.object({
+// Multi-step schemas
+const personalInfoSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Valid email address is required"),
@@ -45,22 +55,53 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
-type SignupForm = z.infer<typeof signupSchema>;
+const addressSchema = z.object({
+  street: z.string().min(5, "Street address is required"),
+  barangay: z.string().min(2, "Barangay is required"),
+  city: z.string().min(2, "City is required"),
+  province: z.string().default("Batangas"),
+  postalCode: z.string().min(4, "Valid postal code is required"),
+  isDefault: z.boolean().default(true),
+  deliveryInstructions: z.string().optional(),
+});
+
+const preferencesSchema = z.object({
+  dietaryRestrictions: z.array(z.string()).default([]),
+  allergies: z.array(z.string()).default([]),
+  preferredCuisines: z.array(z.string()).default([]),
+  spiceLevel: z.enum(["mild", "medium", "hot", "extra_hot"]).default("medium"),
+  emailNotifications: z.boolean().default(true),
+  smsNotifications: z.boolean().default(true),
+  pushNotifications: z.boolean().default(true),
+  promotionalEmails: z.boolean().default(true),
+  orderUpdates: z.boolean().default(true),
+});
+
+type PersonalInfoForm = z.infer<typeof personalInfoSchema>;
+type AddressForm = z.infer<typeof addressSchema>;
+type PreferencesForm = z.infer<typeof preferencesSchema>;
+
+type Step = "personal" | "address" | "preferences" | "verification";
 
 export default function Signup() {
   const [, navigate] = useLocation();
+  const [currentStep, setCurrentStep] = useState<Step>("personal");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<Step>>(new Set());
+  const [registrationData, setRegistrationData] = useState<any>({});
+  const [verificationToken, setVerificationToken] = useState<string>("");
   const { toast } = useToast();
 
   // Get role from URL params if provided
   const urlParams = new URLSearchParams(window.location.search);
   const initialRole = urlParams.get("role") as "customer" | "vendor" | "rider" | "admin" | null;
 
-  const form = useForm<SignupForm>({
-    resolver: zodResolver(signupSchema),
+  // Form for personal info step
+  const personalForm = useForm<PersonalInfoForm>({
+    resolver: zodResolver(personalInfoSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -72,7 +113,48 @@ export default function Signup() {
     },
   });
 
-  const selectedRole = form.watch("role");
+  // Form for address step
+  const addressForm = useForm<AddressForm>({
+    resolver: zodResolver(addressSchema),
+    defaultValues: {
+      street: "",
+      barangay: "",
+      city: "",
+      province: "Batangas",
+      postalCode: "",
+      isDefault: true,
+      deliveryInstructions: "",
+    },
+  });
+
+  // Form for preferences step
+  const preferencesForm = useForm<PreferencesForm>({
+    resolver: zodResolver(preferencesSchema),
+    defaultValues: {
+      dietaryRestrictions: [],
+      allergies: [],
+      preferredCuisines: [],
+      spiceLevel: "medium",
+      emailNotifications: true,
+      smsNotifications: true,
+      pushNotifications: true,
+      promotionalEmails: true,
+      orderUpdates: true,
+    },
+  });
+
+  const selectedRole = personalForm.watch("role");
+
+  // Step progress
+  const steps: { key: Step; title: string; icon: any }[] = [
+    { key: "personal", title: "Personal Info", icon: User },
+    { key: "address", title: "Address", icon: MapPin },
+    { key: "preferences", title: "Preferences", icon: Settings },
+    { key: "verification", title: "Verification", icon: CheckCircle },
+  ];
+
+  const currentStepIndex = steps.findIndex(step => step.key === currentStep);
+  const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
   const roleInfo = {
     customer: {
@@ -109,7 +191,23 @@ export default function Signup() {
     }
   };
 
-  const onSubmit = async (data: SignupForm) => {
+  // Navigation handlers
+  const handleNext = () => {
+    const currentIndex = steps.findIndex(step => step.key === currentStep);
+    if (currentIndex < steps.length - 1) {
+      setCurrentStep(steps[currentIndex + 1].key);
+    }
+  };
+
+  const handlePrevious = () => {
+    const currentIndex = steps.findIndex(step => step.key === currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1].key);
+    }
+  };
+
+  // Step handlers
+  const handlePersonalInfoSubmit = async (data: PersonalInfoForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -136,18 +234,149 @@ export default function Signup() {
         return;
       }
 
-      toast({
-        title: "Account Created Successfully!",
-        description: `Welcome to BTS Delivery, ${data.firstName}!`,
-      });
-
-      // Auto-login after successful registration
+      // Store registration data and token
+      setRegistrationData(result);
       localStorage.setItem("authToken", result.token);
       localStorage.setItem("userRole", result.user.role);
       localStorage.setItem("userId", result.user.id);
 
+      // Mark step as completed and move to address
+      setCompletedSteps(prev => new Set(prev).add("personal"));
+      setCurrentStep("address");
+
+      toast({
+        title: "Personal Information Saved!",
+        description: "Please check your email to verify your account.",
+      });
+    } catch (err) {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddressSubmit = async (data: AddressForm) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/user/address", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        setError(error.message || "Failed to save address. Please try again.");
+        return;
+      }
+
+      setCompletedSteps(prev => new Set(prev).add("address"));
+      setCurrentStep("preferences");
+
+      toast({
+        title: "Address Saved!",
+        description: "Now let's set up your preferences.",
+      });
+    } catch (err) {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePreferencesSubmit = async (data: PreferencesForm) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      
+      // Save dietary preferences
+      const dietaryResponse = await fetch("/api/user/dietary-preferences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          dietaryRestrictions: data.dietaryRestrictions,
+          allergies: data.allergies,
+          preferredCuisines: data.preferredCuisines,
+          spiceLevel: data.spiceLevel,
+        }),
+      });
+
+      // Save notification preferences
+      const notificationResponse = await fetch("/api/user/notification-preferences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          emailNotifications: data.emailNotifications,
+          smsNotifications: data.smsNotifications,
+          pushNotifications: data.pushNotifications,
+          promotionalEmails: data.promotionalEmails,
+          orderUpdates: data.orderUpdates,
+        }),
+      });
+
+      if (!dietaryResponse.ok || !notificationResponse.ok) {
+        setError("Failed to save preferences. Please try again.");
+        return;
+      }
+
+      setCompletedSteps(prev => new Set(prev).add("preferences"));
+      setCurrentStep("verification");
+
+      toast({
+        title: "Preferences Saved!",
+        description: "Almost done! Please verify your email to complete registration.",
+      });
+    } catch (err) {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailVerification = async (token: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || "Email verification failed. Please try again.");
+        return;
+      }
+
+      setCompletedSteps(prev => new Set(prev).add("verification"));
+
+      toast({
+        title: "Email Verified!",
+        description: "Your account is now fully set up. Welcome to BTS Delivery!",
+      });
+
       // Redirect to role-specific dashboard
-      switch (result.user.role) {
+      const userRole = localStorage.getItem("userRole");
+      switch (userRole) {
         case "customer":
           navigate("/customer-dashboard");
           break;
@@ -163,6 +392,37 @@ export default function Signup() {
         default:
           navigate("/");
       }
+    } catch (err) {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || "Failed to resend verification email.");
+        return;
+      }
+
+      toast({
+        title: "Verification Email Sent!",
+        description: "Please check your email for the verification link.",
+      });
     } catch (err) {
       setError("Network error. Please check your connection and try again.");
     } finally {
@@ -218,11 +478,11 @@ export default function Signup() {
                 </Alert>
               )}
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <Form {...personalForm}>
+                <form onSubmit={personalForm.handleSubmit(handlePersonalInfoSubmit)} className="space-y-4">
                   {/* Role Selection */}
                   <FormField
-                    control={form.control}
+                    control={personalForm.control}
                     name="role"
                     render={({ field }) => (
                       <FormItem>
@@ -278,7 +538,7 @@ export default function Signup() {
                   {/* Name Fields */}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
-                      control={form.control}
+                      control={personalForm.control}
                       name="firstName"
                       render={({ field }) => (
                         <FormItem>
@@ -297,7 +557,7 @@ export default function Signup() {
                     />
 
                     <FormField
-                      control={form.control}
+                      control={personalForm.control}
                       name="lastName"
                       render={({ field }) => (
                         <FormItem>
@@ -318,7 +578,7 @@ export default function Signup() {
 
                   {/* Contact Fields */}
                   <FormField
-                    control={form.control}
+                    control={personalForm.control}
                     name="email"
                     render={({ field }) => (
                       <FormItem>
@@ -341,7 +601,7 @@ export default function Signup() {
                   />
 
                   <FormField
-                    control={form.control}
+                    control={personalForm.control}
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
@@ -365,7 +625,7 @@ export default function Signup() {
 
                   {/* Password Fields */}
                   <FormField
-                    control={form.control}
+                    control={personalForm.control}
                     name="password"
                     render={({ field }) => (
                       <FormItem>
@@ -402,7 +662,7 @@ export default function Signup() {
                   />
 
                   <FormField
-                    control={form.control}
+                    control={personalForm.control}
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem>

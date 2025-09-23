@@ -49,7 +49,100 @@ export const users = pgTable("users", {
   emailVerifiedAt: timestamp("email_verified_at"),
   phoneVerifiedAt: timestamp("phone_verified_at"),
   permissions: jsonb("permissions"), // role-specific permissions override
-  preferences: jsonb("preferences"), // user dashboard preferences
+  preferences: jsonb("preferences"), // user dashboard preferences including notifications, dietary restrictions
+  onboardingCompleted: boolean("onboarding_completed").default(false),
+  onboardingStep: varchar("onboarding_step", { length: 50 }).default("personal_info"), // personal_info, address, preferences, verification, completed
+  dateOfBirth: timestamp("date_of_birth"),
+  gender: varchar("gender", { length: 20 }), // male, female, other
+  emergencyContact: varchar("emergency_contact", { length: 100 }),
+  emergencyPhone: varchar("emergency_phone", { length: 20 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Email Verification Tokens for secure email verification
+export const emailVerificationTokens = pgTable("email_verification_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  token: varchar("token", { length: 255 }).unique().notNull(),
+  email: varchar("email", { length: 255 }).notNull(), // Email being verified
+  expiresAt: timestamp("expires_at").notNull(),
+  isUsed: boolean("is_used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Password Reset Tokens for secure password reset
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  token: varchar("token", { length: 255 }).unique().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isUsed: boolean("is_used").default(false),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// User Addresses for address book management
+export const userAddresses = pgTable("user_addresses", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  title: varchar("title", { length: 100 }).notNull(), // "Home", "Work", "Office", etc.
+  streetAddress: varchar("street_address", { length: 255 }).notNull(),
+  barangay: varchar("barangay", { length: 100 }),
+  city: varchar("city", { length: 100 }).notNull(),
+  province: varchar("province", { length: 100 }).notNull(),
+  zipCode: varchar("zip_code", { length: 10 }),
+  landmark: varchar("landmark", { length: 255 }), // Near McDonald's, etc.
+  deliveryInstructions: text("delivery_instructions"),
+  coordinates: jsonb("coordinates"), // {lat, lng}
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Onboarding Progress tracking
+export const userOnboardingProgress = pgTable("user_onboarding_progress", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  step: varchar("step", { length: 50 }).notNull(), // personal_info, address, preferences, verification, tutorial, completed
+  isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
+  stepData: jsonb("step_data"), // Additional data for each step
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Dietary Preferences and Restrictions
+export const userDietaryPreferences = pgTable("user_dietary_preferences", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  dietaryRestrictions: jsonb("dietary_restrictions"), // ["vegetarian", "halal", "no_pork", "no_nuts", "diabetic"]
+  allergies: jsonb("allergies"), // ["nuts", "seafood", "dairy", "gluten"]
+  foodPreferences: jsonb("food_preferences"), // ["spicy", "mild", "sweet", "salty"]
+  cuisinePreferences: jsonb("cuisine_preferences"), // ["filipino", "chinese", "american", "japanese"]
+  avoidIngredients: jsonb("avoid_ingredients"), // ["msg", "artificial_sweeteners"]
+  specialInstructions: text("special_instructions"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Notification Preferences
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  emailNotifications: boolean("email_notifications").default(true),
+  smsNotifications: boolean("sms_notifications").default(true),
+  pushNotifications: boolean("push_notifications").default(true),
+  orderUpdates: boolean("order_updates").default(true),
+  promotionalEmails: boolean("promotional_emails").default(true),
+  restaurantUpdates: boolean("restaurant_updates").default(true),
+  loyaltyRewards: boolean("loyalty_rewards").default(true),
+  securityAlerts: boolean("security_alerts").default(true),
+  weeklyDigest: boolean("weekly_digest").default(false),
+  quietHoursStart: varchar("quiet_hours_start", { length: 5 }), // "22:00"
+  quietHoursEnd: varchar("quiet_hours_end", { length: 5 }), // "08:00"
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1122,6 +1215,14 @@ export const insertRiderPerformanceMetricsSchema = createInsertSchema(riderPerfo
 export const insertDeliveryRouteSchema = createInsertSchema(deliveryRoutes);
 export const insertDeliveryTrackingEventSchema = createInsertSchema(deliveryTrackingEvents);
 
+// User Management Schemas
+export const insertEmailVerificationTokenSchema = createInsertSchema(emailVerificationTokens);
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens);
+export const insertUserAddressSchema = createInsertSchema(userAddresses);
+export const insertUserOnboardingProgressSchema = createInsertSchema(userOnboardingProgress);
+export const insertUserDietaryPreferencesSchema = createInsertSchema(userDietaryPreferences);
+export const insertUserNotificationPreferencesSchema = createInsertSchema(userNotificationPreferences);
+
 // Loyalty Types
 export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
 export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions);
@@ -1167,6 +1268,20 @@ export type DeliveryRoute = typeof deliveryRoutes.$inferSelect;
 export type InsertDeliveryRoute = z.infer<typeof insertDeliveryRouteSchema>;
 export type DeliveryTrackingEvent = typeof deliveryTrackingEvents.$inferSelect;
 export type InsertDeliveryTrackingEvent = z.infer<typeof insertDeliveryTrackingEventSchema>;
+
+// User Management Types
+export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
+export type InsertEmailVerificationToken = z.infer<typeof insertEmailVerificationTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type UserAddress = typeof userAddresses.$inferSelect;
+export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
+export type UserOnboardingProgress = typeof userOnboardingProgress.$inferSelect;
+export type InsertUserOnboardingProgress = z.infer<typeof insertUserOnboardingProgressSchema>;
+export type UserDietaryPreferences = typeof userDietaryPreferences.$inferSelect;
+export type InsertUserDietaryPreferences = z.infer<typeof insertUserDietaryPreferencesSchema>;
+export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
+export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 
 export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
 export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;

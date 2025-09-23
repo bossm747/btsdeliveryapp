@@ -41,6 +41,7 @@ import { gpsTrackingService } from "./gps-tracking";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
 import * as aiServices from "./ai-services";
 import { riderAssignmentService } from "./riderAssignmentService";
+import { emailService } from "./integrations/email";
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -108,6 +109,26 @@ const authenticateToken = async (req: any, res: any, next: any) => {
 
     if (!user) {
       return res.status(401).json({ message: "User not found" });
+    }
+
+    // Check if user has verified their email (except for certain endpoints)
+    const allowUnverifiedPaths = [
+      '/api/auth/verify-email', 
+      '/api/auth/resend-verification', 
+      '/api/auth/me',
+      // Allow pending users to complete onboarding steps
+      '/api/user/address',
+      '/api/user/dietary-preferences',
+      '/api/user/notification-preferences',
+      '/api/user/onboarding-status'
+    ];
+    const isAllowedPath = allowUnverifiedPaths.some(path => req.path.startsWith(path));
+    
+    if (!isAllowedPath && user.status === "pending" && !user.emailVerifiedAt) {
+      return res.status(403).json({ 
+        message: "Email verification required. Please verify your email address to access this feature.",
+        requiresEmailVerification: true 
+      });
     }
 
     req.user = user;
@@ -213,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Create user
+      // Create user (not verified initially)
       const [newUser] = await db.insert(users).values({
         email,
         phone,
@@ -221,10 +242,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName,
         role,
         passwordHash,
-        status: "active"
+        status: "pending",
+        onboardingStep: "personal_info" // Start onboarding process
       }).returning();
 
-      // Create session
+      // Generate email verification token
+      const verificationToken = nanoid(64);
+      await storage.createEmailVerificationToken({
+        userId: newUser.id,
+        token: verificationToken,
+        email: email,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+
+      // Send verification email
+      try {
+        await emailService.sendEmailVerification(
+          email, 
+          `${firstName} ${lastName}`, 
+          verificationToken
+        );
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        // Continue with registration even if email fails
+      }
+
+      // Create default notification preferences
+      try {
+        await storage.createUserNotificationPreferences({
+          userId: newUser.id,
+          emailNotifications: true,
+          smsNotifications: true,
+          pushNotifications: true,
+          orderUpdates: true,
+          promotionalEmails: true,
+          restaurantUpdates: true,
+          loyaltyRewards: true,
+          securityAlerts: true,
+          weeklyDigest: false
+        });
+      } catch (error) {
+        console.error("Failed to create notification preferences:", error);
+      }
+
+      // Create session for continued onboarding
       const sessionToken = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
       const refreshToken = jwt.sign({ userId: newUser.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
       
@@ -243,9 +304,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { passwordHash: _, ...userResponse } = newUser;
 
       res.status(201).json({
-        message: "User created successfully",
+        message: "Account created successfully! Please check your email to verify your account.",
         user: userResponse,
-        token: sessionToken
+        token: sessionToken,
+        requiresEmailVerification: true,
+        onboardingStep: "personal_info"
       });
     } catch (error) {
       console.error("Registration error:", error);
@@ -277,8 +340,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      // Check if user is active
-      if (user.status !== "active") {
+      // Check if user is active and email is verified
+      if (user.status === "pending" && !user.emailVerifiedAt) {
+        return res.status(401).json({ 
+          message: "Please verify your email address before logging in. Check your email for the verification link.",
+          requiresEmailVerification: true 
+        });
+      }
+      
+      if (user.status !== "active" && user.status !== "pending") {
         return res.status(401).json({ message: "Account is suspended or inactive" });
       }
 
@@ -337,6 +407,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Logged out successfully" });
     } catch (error) {
       console.error("Logout error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Email Verification Routes
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.body;
+
+      if (!token) {
+        return res.status(400).json({ message: "Verification token is required" });
+      }
+
+      // Get verification token
+      const verificationToken = await storage.getEmailVerificationToken(token);
+      
+      if (!verificationToken) {
+        return res.status(400).json({ message: "Invalid or expired verification token" });
+      }
+
+      // Check if token is expired
+      if (new Date() > verificationToken.expiresAt) {
+        return res.status(400).json({ message: "Verification token has expired" });
+      }
+
+      // Mark email as verified and activate account
+      await storage.updateUser(verificationToken.userId, {
+        emailVerifiedAt: new Date(),
+        status: "active",
+        onboardingStep: "address"
+      });
+
+      // Mark token as used
+      await storage.markEmailVerificationTokenUsed(token);
+
+      // Complete onboarding step
+      await storage.completeOnboardingStep(verificationToken.userId, "verification");
+
+      res.json({ 
+        message: "Email verified successfully!",
+        nextStep: "address"
+      });
+    } catch (error) {
+      console.error("Email verification error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/resend-verification", authenticateToken, async (req: any, res) => {
+    try {
+      const user = req.user;
+
+      if (user.emailVerifiedAt) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Clean up old tokens
+      await storage.deleteExpiredEmailVerificationTokens();
+
+      // Generate new verification token
+      const verificationToken = nanoid(64);
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: verificationToken,
+        email: user.email,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+
+      // Send verification email
+      await emailService.sendEmailVerification(
+        user.email, 
+        `${user.firstName} ${user.lastName}`, 
+        verificationToken
+      );
+
+      res.json({ message: "Verification email sent successfully" });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Password Reset Routes
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ message: "If an account with that email exists, you will receive a password reset link." });
+      }
+
+      // Clean up old tokens
+      await storage.deleteExpiredPasswordResetTokens();
+
+      // Generate reset token
+      const resetToken = nanoid(64);
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token: resetToken,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+
+      // Send password reset email
+      await emailService.sendPasswordReset(
+        user.email,
+        `${user.firstName} ${user.lastName}`,
+        resetToken
+      );
+
+      res.json({ message: "If an account with that email exists, you will receive a password reset link." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: "Reset token and new password are required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      // Get reset token
+      const resetToken = await storage.getPasswordResetToken(token);
+      
+      if (!resetToken) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ message: "Reset token has expired" });
+      }
+
+      // Hash new password
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      // Update user password
+      await storage.updateUser(resetToken.userId, {
+        passwordHash,
+        updatedAt: new Date()
+      });
+
+      // Mark token as used
+      await storage.markPasswordResetTokenUsed(token);
+
+      // Delete all user sessions to force re-login
+      await db.delete(userSessions)
+        .where(eq(userSessions.userId, resetToken.userId));
+
+      res.json({ message: "Password reset successfully. Please log in with your new password." });
+    } catch (error) {
+      console.error("Reset password error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1704,6 +1943,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating customer profile:", error);
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // User Address Management Routes
+  app.post("/api/user/address", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const addressData = {
+        userId: req.user.id,
+        street: req.body.street,
+        barangay: req.body.barangay,
+        city: req.body.city,
+        province: req.body.province || "Batangas",
+        postalCode: req.body.postalCode,
+        isDefault: req.body.isDefault || true,
+        deliveryInstructions: req.body.deliveryInstructions
+      };
+
+      const address = await storage.createUserAddress(addressData);
+      
+      // Mark address step as completed
+      await storage.completeOnboardingStep(req.user.id, "address");
+      
+      res.json(address);
+    } catch (error) {
+      console.error("Error creating user address:", error);
+      res.status(500).json({ message: "Failed to save address" });
+    }
+  });
+
+  app.get("/api/user/addresses", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const addresses = await storage.getUserAddresses(req.user.id);
+      res.json(addresses);
+    } catch (error) {
+      console.error("Error fetching user addresses:", error);
+      res.status(500).json({ message: "Failed to fetch addresses" });
+    }
+  });
+
+  // User Dietary Preferences Routes
+  app.post("/api/user/dietary-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const preferencesData = {
+        userId: req.user.id,
+        dietaryRestrictions: req.body.dietaryRestrictions || [],
+        allergies: req.body.allergies || [],
+        preferredCuisines: req.body.preferredCuisines || [],
+        spiceLevel: req.body.spiceLevel || "medium"
+      };
+
+      const preferences = await storage.createUserDietaryPreferences(preferencesData);
+      
+      // Mark dietary preferences step as completed
+      await storage.completeOnboardingStep(req.user.id, "dietary_preferences");
+      
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error creating dietary preferences:", error);
+      res.status(500).json({ message: "Failed to save dietary preferences" });
+    }
+  });
+
+  app.get("/api/user/dietary-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const preferences = await storage.getUserDietaryPreferences(req.user.id);
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error fetching dietary preferences:", error);
+      res.status(500).json({ message: "Failed to fetch dietary preferences" });
+    }
+  });
+
+  // User Onboarding Status Routes
+  app.get("/api/user/onboarding-status", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const progress = await storage.getUserOnboardingProgress(req.user.id);
+      
+      // Check completion status for each step
+      const stepStatus = {
+        personal_info: { completed: true, completedAt: req.user.createdAt }, // Completed when user is created
+        address: progress.find(p => p.step === "address")?.isCompleted || false,
+        dietary_preferences: progress.find(p => p.step === "dietary_preferences")?.isCompleted || false,
+        notification_preferences: progress.find(p => p.step === "notification_preferences")?.isCompleted || false,
+        email_verification: !!req.user.emailVerifiedAt
+      };
+
+      const allCompleted = Object.values(stepStatus).every(step => 
+        typeof step === 'object' ? step.completed : step
+      );
+
+      // Update user onboarding completion status if all steps are done
+      if (allCompleted && !req.user.onboardingCompleted) {
+        await storage.updateUser(req.user.id, { 
+          onboardingCompleted: true,
+          onboardingStep: "completed"
+        });
+      }
+
+      res.json({
+        onboardingCompleted: allCompleted,
+        steps: stepStatus,
+        progress
+      });
+    } catch (error) {
+      console.error("Error fetching onboarding status:", error);
+      res.status(500).json({ message: "Failed to fetch onboarding status" });
+    }
+  });
+
+  // User Notification Preferences Routes
+  app.post("/api/user/notification-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const preferencesData = {
+        userId: req.user.id,
+        emailNotifications: req.body.emailNotifications ?? true,
+        smsNotifications: req.body.smsNotifications ?? true,
+        pushNotifications: req.body.pushNotifications ?? true,
+        orderUpdates: req.body.orderUpdates ?? true,
+        promotionalEmails: req.body.promotionalEmails ?? true,
+        restaurantUpdates: req.body.restaurantUpdates ?? true,
+        loyaltyRewards: req.body.loyaltyRewards ?? true,
+        securityAlerts: req.body.securityAlerts ?? true,
+        weeklyDigest: req.body.weeklyDigest ?? false
+      };
+
+      const preferences = await storage.createUserNotificationPreferences(preferencesData);
+      
+      // Mark notification preferences step as completed
+      await storage.completeOnboardingStep(req.user.id, "notification_preferences");
+      
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error creating notification preferences:", error);
+      res.status(500).json({ message: "Failed to save notification preferences" });
+    }
+  });
+
+  app.get("/api/user/notification-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const preferences = await storage.getUserNotificationPreferences(req.user.id);
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error fetching notification preferences:", error);
+      res.status(500).json({ message: "Failed to fetch notification preferences" });
+    }
+  });
+
+  app.patch("/api/user/notification-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const updates = req.body;
+      const preferences = await storage.updateUserNotificationPreferences(req.user.id, updates);
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error updating notification preferences:", error);
+      res.status(500).json({ message: "Failed to update notification preferences" });
     }
   });
 
