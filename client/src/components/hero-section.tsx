@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Search } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import btsRiderImage from "@assets/btsbroom Background Removed_1758627732509.png";
 
 export default function HeroSection() {
   const [, setLocation] = useLocation();
@@ -18,8 +19,20 @@ export default function HeroSection() {
   };
 
   return (
-    <section className="hero-gradient text-white" data-testid="hero-section">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+    <section 
+      className="hero-gradient text-white relative overflow-hidden" 
+      data-testid="hero-section"
+      style={{
+        backgroundImage: `url(${btsRiderImage})`,
+        backgroundSize: 'contain',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right center'
+      }}
+    >
+      {/* Translucent overlay to make background image opaque */}
+      <div className="absolute inset-0 bg-gradient-to-r from-[#004225]/95 via-[#004225]/80 to-[#004225]/60"></div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
             <div className="flex items-center space-x-4 mb-4">
