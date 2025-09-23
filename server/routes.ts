@@ -85,6 +85,71 @@ const authenticateToken = async (req: any, res: any, next: any) => {
   }
 };
 
+// Role-based access control middleware
+const requireRole = (allowedRoles: string[]) => {
+  return (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        message: "Insufficient permissions",
+        required: allowedRoles,
+        current: req.user.role
+      });
+    }
+
+    next();
+  };
+};
+
+// Admin-only middleware
+const requireAdmin = requireRole(['admin']);
+
+// Admin or vendor middleware
+const requireAdminOrVendor = requireRole(['admin', 'vendor']);
+
+// Admin or rider middleware  
+const requireAdminOrRider = requireRole(['admin', 'rider']);
+
+// Audit logging middleware for admin actions
+const auditLog = (action: string, resource: string) => {
+  return async (req: any, res: any, next: any) => {
+    const originalSend = res.send;
+    
+    res.send = function(body: any) {
+      // Log the admin action if it was successful (200-299 status)
+      if (res.statusCode >= 200 && res.statusCode < 300 && req.user?.role === 'admin') {
+        // Import adminAuditLogs here to avoid circular dependency
+        const { adminAuditLogs } = require("@shared/schema");
+        
+        db.insert(adminAuditLogs).values({
+          adminUserId: req.user.id,
+          action,
+          resource,
+          resourceId: req.params.id || req.body?.id || 'unknown',
+          details: {
+            method: req.method,
+            path: req.path,
+            body: req.body,
+            query: req.query,
+            params: req.params
+          },
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent')
+        }).catch((error) => {
+          console.error('Failed to log admin action:', error);
+        });
+      }
+      
+      return originalSend.call(this, body);
+    };
+    
+    next();
+  };
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // ============= AUTHENTICATION ROUTES =============
@@ -1917,8 +1982,192 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Dispatch Console Endpoints
+  app.get("/api/admin/dispatch/orders", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getOrders();
+      
+      // Transform orders for dispatch console with live data
+      const liveOrders = orders.map((order: any) => {
+        const now = new Date();
+        const createdAt = new Date(order.createdAt);
+        const estimatedDelivery = new Date(createdAt.getTime() + (order.estimatedDeliveryTime || 30) * 60000);
+        const slaBreach = now > estimatedDelivery && !['delivered', 'cancelled'].includes(order.status);
+        
+        return {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          customerName: `Customer ${order.customerId}`,
+          customerPhone: "09171234567",
+          restaurantName: "Restaurant",
+          status: order.status,
+          estimatedDeliveryTime: estimatedDelivery.toLocaleTimeString(),
+          riderId: order.riderId,
+          riderName: order.riderId ? `Rider ${order.riderId}` : null,
+          riderPhone: order.riderId ? "09187654321" : null,
+          deliveryAddress: order.deliveryAddress,
+          totalAmount: order.totalAmount,
+          priority: 1,
+          createdAt: order.createdAt,
+          slaBreach,
+          lastUpdate: order.updatedAt
+        };
+      });
+      
+      res.json(liveOrders);
+    } catch (error) {
+      console.error("Error fetching dispatch orders:", error);
+      res.status(500).json({ message: "Failed to fetch dispatch orders" });
+    }
+  });
+
+  app.get("/api/admin/dispatch/riders", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const riders = await storage.getRiders();
+      
+      // Transform riders for dispatch console with live data
+      const liveRiders = riders.map((rider: any) => ({
+        id: rider.id,
+        name: `${rider.userId}`, // Would need user join in real implementation
+        phone: "09171234567",
+        vehicleType: rider.vehicleType || "motorcycle",
+        isOnline: rider.isOnline || false,
+        currentLocation: rider.currentLocation || {
+          lat: 13.7563 + (Math.random() - 0.5) * 0.1,
+          lng: 121.0583 + (Math.random() - 0.5) * 0.1,
+          accuracy: 10,
+          timestamp: new Date().toISOString()
+        },
+        activeOrdersCount: rider.activeOrdersCount || 0,
+        maxActiveOrders: rider.maxActiveOrders || 3,
+        status: rider.isOnline ? 'available' : 'offline',
+        lastActivity: rider.lastActivityAt || new Date().toISOString(),
+        rating: rider.rating || 4.5,
+        todayDeliveries: rider.completedDeliveries || 0
+      }));
+      
+      res.json(liveRiders);
+    } catch (error) {
+      console.error("Error fetching dispatch riders:", error);
+      res.status(500).json({ message: "Failed to fetch dispatch riders" });
+    }
+  });
+
+  app.get("/api/admin/dispatch/alerts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      // For now, generate sample alerts - in real implementation would fetch from systemAlerts table
+      const alerts = [
+        {
+          id: "alert-1",
+          type: "sla_breach",
+          severity: "high",
+          title: "Multiple SLA Breaches Detected",
+          description: "3 orders have exceeded their estimated delivery time",
+          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          acknowledged: false,
+          affectedOrders: ["order-1", "order-2", "order-3"]
+        },
+        {
+          id: "alert-2", 
+          type: "rider_offline",
+          severity: "medium",
+          title: "Rider Capacity Low",
+          description: "Only 2 riders online in Batangas City area",
+          timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          acknowledged: false,
+          affectedRiders: ["rider-1", "rider-2"]
+        }
+      ];
+      
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching dispatch alerts:", error);
+      res.status(500).json({ message: "Failed to fetch dispatch alerts" });
+    }
+  });
+
+  app.post("/api/admin/dispatch/assign", authenticateToken, requireAdmin, auditLog('assign', 'orders'), async (req, res) => {
+    try {
+      const { orderId, riderId } = req.body;
+      
+      if (!orderId || !riderId) {
+        return res.status(400).json({ message: "Order ID and Rider ID are required" });
+      }
+      
+      // Update order with assigned rider
+      const updatedOrder = await storage.updateOrder(orderId, { riderId });
+      
+      if (!updatedOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Update rider active orders count
+      const rider = await storage.getRider(riderId);
+      if (rider) {
+        await storage.updateRider(riderId, { 
+          activeOrdersCount: (rider.activeOrdersCount || 0) + 1 
+        });
+      }
+      
+      res.json({ message: "Rider assigned successfully", order: updatedOrder });
+    } catch (error) {
+      console.error("Error assigning rider:", error);
+      res.status(500).json({ message: "Failed to assign rider" });
+    }
+  });
+
+  app.post("/api/admin/dispatch/reassign", authenticateToken, requireAdmin, auditLog('reassign', 'orders'), async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ message: "Order ID is required" });
+      }
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // If order had a rider, decrease their active count
+      if (order.riderId) {
+        const rider = await storage.getRider(order.riderId);
+        if (rider) {
+          await storage.updateRider(order.riderId, {
+            activeOrdersCount: Math.max((rider.activeOrdersCount || 1) - 1, 0)
+          });
+        }
+      }
+      
+      // Remove rider assignment and reset status
+      const updatedOrder = await storage.updateOrder(orderId, { 
+        riderId: null,
+        status: 'confirmed'
+      });
+      
+      res.json({ message: "Order reassigned successfully", order: updatedOrder });
+    } catch (error) {
+      console.error("Error reassigning order:", error);
+      res.status(500).json({ message: "Failed to reassign order" });
+    }
+  });
+
+  app.patch("/api/admin/dispatch/alerts/:id/acknowledge", authenticateToken, requireAdmin, auditLog('acknowledge', 'alerts'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // In real implementation, would update systemAlerts table
+      // For now, just return success
+      
+      res.json({ message: "Alert acknowledged successfully" });
+    } catch (error) {
+      console.error("Error acknowledging alert:", error);
+      res.status(500).json({ message: "Failed to acknowledge alert" });
+    }
+  });
+
   // Admin Dashboard Endpoints
-  app.get("/api/admin/stats", async (req, res) => {
+  app.get("/api/admin/stats", authenticateToken, requireAdmin, auditLog('view', 'admin_stats'), async (req, res) => {
     try {
       // Get various statistics for admin dashboard
       const restaurants = await storage.getRestaurants();

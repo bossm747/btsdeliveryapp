@@ -28,6 +28,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import AdminAnalytics from "@/components/admin/admin-analytics";
+import DispatchConsole from "@/components/admin/dispatch-console";
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -155,8 +156,9 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="analytics" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue="dispatch" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="dispatch">Live Dispatch</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="restaurants">Restaurants</TabsTrigger>
@@ -164,6 +166,10 @@ export default function AdminDashboard() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="dispatch" className="space-y-4">
+          <DispatchConsole />
+        </TabsContent>
 
         <TabsContent value="analytics" className="space-y-4">
           <AdminAnalytics stats={stats} />
