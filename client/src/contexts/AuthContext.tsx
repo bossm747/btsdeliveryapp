@@ -110,6 +110,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.setItem("userId", result.user.id);
 
     setUser(result.user);
+    
+    // Navigate based on user role after setting user state
+    window.location.href = 
+      result.user.role === "customer" ? "/customer-dashboard" :
+      result.user.role === "vendor" ? "/vendor-dashboard" :
+      result.user.role === "rider" ? "/rider-dashboard" :
+      result.user.role === "admin" ? "/admin/dispatch" : "/";
   };
 
   const register = async (userData: RegisterData) => {

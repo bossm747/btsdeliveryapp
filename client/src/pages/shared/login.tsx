@@ -74,23 +74,7 @@ export default function Login() {
         description: `Welcome back, ${result.user.firstName || result.user.email}!`,
       });
 
-      // Redirect to role-specific dashboard
-      switch (result.user.role) {
-        case "customer":
-          navigate("/customer-dashboard");
-          break;
-        case "vendor":
-          navigate("/vendor-dashboard");
-          break;
-        case "rider":
-          navigate("/rider-dashboard");
-          break;
-        case "admin":
-          navigate("/admin/dispatch");
-          break;
-        default:
-          navigate("/");
-      }
+      // Navigation is now handled by AuthContext after setting user state
     } catch (err) {
       setError("Network error. Please check your connection and try again.");
     } finally {
