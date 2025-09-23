@@ -20,6 +20,7 @@ import {
   Twitter
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import btsRiderImage from "@assets/btsbroom Background Removed_1758627732509.png";
 
 export default function Landing() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
@@ -97,8 +98,18 @@ export default function Landing() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
+      <section 
+        className="py-20 px-4 relative overflow-hidden"
+        style={{
+          backgroundImage: `url(${btsRiderImage})`,
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right center'
+        }}
+      >
+        {/* Translucent overlay to make background image opaque */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-white/60"></div>
+        <div className="container mx-auto text-center relative z-10">
           <div className="max-w-4xl mx-auto">
             <Badge className="bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] text-white border-0 mb-6">
               #1 Delivery Platform sa Batangas
