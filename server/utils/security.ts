@@ -49,12 +49,12 @@ export class SecurityUtils {
     }
     
     return jwt.sign(payload, secret, {
-      expiresIn,
+      expiresIn: expiresIn as string | number,
       issuer,
       audience,
       subject: payload.userId?.toString(),
       jwtid: this.generateSecureToken(16)
-    });
+    } as jwt.SignOptions);
   }
   
   // Verify JWT tokens
@@ -243,12 +243,12 @@ export class SecurityUtils {
   private static generateCSP(): string {
     const directives = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://maps.googleapis.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://api.stripe.com https://maps.googleapis.com wss: ws:",
-      "frame-src 'self' https://js.stripe.com",
+      "connect-src 'self' https://maps.googleapis.com wss: ws:",
+      "frame-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

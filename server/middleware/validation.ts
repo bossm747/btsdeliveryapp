@@ -319,7 +319,7 @@ export const paymentSchemas = {
     orderId: commonSchemas.uuid,
     amount: commonSchemas.nonNegativeNumber,
     currency: z.string().length(3, 'Invalid currency code').default('PHP'),
-    paymentMethod: z.enum(['stripe', 'nexuspay', 'gcash', 'paymaya']),
+    paymentMethod: z.enum(['nexuspay', 'gcash', 'paymaya']),
     metadata: z.record(z.any()).optional()
   }),
   

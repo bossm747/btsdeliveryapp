@@ -12,7 +12,6 @@ export const securityHeaders = helmet({
         "'self'",
         "'unsafe-inline'", // Required for Vite in development
         "'unsafe-eval'", // Required for Vite in development
-        "https://js.stripe.com",
         "https://maps.googleapis.com",
         "https://www.google.com",
         "https://www.gstatic.com"
@@ -37,15 +36,12 @@ export const securityHeaders = helmet({
       ],
       connectSrc: [
         "'self'",
-        "https://api.stripe.com",
         "https://maps.googleapis.com",
         "wss://localhost:*", // For WebSocket in development
         "ws://localhost:*"   // For WebSocket in development
       ],
       frameSrc: [
-        "'self'",
-        "https://js.stripe.com",
-        "https://hooks.stripe.com"
+        "'self'"
       ],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],

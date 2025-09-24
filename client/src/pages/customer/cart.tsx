@@ -35,7 +35,7 @@ const deliveryAddressSchema = z.object({
 
 const orderSchema = z.object({
   deliveryAddress: deliveryAddressSchema,
-  paymentProvider: z.enum(['stripe', 'nexuspay', 'cod']).default('nexuspay'),
+  paymentProvider: z.enum(['nexuspay', 'cod']).default('nexuspay'),
   paymentMethodType: z.string().optional(),
   specialInstructions: z.string().optional(),
   tip: z.number().min(0).optional(),
@@ -97,7 +97,7 @@ export default function Cart() {
   const queryClient = useQueryClient();
 
   // Enhanced state management for comprehensive payment system
-  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'stripe' | 'nexuspay' | 'cod'>('nexuspay');
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'nexuspay' | 'cod'>('nexuspay');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [pricingCalculation, setPricingCalculation] = useState<any>(null);
   const [isCalculatingPricing, setIsCalculatingPricing] = useState(false);
@@ -202,7 +202,7 @@ export default function Cart() {
         // Cash on delivery - no payment processing needed
         return { order, paymentType: "cod" };
         
-      } else if (orderData.paymentProvider === "stripe" || orderData.paymentProvider === "nexuspay") {
+      } else if (orderData.paymentProvider === "nexuspay") {
         // Create payment with comprehensive pricing
         const paymentResponse = await apiRequest("POST", "/api/payment/create-with-pricing", {
           orderId: order.id,
@@ -226,25 +226,14 @@ export default function Cart() {
         const paymentData = await paymentResponse.json();
         
         if (paymentData.success) {
-          if (orderData.paymentProvider === "stripe") {
-            // Return Stripe payment intent for client-side confirmation
-            return { 
-              order, 
-              paymentType: "stripe", 
-              clientSecret: paymentData.clientSecret,
-              paymentIntentId: paymentData.paymentIntentId,
-              pricing: paymentData.pricing
-            };
-          } else {
-            // Redirect to NexusPay payment page
-            return { 
-              order, 
-              paymentType: "nexuspay", 
-              paymentLink: paymentData.paymentLink,
-              transactionId: paymentData.transactionId,
-              pricing: paymentData.pricing
-            };
-          }
+          // Redirect to NexusPay payment page
+          return { 
+            order, 
+            paymentType: "nexuspay", 
+            paymentLink: paymentData.paymentLink,
+            transactionId: paymentData.transactionId,
+            pricing: paymentData.pricing
+          };
         } else {
           throw new Error(paymentData.message || "Payment creation failed");
         }
@@ -260,18 +249,6 @@ export default function Cart() {
           title: "Order placed successfully!",
           description: `Your order #${order.orderNumber} will be paid on delivery.`,
         });
-        clearCart();
-        queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-        setLocation(`/order/${order.id}`);
-        
-      } else if (paymentType === "stripe") {
-        // Handle Stripe payment confirmation (would need Stripe Elements integration)
-        toast({
-          title: "Redirecting to payment...",
-          description: "Please complete your payment to confirm the order.",
-        });
-        // TODO: Integrate with Stripe Elements for client-side confirmation
-        // For now, redirect to order page
         clearCart();
         queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
         setLocation(`/order/${order.id}`);

@@ -52,7 +52,7 @@ export const SecurityConfig = {
   // Payment security configurations
   payment: {
     maxAmount: 50000, // PHP 50,000
-    allowedMethods: ['stripe', 'nexuspay', 'gcash', 'paymaya', 'cash'],
+    allowedMethods: ['nexuspay', 'gcash', 'paymaya', 'cash'],
     fraudDetection: {
       highRiskThreshold: 80,
       mediumRiskThreshold: 50,
@@ -116,7 +116,6 @@ export const SecurityConfig = {
         "'self'",
         "'unsafe-inline'", // Required for Vite in development
         "'unsafe-eval'", // Required for Vite in development
-        "https://js.stripe.com",
         "https://maps.googleapis.com",
         "https://www.google.com",
         "https://www.gstatic.com"
@@ -141,15 +140,12 @@ export const SecurityConfig = {
       ],
       connectSrc: [
         "'self'",
-        "https://api.stripe.com",
         "https://maps.googleapis.com",
         "wss://localhost:*", // For WebSocket in development
         "ws://localhost:*"   // For WebSocket in development
       ],
       frameSrc: [
-        "'self'",
-        "https://js.stripe.com",
-        "https://hooks.stripe.com"
+        "'self'"
       ],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -200,7 +196,7 @@ export const SecurityConfig = {
       /(insert.*into)/i,
       /(update.*set)/i,
       /(delete.*from)/i,
-      /(\.\.\//),
+      /(\.\.\/)/,
       /(etc\/passwd)/i,
       /(cmd\.exe)/i,
       /(\/bin\/)/i

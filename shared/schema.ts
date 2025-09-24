@@ -566,7 +566,7 @@ export const orders = pgTable("orders", {
   paymentMethod: varchar("payment_method", { length: 50 }).notNull().default("cash"), // cash, gcash, maya, card
   paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"), // pending, processing, paid, failed, refunded, cancelled
   paymentTransactionId: varchar("payment_transaction_id", { length: 100 }),
-  paymentProvider: varchar("payment_provider", { length: 50 }), // stripe, nexuspay, cash
+  paymentProvider: varchar("payment_provider", { length: 50 }), // nexuspay, cash
   
   // Delivery Information
   deliveryAddress: jsonb("delivery_address").notNull(), // Enhanced with coordinates, landmarks, etc.
@@ -1323,7 +1323,7 @@ export const customerPaymentMethods = pgTable("customer_payment_methods", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: uuid("customer_id").references(() => users.id).notNull(),
   type: varchar("type", { length: 20 }).notNull(), // card, gcash, maya, bank_account
-  provider: varchar("provider", { length: 50 }).notNull(), // stripe, paymongo, nexuspay
+  provider: varchar("provider", { length: 50 }).notNull(), // paymongo, nexuspay
   
   // Tokenized payment data (never store actual card details)
   token: varchar("token", { length: 255 }).notNull(), // Provider token/ID
@@ -1348,7 +1348,7 @@ export const customerPaymentMethods = pgTable("customer_payment_methods", {
 export const paymentWebhookEvents = pgTable("payment_webhook_events", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   paymentId: uuid("payment_id").references(() => payments.id),
-  provider: varchar("provider", { length: 50 }).notNull(), // stripe, nexuspay, paymongo
+  provider: varchar("provider", { length: 50 }).notNull(), // nexuspay, paymongo
   eventType: varchar("event_type", { length: 100 }).notNull(), // payment_intent.succeeded, etc.
   webhookId: varchar("webhook_id", { length: 255 }), // Provider webhook ID
   

@@ -35,7 +35,6 @@ import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
-import { StripeProvider } from "./integrations/payment";
 import { enhancedPricingService, pricingService, type OrderType, type VehicleType, type PaymentMethodType } from "./services/pricing";
 import { financialAnalyticsService } from "./services/financial-analytics";
 import * as geminiAI from "./services/gemini";
@@ -63,14 +62,6 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is required");
 }
 
-// Initialize payment providers
-let stripeProvider: StripeProvider | null = null;
-try {
-  stripeProvider = new StripeProvider();
-  console.log('Stripe provider initialized successfully');
-} catch (error) {
-  console.warn('Stripe provider initialization failed:', error);
-}
 
 // Extend Express Request interface to include user property
 declare global {
@@ -1109,7 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     amount: z.number().min(0.01).max(500000),
     currency: z.string().default('php'),
     orderId: z.string(),
-    paymentProvider: z.enum(['stripe', 'nexuspay']).default('nexuspay'),
+    paymentProvider: z.enum(['nexuspay']).default('nexuspay'),
     paymentMethodType: z.string().optional(),
     customerId: z.string().optional(),
     metadata: z.record(z.any()).optional(),
@@ -1184,71 +1175,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...metadata
       };
 
-      let paymentResult;
+      // Create NexusPay payment
+      const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+      const webhookUrl = `${baseUrl}/api/payment/webhook`;
+      const redirectUrl = `${baseUrl}/order/${orderId}/payment-result`;
 
-      if (paymentProvider === 'stripe' && stripeProvider) {
-        // Create Stripe payment intent
-        paymentResult = await stripeProvider.createPaymentIntent(
-          finalAmount,
-          currency,
-          enhancedMetadata
-        );
-
-        // Store payment info in order
-        await storage.updateOrder(orderId, {
-          paymentTransactionId: paymentResult.id,
-          paymentStatus: 'pending',
-          paymentProvider: 'stripe',
-          totalAmount: finalAmount.toString()
-        });
-
-        res.json({
-          success: true,
-          paymentProvider: 'stripe',
-          clientSecret: paymentResult.client_secret,
-          paymentIntentId: paymentResult.id,
-          amount: paymentResult.amount / 100,
-          currency: paymentResult.currency,
-          metadata: paymentResult.metadata
-        });
-
-      } else {
-        // Create NexusPay payment
-        const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
-        const webhookUrl = `${baseUrl}/api/payment/webhook`;
-        const redirectUrl = `${baseUrl}/order/${orderId}/payment-result`;
-
-        // Determine payment method code for NexusPay
-        let paymentMethodCode: string | undefined;
-        if (paymentMethodType && paymentMethodType in NEXUSPAY_CODES) {
-          paymentMethodCode = NEXUSPAY_CODES[paymentMethodType as keyof typeof NEXUSPAY_CODES];
-        }
-
-        paymentResult = await nexusPayService.createCashInPayment(
-          finalAmount,
-          webhookUrl,
-          redirectUrl,
-          paymentMethodCode,
-          enhancedMetadata
-        );
-
-        // Store payment info in order
-        await storage.updateOrder(orderId, {
-          paymentTransactionId: paymentResult.transactionId,
-          paymentStatus: 'pending',
-          paymentProvider: 'nexuspay',
-          totalAmount: finalAmount.toString()
-        });
-
-        res.json({
-          success: true,
-          paymentProvider: 'nexuspay',
-          paymentLink: paymentResult.link,
-          transactionId: paymentResult.transactionId,
-          amount: finalAmount,
-          currency: 'PHP'
-        });
+      // Determine payment method code for NexusPay
+      let paymentMethodCode: string | undefined;
+      if (paymentMethodType && paymentMethodType in NEXUSPAY_CODES) {
+        paymentMethodCode = NEXUSPAY_CODES[paymentMethodType as keyof typeof NEXUSPAY_CODES];
       }
+
+      const paymentResult = await nexusPayService.createCashInPayment(
+        finalAmount,
+        webhookUrl,
+        redirectUrl,
+        paymentMethodCode,
+        enhancedMetadata
+      );
+
+      // Store payment info in order
+      await storage.updateOrder(orderId, {
+        paymentTransactionId: paymentResult.transactionId,
+        paymentStatus: 'pending',
+        paymentProvider: 'nexuspay',
+        totalAmount: finalAmount.toString()
+      });
+
+      res.json({
+        success: true,
+        paymentProvider: 'nexuspay',
+        paymentLink: paymentResult.link,
+        transactionId: paymentResult.transactionId,
+        amount: finalAmount,
+        currency: 'PHP'
+      });
 
     } catch (error: any) {
       console.error("Error creating payment:", error);
@@ -1268,66 +1229,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enhanced Payment Webhook Endpoint - Supports both Stripe and NexusPay
+  // Payment Webhook Endpoint - NexusPay
   app.post("/api/payment/webhook", async (req, res) => {
     try {
-      const signature = req.headers['stripe-signature'] as string;
       const nexusSignature = req.headers['x-nexuspay-signature'] as string;
       
-      let paymentProvider: 'stripe' | 'nexuspay' = 'nexuspay';
-      let webhookEvent: any;
+      const paymentProvider: 'nexuspay' = 'nexuspay';
 
-      if (signature && stripeProvider) {
-        // Stripe webhook processing
-        paymentProvider = 'stripe';
-        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-        
-        if (!webhookSecret) {
-          return res.status(400).json({ error: 'Stripe webhook secret not configured' });
-        }
-
-        try {
-          // Verify Stripe webhook signature
-          const isValid = stripeProvider.verifyWebhookSignature(req.body, signature, webhookSecret);
-          if (!isValid) {
-            return res.status(400).json({ error: 'Invalid webhook signature' });
-          }
-
-          webhookEvent = stripeProvider.constructWebhookEvent(req.body, signature, webhookSecret);
-        } catch (error) {
-          console.error('Stripe webhook signature verification failed:', error);
-          return res.status(400).json({ error: 'Webhook signature verification failed' });
-        }
-
-        // Handle Stripe webhook events
-        const { type, data } = webhookEvent;
-        const paymentIntent = data.object;
-
-        switch (type) {
-          case 'payment_intent.succeeded':
-            await handlePaymentSuccess(paymentIntent.id, paymentProvider, {
-              amount: paymentIntent.amount / 100,
-              currency: paymentIntent.currency,
-              metadata: paymentIntent.metadata
-            });
-            break;
-
-          case 'payment_intent.payment_failed':
-            await handlePaymentFailure(paymentIntent.id, paymentProvider, {
-              error: data.last_payment_error?.message || 'Payment failed'
-            });
-            break;
-
-          case 'payment_intent.canceled':
-            await handlePaymentCancellation(paymentIntent.id, paymentProvider);
-            break;
-
-          default:
-            console.log(`Unhandled Stripe event type: ${type}`);
-        }
-
-      } else if (nexusSignature || !signature) {
-        // NexusPay webhook processing
+      // NexusPay webhook processing
         const { transactionId, status, amount, orderId } = req.body;
 
         // Verify NexusPay webhook signature if provided
@@ -1360,7 +1269,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (status === 'canceled' || status === 'cancelled') {
           await handlePaymentCancellation(transactionId, paymentProvider);
         }
-      }
       
       res.json({ received: true });
     } catch (error) {
@@ -1370,7 +1278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Helper functions for webhook event handling
-  async function handlePaymentSuccess(transactionId: string, provider: 'stripe' | 'nexuspay', data: any) {
+  async function handlePaymentSuccess(transactionId: string, provider: 'nexuspay', data: any) {
     try {
       // Find order with this transaction ID
       const orders = await storage.getOrders();
@@ -1398,7 +1306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  async function handlePaymentFailure(transactionId: string, provider: 'stripe' | 'nexuspay', data: any) {
+  async function handlePaymentFailure(transactionId: string, provider: 'nexuspay', data: any) {
     try {
       const orders = await storage.getOrders();
       const order = orders.find(o => o.paymentTransactionId === transactionId);
@@ -1424,7 +1332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  async function handlePaymentCancellation(transactionId: string, provider: 'stripe' | 'nexuspay') {
+  async function handlePaymentCancellation(transactionId: string, provider: 'nexuspay') {
     try {
       const orders = await storage.getOrders();
       const order = orders.find(o => o.paymentTransactionId === transactionId);
@@ -1464,31 +1372,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      let status, details;
-
-      if (order.paymentProvider === 'stripe' && stripeProvider) {
-        // Get Stripe payment status
-        status = await stripeProvider.getPaymentStatus(transactionId);
-        details = {
-          provider: 'stripe',
-          status,
-          orderId: order.id,
-          amount: order.totalAmount,
-          currency: 'PHP'
-        };
-      } else {
-        // Get NexusPay payment status
-        const nexusStatus = await nexusPayService.getTransactionDetails(transactionId);
-        status = nexusStatus.status || order.paymentStatus;
-        details = {
-          provider: 'nexuspay',
-          status,
-          orderId: order.id,
-          amount: order.totalAmount,
-          currency: 'PHP',
-          nexusDetails: nexusStatus
-        };
-      }
+      // Get NexusPay payment status
+      const nexusStatus = await nexusPayService.getTransactionDetails(transactionId);
+      const status = nexusStatus.status || order.paymentStatus;
+      const details = {
+        provider: 'nexuspay',
+        status,
+        orderId: order.id,
+        amount: order.totalAmount,
+        currency: 'PHP',
+        nexusDetails: nexusStatus
+      };
 
       res.json({
         success: true,
@@ -1504,74 +1398,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Confirm Payment - For Stripe payments requiring client-side confirmation
-  app.post("/api/payment/confirm", authenticateToken, async (req, res) => {
-    try {
-      const validatedData = confirmPaymentSchema.parse(req.body);
-      const { paymentIntentId, paymentMethodId, orderId } = validatedData;
-
-      // Find the order
-      const order = await storage.getOrder(orderId);
-      if (!order) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Order not found" 
-        });
-      }
-
-      if (order.userId !== req.user?.id) {
-        return res.status(403).json({ 
-          success: false, 
-          message: "Access denied" 
-        });
-      }
-
-      if (!stripeProvider) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Stripe not configured" 
-        });
-      }
-
-      // Confirm the payment with Stripe
-      const result = await stripeProvider.confirmPayment(paymentIntentId, paymentMethodId);
-
-      // Update order status based on payment result
-      if (result.status === 'succeeded') {
-        await storage.updateOrder(orderId, {
-          paymentStatus: 'paid',
-          paidAt: new Date().toISOString(),
-        });
-      } else if (result.status === 'requires_action') {
-        // Payment requires additional action (3D Secure, etc.)
-        await storage.updateOrder(orderId, {
-          paymentStatus: 'requires_action'
-        });
-      }
-
-      res.json({
-        success: true,
-        paymentStatus: result.status,
-        paymentIntent: result
-      });
-
-    } catch (error: any) {
-      console.error("Error confirming payment:", error);
-      
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          success: false,
-          message: "Invalid payment confirmation data",
-          errors: error.errors
-        });
-      }
-
-      res.status(500).json({ 
-        success: false,
-        message: error.message || "Failed to confirm payment" 
-      });
-    }
-  });
 
   // Process Refund - Supports both providers
   app.post("/api/payment/refund", authenticateToken, async (req, res) => {
@@ -1605,21 +1431,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      let refundResult;
-
-      if (order.paymentProvider === 'stripe' && stripeProvider) {
-        // Process Stripe refund
-        refundResult = await stripeProvider.refund(paymentIntentId, amount, reason);
-      } else {
-        // Note: NexusPay refund functionality would need to be implemented
-        // For now, we'll create a manual refund record
-        refundResult = {
-          id: `refund_${nanoid()}`,
-          status: 'pending_manual_review',
-          amount: amount || parseFloat(order.totalAmount || '0'),
-          reason: reason || 'Customer request',
-        };
-      }
+      // NexusPay refund functionality
+      // For now, we'll create a manual refund record
+      const refundResult = {
+        id: `refund_${nanoid()}`,
+        status: 'pending_manual_review',
+        amount: amount || parseFloat(order.totalAmount || '0'),
+        reason: reason || 'Customer request',
+      };
 
       // Update order status
       await storage.updateOrder(orderId, {
@@ -1630,9 +1449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         refund: refundResult,
-        message: order.paymentProvider === 'stripe' ? 
-          "Refund processed successfully" : 
-          "Refund request submitted for manual review"
+        message: "Refund request submitted for manual review"
       });
 
     } catch (error: any) {
@@ -1657,19 +1474,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment/methods/available", async (req, res) => {
     try {
       const methods = [];
-
-      // Add Stripe methods if available
-      if (stripeProvider) {
-        methods.push({
-          provider: 'stripe',
-          type: 'card',
-          name: 'Credit/Debit Card',
-          description: 'Visa, Mastercard, and other major cards',
-          category: 'card',
-          icon: 'credit-card',
-          enabled: true
-        });
-      }
 
       // Add NexusPay methods (Filipino payment options)
       const nexusPayMethods = nexusPayService.getAvailablePaymentMethods();
@@ -1710,109 +1514,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer Payment Method Management
-  app.get("/api/payment/methods", authenticateToken, async (req, res) => {
-    try {
-      if (!stripeProvider) {
-        return res.json({
-          success: true,
-          methods: [],
-          message: "Payment method storage not available"
-        });
-      }
-
-      // Get or create Stripe customer
-      let customer;
-      try {
-        // Try to get existing customer (would need customer ID stored in user record)
-        const stripeCustomerId = req.user?.stripeCustomerId;
-        if (stripeCustomerId) {
-          customer = await stripeProvider.getCustomer(stripeCustomerId);
-        }
-      } catch (error) {
-        // Create new customer if not found
-        customer = await stripeProvider.createCustomer({
-          email: req.user?.email,
-          firstName: req.user?.firstName,
-          lastName: req.user?.lastName,
-          phone: req.user?.phone,
-          userId: req.user?.id,
-        });
-        
-        // TODO: Store stripeCustomerId in user record
-        // await storage.updateUser(req.user.id, { stripeCustomerId: customer.id });
-      }
-
-      // Get saved payment methods
-      const paymentMethods = await stripeProvider.listPaymentMethods(customer.id);
-
-      res.json({
-        success: true,
-        customerId: customer.id,
-        methods: paymentMethods
-      });
-
-    } catch (error: any) {
-      console.error("Error fetching payment methods:", error);
-      res.status(500).json({ 
-        success: false,
-        message: error.message || "Failed to fetch payment methods" 
-      });
-    }
-  });
-
-  // Create Setup Intent for saving payment methods
-  app.post("/api/payment/setup-intent", authenticateToken, async (req, res) => {
-    try {
-      if (!stripeProvider) {
-        return res.status(400).json({ 
-          success: false,
-          message: "Payment method storage not available" 
-        });
-      }
-
-      // Get or create Stripe customer
-      let customer;
-      try {
-        const stripeCustomerId = req.user?.stripeCustomerId;
-        if (stripeCustomerId) {
-          customer = await stripeProvider.getCustomer(stripeCustomerId);
-        } else {
-          throw new Error('Customer not found');
-        }
-      } catch (error) {
-        customer = await stripeProvider.createCustomer({
-          email: req.user?.email,
-          firstName: req.user?.firstName,
-          lastName: req.user?.lastName,
-          phone: req.user?.phone,
-          userId: req.user?.id,
-        });
-      }
-
-      // Create setup intent
-      const setupIntent = await stripeProvider.createSetupIntent(customer.id, {
-        userId: req.user?.id,
-      });
-
-      res.json({
-        success: true,
-        setupIntent: {
-          id: setupIntent.id,
-          client_secret: setupIntent.client_secret,
-          status: setupIntent.status
-        },
-        customerId: customer.id
-      });
-
-    } catch (error: any) {
-      console.error("Error creating setup intent:", error);
-      res.status(500).json({ 
-        success: false,
-        message: error.message || "Failed to create setup intent" 
-      });
-    }
-  });
 
   // ===================
   // PRICING API ROUTES
@@ -2378,7 +2079,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weight: z.number().optional(),
         
         // Payment preferences
-        paymentProvider: z.enum(['stripe', 'nexuspay']).default('nexuspay'),
+        paymentProvider: z.enum(['nexuspay']).default('nexuspay'),
         paymentMethodType: z.string().optional(),
         
         // Additional options
@@ -2438,77 +2139,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData.metadata
       };
 
-      let paymentResult;
+      // Create NexusPay payment
+      const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+      const webhookUrl = `${baseUrl}/api/payment/webhook`;
+      const redirectUrl = `${baseUrl}/order/${validatedData.orderId}/payment-result`;
 
-      if (validatedData.paymentProvider === 'stripe' && stripeProvider) {
-        // Create Stripe payment intent
-        paymentResult = await stripeProvider.createPaymentIntent(
-          finalAmount,
-          'php',
-          enhancedMetadata
-        );
-
-        // Store comprehensive order info
-        await storage.updateOrder(validatedData.orderId, {
-          paymentTransactionId: paymentResult.id,
-          paymentStatus: 'pending',
-          paymentProvider: 'stripe',
-          totalAmount: finalAmount.toString(),
-          deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
-          serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
-          tax: pricingCalculation.serviceFees.tax.toString(),
-        });
-
-        res.json({
-          success: true,
-          paymentProvider: 'stripe',
-          clientSecret: paymentResult.client_secret,
-          paymentIntentId: paymentResult.id,
-          pricing: pricingCalculation,
-          finalAmount,
-          currency: 'PHP'
-        });
-
-      } else {
-        // Create NexusPay payment
-        const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
-        const webhookUrl = `${baseUrl}/api/payment/webhook`;
-        const redirectUrl = `${baseUrl}/order/${validatedData.orderId}/payment-result`;
-
-        let paymentMethodCode: string | undefined;
-        if (validatedData.paymentMethodType && validatedData.paymentMethodType in NEXUSPAY_CODES) {
-          paymentMethodCode = NEXUSPAY_CODES[validatedData.paymentMethodType as keyof typeof NEXUSPAY_CODES];
-        }
-
-        paymentResult = await nexusPayService.createCashInPayment(
-          finalAmount,
-          webhookUrl,
-          redirectUrl,
-          paymentMethodCode,
-          enhancedMetadata
-        );
-
-        // Store comprehensive order info
-        await storage.updateOrder(validatedData.orderId, {
-          paymentTransactionId: paymentResult.transactionId,
-          paymentStatus: 'pending',
-          paymentProvider: 'nexuspay',
-          totalAmount: finalAmount.toString(),
-          deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
-          serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
-          tax: pricingCalculation.serviceFees.tax.toString(),
-        });
-
-        res.json({
-          success: true,
-          paymentProvider: 'nexuspay',
-          paymentLink: paymentResult.link,
-          transactionId: paymentResult.transactionId,
-          pricing: pricingCalculation,
-          finalAmount,
-          currency: 'PHP'
-        });
+      let paymentMethodCode: string | undefined;
+      if (validatedData.paymentMethodType && validatedData.paymentMethodType in NEXUSPAY_CODES) {
+        paymentMethodCode = NEXUSPAY_CODES[validatedData.paymentMethodType as keyof typeof NEXUSPAY_CODES];
       }
+
+      const paymentResult = await nexusPayService.createCashInPayment(
+        finalAmount,
+        webhookUrl,
+        redirectUrl,
+        paymentMethodCode,
+        enhancedMetadata
+      );
+
+      // Store comprehensive order info
+      await storage.updateOrder(validatedData.orderId, {
+        paymentTransactionId: paymentResult.transactionId,
+        paymentStatus: 'pending',
+        paymentProvider: 'nexuspay',
+        totalAmount: finalAmount.toString(),
+        deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
+        serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
+        tax: pricingCalculation.serviceFees.tax.toString(),
+      });
+
+      res.json({
+        success: true,
+        paymentProvider: 'nexuspay',
+        paymentLink: paymentResult.link,
+        transactionId: paymentResult.transactionId,
+        pricing: pricingCalculation,
+        finalAmount,
+        currency: 'PHP'
+      });
 
     } catch (error: any) {
       console.error("Error creating payment with pricing:", error);

@@ -148,16 +148,6 @@ function convertToAppError(err: Error): AppError {
     );
   }
   
-  // Stripe errors
-  if (err.name === 'StripeError') {
-    return new AppError(
-      'Payment processing failed',
-      ErrorType.EXTERNAL_SERVICE,
-      402,
-      true
-    );
-  }
-  
   // Default to internal server error
   return new AppError(
     err.message || 'Internal server error',

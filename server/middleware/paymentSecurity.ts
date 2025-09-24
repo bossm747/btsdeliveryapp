@@ -79,7 +79,7 @@ export const validatePaymentMethod = (req: Request, res: Response, next: NextFun
     return next(createErrors.validation('Payment method is required'));
   }
   
-  const allowedMethods = ['stripe', 'nexuspay', 'gcash', 'paymaya', 'cash'];
+  const allowedMethods = ['nexuspay', 'gcash', 'paymaya', 'cash'];
   
   if (!allowedMethods.includes(paymentMethod)) {
     return next(createErrors.validation(`Invalid payment method. Allowed: ${allowedMethods.join(', ')}`));
@@ -89,10 +89,10 @@ export const validatePaymentMethod = (req: Request, res: Response, next: NextFun
 };
 
 // Webhook signature verification middleware
-export const verifyWebhookSignature = (provider: 'stripe' | 'nexuspay') => {
+export const verifyWebhookSignature = (provider: 'nexuspay') => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      const signature = req.headers['stripe-signature'] || req.headers['x-webhook-signature'];
+      const signature = req.headers['x-webhook-signature'];
       
       if (!signature) {
         securityLogger.logSuspiciousActivity(req, 'webhook_no_signature', {
@@ -103,9 +103,7 @@ export const verifyWebhookSignature = (provider: 'stripe' | 'nexuspay') => {
       }
       
       // Get the appropriate secret
-      const secret = provider === 'stripe' 
-        ? process.env.STRIPE_WEBHOOK_SECRET 
-        : process.env.NEXUSPAY_WEBHOOK_SECRET;
+      const secret = process.env.NEXUSPAY_WEBHOOK_SECRET;
       
       if (!secret) {
         logger.error(`${provider} webhook secret not configured`);
@@ -115,9 +113,7 @@ export const verifyWebhookSignature = (provider: 'stripe' | 'nexuspay') => {
       // Verify signature based on provider
       let isValid = false;
       
-      if (provider === 'stripe') {
-        isValid = verifyStripeSignature(req.body, signature as string, secret);
-      } else if (provider === 'nexuspay') {
+      if (provider === 'nexuspay') {
         isValid = verifyNexusPaySignature(req.body, signature as string, secret);
       }
       
@@ -144,45 +140,6 @@ export const verifyWebhookSignature = (provider: 'stripe' | 'nexuspay') => {
   };
 };
 
-// Stripe signature verification
-function verifyStripeSignature(payload: any, signature: string, secret: string): boolean {
-  try {
-    const elements = signature.split(',');
-    const signatureData: any = {};
-    
-    for (const element of elements) {
-      const [key, value] = element.split('=');
-      signatureData[key] = value;
-    }
-    
-    if (!signatureData.t || !signatureData.v1) {
-      return false;
-    }
-    
-    const timestamp = parseInt(signatureData.t);
-    const currentTime = Math.floor(Date.now() / 1000);
-    
-    // Check if timestamp is within 5 minutes
-    if (Math.abs(currentTime - timestamp) > 300) {
-      return false;
-    }
-    
-    const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
-    const signedPayload = `${timestamp}.${payloadString}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(signedPayload)
-      .digest('hex');
-    
-    return crypto.timingSafeEqual(
-      Buffer.from(signatureData.v1),
-      Buffer.from(expectedSignature)
-    );
-  } catch (error) {
-    return false;
-  }
-}
-
 // NexusPay signature verification
 function verifyNexusPaySignature(payload: any, signature: string, secret: string): boolean {
   try {
@@ -206,7 +163,7 @@ export const fraudDetection = async (req: Request, res: Response, next: NextFunc
   try {
     const { amount, paymentMethod, orderId } = req.body;
     const userId = req.user?.id;
-    const ip = req.ip;
+    const ip = req.ip || '0.0.0.0';
     
     const fraudScore = await calculateFraudScore({
       userId,
@@ -377,16 +334,6 @@ export const gdprPaymentCompliance = (req: Request, res: Response, next: NextFun
 export const enhancedPaymentSecurity = (method: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     switch (method) {
-      case 'stripe':
-        // Additional Stripe-specific security
-        if (req.body.cardNumber) {
-          // Validate card number format (basic Luhn algorithm)
-          if (!isValidCreditCard(req.body.cardNumber)) {
-            return next(createErrors.validation('Invalid credit card number'));
-          }
-        }
-        break;
-        
       case 'nexuspay':
         // Additional NexusPay-specific security
         if (req.body.accountNumber) {
