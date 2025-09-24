@@ -804,7 +804,21 @@ export class EnhancedPricingService {
       estimatedDuration
     };
   }
-    // This method is kept for backward compatibility
+
+  /**
+   * Legacy method kept for backward compatibility
+   * Calculate delivery fee using fallback location pricing
+   */
+  private calculateLegacyDeliveryFee(params: {
+    city: string;
+    distance: number;
+    weight: number;
+    orderType: string;
+    isPeakHour: boolean;
+    weatherCondition?: string;
+  }): number {
+    const { city, distance, weight, orderType, isPeakHour, weatherCondition } = params;
+    
     // Get location pricing
     const locationPricing = this.FALLBACK_LOCATION_PRICING.find(loc => 
       loc.city.toLowerCase() === city.toLowerCase()
@@ -1198,11 +1212,15 @@ export class EnhancedPricingService {
       console.error('Error calculating insurance fee:', error);
     }
     
+    // Fallback calculation when database rules are not available
+    const insuranceFee = Math.max(20, Math.min(500, Math.round(baseAmount * 0.01)));
+    return insuranceFee;
+  }
 
   /**
-   * Calculate insurance fee for parcels and high-value orders
+   * Calculate insurance fee for parcels and high-value orders (legacy method)
    */
-  private calculateInsuranceFee(amount: number, orderType: OrderType, isInsured: boolean): number | undefined {
+  private calculateLegacyInsuranceFee(amount: number, orderType: OrderType, isInsured: boolean): number | undefined {
     if (!isInsured && orderType !== 'parcel') return undefined;
     
     // Auto-insure high-value orders
@@ -1423,7 +1441,6 @@ export class EnhancedPricingService {
       errors
     };
   }
-}
 
   /**
    * Calculate taxes with regulatory compliance for Philippines market
