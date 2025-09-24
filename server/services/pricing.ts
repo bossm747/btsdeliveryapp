@@ -303,6 +303,12 @@ export class EnhancedPricingService {
     flood: 2.5,
   };
   
+  // Aliases for backward compatibility (these reference the DEFAULT_ constants)
+  private readonly PEAK_HOUR_MULTIPLIERS = this.DEFAULT_PEAK_HOUR_MULTIPLIERS;
+  private readonly WEATHER_SURGE = this.DEFAULT_WEATHER_SURGE;
+  private readonly COMMISSION_RATES = this.DEFAULT_COMMISSION_RATES;
+  private readonly LOCATION_PRICING = this.FALLBACK_LOCATION_PRICING;
+  
   constructor() {
     // Initialize cache cleanup interval
     setInterval(() => {
@@ -915,7 +921,7 @@ export class EnhancedPricingService {
     }
     
     // Apply zone surcharge multiplier
-    const zoneSurcharge = parseFloat(zone.surchargeMultiplier) - 1;
+    const zoneSurcharge = parseFloat(zone.surchargeMultiplier || '1.0') - 1;
     const zoneAdjustment = (baseDeliveryFee + distanceFee) * zoneSurcharge;
     
     // Calculate surge fee
@@ -967,7 +973,7 @@ export class EnhancedPricingService {
     
     try {
       // Get active fee rules for this service type
-      const feeRules = await db.select()
+      const feeRulesData = await db.select()
         .from(feeRules)
         .where(
           and(
@@ -982,7 +988,7 @@ export class EnhancedPricingService {
         .orderBy(desc(feeRules.priority));
         
       // Process each fee rule
-      for (const rule of feeRules) {
+      for (const rule of feeRulesData) {
         const feeStructure = rule.feeStructure as any;
         let calculatedFee = 0;
         
@@ -1268,7 +1274,14 @@ export class EnhancedPricingService {
       promotionalDiscount,
       loyaltyPointsDiscount,
       couponDiscount,
-      totalDiscounts
+      volumeDiscount: 0,
+      firstTimeUserDiscount: 0,
+      referralDiscount: 0,
+      vendorPromoDiscount: 0,
+      seasonalDiscount: 0,
+      groupOrderDiscount: 0,
+      totalDiscounts,
+      appliedPromotions: []
     };
   }
 
@@ -1357,15 +1370,16 @@ export class EnhancedPricingService {
   /**
    * Get dynamic pricing based on current conditions
    */
-  async getDynamicPricing(city: string, orderType: OrderType): Promise<{
+  async getDynamicPricing(city: string | null, orderType: OrderType): Promise<{
     baseDeliveryFee: number;
     currentMultiplier: number;
     isHighDemand: boolean;
     estimatedWaitTime: string;
   }> {
-    const locationPricing = this.LOCATION_PRICING.find(loc => 
-      loc.city.toLowerCase() === city.toLowerCase()
-    ) || this.LOCATION_PRICING.find(loc => loc.city === 'Other')!;
+    const cityName = city || 'Other';
+    const locationPricing = this.LOCATION_PRICING.find((loc: LocationPricing) => 
+      loc.city.toLowerCase() === cityName.toLowerCase()
+    ) || this.LOCATION_PRICING.find((loc: LocationPricing) => loc.city === 'Other')!;;
 
     // Check current time for peak hour detection
     const now = new Date();
@@ -1467,7 +1481,7 @@ export class EnhancedPricingService {
     
     try {
       // Get active tax rules
-      const taxRules = await db.select()
+      const taxRulesData = await db.select()
         .from(taxRules)
         .where(
           and(
@@ -1480,7 +1494,7 @@ export class EnhancedPricingService {
           )
         );
         
-      for (const rule of taxRules) {
+      for (const rule of taxRulesData) {
         const taxRate = parseFloat(rule.taxRate);
         
         // Determine taxable amount based on tax type
@@ -1659,7 +1673,8 @@ export class EnhancedPricingService {
       const promotion = promotions[0];
       
       // Check eligibility criteria
-      if (promotion.serviceTypes && !promotion.serviceTypes.includes(orderType)) {
+      const serviceTypes = promotion.serviceTypes as string[] | null;
+      if (serviceTypes && !serviceTypes.includes(orderType)) {
         return { amount: 0, details: null };
       }
       
@@ -1838,8 +1853,14 @@ export class EnhancedPricingService {
     orderId?: string;
   }): Promise<void> {
     try {
+      // Only store fee calculation if orderId is provided (required field in database)
+      if (!params.orderId) {
+        console.log('Skipping fee calculation storage: orderId not provided');
+        return;
+      }
+      
       const feeCalculation: InsertFeeCalculation = {
-        orderId: params.orderId || undefined,
+        orderId: params.orderId,
         calculationType: params.calculationType,
         pricingSnapshot: params.pricingContext,
         baseAmount: params.baseAmount.toString(),
