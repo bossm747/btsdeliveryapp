@@ -28,14 +28,16 @@ import {
   users,
   userSessions,
   orders,
-  restaurants
+  restaurants,
+  feeCalculations
 } from "@shared/schema";
 import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import { StripeProvider } from "./integrations/payment";
-import { pricingService, type OrderType } from "./services/pricing";
+import { enhancedPricingService, pricingService, type OrderType, type VehicleType, type PaymentMethodType } from "./services/pricing";
+import { financialAnalyticsService } from "./services/financial-analytics";
 import * as geminiAI from "./services/gemini";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -1816,50 +1818,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PRICING API ROUTES
   // ===================
 
-  // Calculate comprehensive pricing for any order type
+  // Calculate comprehensive pricing using enhanced pricing engine
   app.post("/api/pricing/calculate", authenticateToken, async (req, res) => {
     try {
       const pricingSchema = z.object({
         orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
         baseAmount: z.number().min(0.01),
-        city: z.string(),
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }),
+        deliveryAddress: z.string(),
         distance: z.number().optional(),
         weight: z.number().optional(),
+        vehicleType: z.enum(['motorcycle', 'bicycle', 'car', 'truck']).optional(),
+        paymentMethod: z.enum(['cash', 'gcash', 'maya', 'card', 'bank_transfer']).optional(),
         isInsured: z.boolean().optional(),
-        isPeakHour: z.boolean().optional(),
+        isExpress: z.boolean().optional(),
         weatherCondition: z.string().optional(),
         loyaltyPoints: z.number().optional(),
-        promoCode: z.string().optional(),
+        promoCodes: z.array(z.string()).optional(),
         tip: z.number().optional(),
-        customServiceFeeRate: z.number().optional(),
+        customerId: z.string().optional(),
+        vendorId: z.string().optional(),
+        estimatedDuration: z.number().optional(),
       });
 
       const validatedData = pricingSchema.parse(req.body);
       
-      // Calculate comprehensive pricing
-      const pricingCalculation = await pricingService.calculatePricing(validatedData);
+      // Calculate comprehensive pricing using enhanced service
+      const pricingCalculation = await enhancedPricingService.calculateComprehensivePricing(validatedData);
       
-      // Validate the calculation
-      const validation = pricingService.validatePricing(pricingCalculation);
-      
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: "Pricing calculation validation failed",
-          errors: validation.errors
-        });
-      }
-
       res.json({
         success: true,
         pricing: pricingCalculation,
         breakdown: pricingCalculation.breakdown,
         discounts: pricingCalculation.discounts,
-        isValid: validation.isValid
+        commissions: pricingCalculation.commissions,
+        surgeInfo: pricingCalculation.surgeInfo,
+        zoneInfo: pricingCalculation.zoneInfo,
+        calculatedAt: pricingCalculation.calculatedAt,
+        calculationVersion: pricingCalculation.calculationVersion
       });
 
     } catch (error: any) {
-      console.error("Error calculating pricing:", error);
+      console.error("Error calculating enhanced pricing:", error);
       
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -1872,6 +1875,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         success: false,
         message: error.message || "Failed to calculate pricing" 
+      });
+    }
+  });
+
+  // Get pricing estimate before placing order (no authentication required)
+  app.post("/api/pricing/estimate", async (req, res) => {
+    try {
+      const estimateSchema = z.object({
+        orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
+        baseAmount: z.number().min(0.01),
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }),
+        vehicleType: z.enum(['motorcycle', 'bicycle', 'car', 'truck']).optional(),
+        distance: z.number().optional(),
+        weight: z.number().optional(),
+        estimatedDuration: z.number().optional(),
+      });
+
+      const validatedData = estimateSchema.parse(req.body);
+      
+      // Get pricing estimate using enhanced service
+      const estimate = await enhancedPricingService.calculateComprehensivePricing({
+        ...validatedData,
+        deliveryAddress: 'Estimate Location',
+        loyaltyPoints: 0,
+        promoCodes: [],
+        tip: 0
+      });
+      
+      res.json({
+        success: true,
+        estimate: {
+          deliveryFee: {
+            min: estimate.breakdown.baseDeliveryFee,
+            max: estimate.breakdown.totalDeliveryFee
+          },
+          totalFee: {
+            min: Math.round(estimate.finalTotal * 0.9), // Conservative estimate
+            max: estimate.finalTotal
+          },
+          estimatedTime: estimate.estimatedDuration ? `${estimate.estimatedDuration}-${estimate.estimatedDuration + 15} minutes` : '25-45 minutes',
+          surgeActive: estimate.surgeInfo.isActive,
+          surgeMultiplier: estimate.surgeInfo.multiplier,
+          availabilityStatus: estimate.surgeInfo.isActive ? 'high-demand' : 'available',
+          zoneInfo: estimate.zoneInfo
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error calculating pricing estimate:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid estimate parameters",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to calculate pricing estimate" 
+      });
+    }
+  });
+
+  // Get real-time surge pricing status
+  app.get("/api/pricing/surge-status", async (req, res) => {
+    try {
+      const { coordinates, serviceType } = req.query;
+      
+      if (!coordinates) {
+        return res.status(400).json({
+          success: false,
+          message: "Coordinates parameter is required"
+        });
+      }
+      
+      const coords = JSON.parse(coordinates as string);
+      const orderType = (serviceType as string) || 'food';
+      
+      // Build pricing context to get surge information
+      const timestamp = new Date();
+      const pricingContext = await enhancedPricingService.buildPricingContext({
+        zone: await enhancedPricingService.getPricingZone(coords),
+        coordinates: coords,
+        timestamp,
+        serviceType: orderType,
+        vehicleType: 'motorcycle',
+        distance: 5,
+        estimatedDuration: 30
+      });
+      
+      res.json({
+        success: true,
+        surgeStatus: {
+          isActive: pricingContext.surgeMultiplier > 1,
+          multiplier: pricingContext.surgeMultiplier,
+          level: pricingContext.demandLevel,
+          reasons: pricingContext.eventFactors,
+          availableRiders: pricingContext.availableRiders,
+          estimatedWaitTime: pricingContext.surgeMultiplier > 1.5 ? '35-50 minutes' : '20-35 minutes'
+        },
+        location: {
+          zone: pricingContext.zone.name,
+          coordinates: coords
+        },
+        timestamp: timestamp.toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching surge status:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get surge status" 
+      });
+    }
+  });
+
+  // Get zone-based pricing information
+  app.get("/api/pricing/zones", async (req, res) => {
+    try {
+      const { coordinates } = req.query;
+      
+      if (!coordinates) {
+        return res.status(400).json({
+          success: false,
+          message: "Coordinates parameter is required"
+        });
+      }
+      
+      const coords = JSON.parse(coordinates as string);
+      
+      // Get pricing zone information
+      const zone = await enhancedPricingService.getPricingZone(coords);
+      
+      res.json({
+        success: true,
+        zone: {
+          id: zone.id,
+          name: zone.name,
+          description: zone.description,
+          baseDeliveryFee: parseFloat(zone.baseDeliveryFee),
+          perKilometerRate: parseFloat(zone.perKilometerRate),
+          minimumFee: parseFloat(zone.minimumFee),
+          maximumDistance: parseFloat(zone.maximumDistance),
+          surchargeMultiplier: parseFloat(zone.surchargeMultiplier),
+          serviceTypes: zone.serviceTypes,
+          isActive: zone.isActive
+        },
+        coordinates: coords,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching zone pricing:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get zone pricing" 
       });
     }
   });
@@ -1902,28 +2067,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Calculate commission breakdown
+  // Calculate enhanced commission breakdown
   app.post("/api/pricing/commissions", authenticateToken, async (req, res) => {
     try {
       const commissionSchema = z.object({
         orderTotal: z.number().min(0),
-        deliveryFee: z.number().min(0),
-        serviceFee: z.number().min(0),
+        baseAmount: z.number().min(0),
+        deliveryFeeBreakdown: z.object({
+          totalDeliveryFee: z.number()
+        }),
+        serviceFeeBreakdown: z.object({
+          totalServiceFees: z.number()
+        }),
         orderType: z.enum(['food', 'pabili', 'pabayad', 'parcel']),
+        vendorId: z.string().optional(),
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }).optional(),
       });
 
       const validatedData = commissionSchema.parse(req.body);
       
-      const commissions = pricingService.calculateCommissions(validatedData);
+      // Use enhanced commission calculation if coordinates provided
+      let commissions;
+      if (validatedData.coordinates) {
+        const pricingContext = await enhancedPricingService.buildPricingContext({
+          zone: await enhancedPricingService.getPricingZone(validatedData.coordinates),
+          coordinates: validatedData.coordinates,
+          timestamp: new Date(),
+          serviceType: validatedData.orderType,
+          vehicleType: 'motorcycle',
+          distance: 5,
+          estimatedDuration: 30
+        });
+        
+        commissions = await enhancedPricingService.calculateAdvancedCommissions({
+          orderTotal: validatedData.orderTotal,
+          baseAmount: validatedData.baseAmount,
+          deliveryFeeBreakdown: validatedData.deliveryFeeBreakdown,
+          serviceFeeBreakdown: validatedData.serviceFeeBreakdown,
+          orderType: validatedData.orderType,
+          vendorId: validatedData.vendorId,
+          pricingContext
+        });
+      } else {
+        // Fallback to basic commission calculation
+        commissions = pricingService.calculateCommissions({
+          orderTotal: validatedData.orderTotal,
+          deliveryFee: validatedData.deliveryFeeBreakdown.totalDeliveryFee,
+          serviceFee: validatedData.serviceFeeBreakdown.totalServiceFees,
+          orderType: validatedData.orderType
+        });
+      }
       
       res.json({
         success: true,
         commissions,
-        orderDetails: validatedData
+        orderDetails: validatedData,
+        calculatedAt: new Date().toISOString()
       });
 
     } catch (error: any) {
-      console.error("Error calculating commissions:", error);
+      console.error("Error calculating enhanced commissions:", error);
       
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -1936,6 +2142,223 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         success: false,
         message: error.message || "Failed to calculate commissions" 
+      });
+    }
+  });
+
+  // Get comprehensive pricing analytics and reports
+  app.get("/api/pricing/analytics", authenticateToken, async (req, res) => {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        serviceType, 
+        zoneId, 
+        reportType = 'summary' 
+      } = req.query;
+      
+      // Parse dates with defaults (last 30 days if not specified)
+      const endDateParsed = endDate ? new Date(endDate as string) : new Date();
+      const startDateParsed = startDate ? 
+        new Date(startDate as string) : 
+        new Date(endDateParsed.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      let analyticsData;
+      
+      switch (reportType) {
+        case 'summary':
+          analyticsData = await financialAnalyticsService.getFinancialSummary(startDateParsed, endDateParsed);
+          break;
+        case 'breakdown':
+          analyticsData = await financialAnalyticsService.getRevenueBreakdown(startDateParsed, endDateParsed);
+          break;
+        case 'profit':
+          analyticsData = await financialAnalyticsService.getProfitAnalysis(startDateParsed, endDateParsed);
+          break;
+        case 'trends':
+          analyticsData = await financialAnalyticsService.getTrendAnalysis(startDateParsed, endDateParsed);
+          break;
+        case 'vendors':
+          analyticsData = await financialAnalyticsService.getVendorPerformance(startDateParsed, endDateParsed);
+          break;
+        case 'riders':
+          analyticsData = await financialAnalyticsService.getRiderPerformance(startDateParsed, endDateParsed);
+          break;
+        case 'kpis':
+          analyticsData = await financialAnalyticsService.getFinancialKPIs(startDateParsed, endDateParsed);
+          break;
+        case 'tax':
+          analyticsData = await financialAnalyticsService.getTaxCompliance(startDateParsed, endDateParsed);
+          break;
+        case 'comprehensive':
+          analyticsData = await financialAnalyticsService.generateComprehensiveReport(startDateParsed, endDateParsed);
+          break;
+        default:
+          analyticsData = await financialAnalyticsService.getFinancialSummary(startDateParsed, endDateParsed);
+      }
+      
+      res.json({
+        success: true,
+        reportType,
+        analytics: analyticsData,
+        filters: {
+          startDate: startDateParsed.toISOString(),
+          endDate: endDateParsed.toISOString(),
+          serviceType,
+          zoneId,
+          reportType
+        },
+        generatedAt: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching comprehensive pricing analytics:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get pricing analytics" 
+      });
+    }
+  });
+
+  // Get pricing history for audit trail with real database integration
+  app.get("/api/pricing/history", authenticateToken, async (req, res) => {
+    try {
+      const { 
+        orderId, 
+        startDate, 
+        endDate, 
+        limit = 50,
+        offset = 0 
+      } = req.query;
+      
+      // Build query conditions
+      const conditions = [eq(feeCalculations.isActive, true)];
+      
+      if (orderId) {
+        conditions.push(eq(feeCalculations.orderId, orderId as string));
+      }
+      
+      if (startDate) {
+        conditions.push(gte(feeCalculations.calculatedAt, new Date(startDate as string)));
+      }
+      
+      if (endDate) {
+        conditions.push(lte(feeCalculations.calculatedAt, new Date(endDate as string)));
+      }
+      
+      // Get total count for pagination
+      const totalQuery = await db.select({ count: sql<number>`count(*)` })
+        .from(feeCalculations)
+        .where(and(...conditions));
+      const total = totalQuery[0]?.count || 0;
+      
+      // Get historical data with pagination
+      const calculations = await db.select({
+        id: feeCalculations.id,
+        orderId: feeCalculations.orderId,
+        calculationType: feeCalculations.calculationType,
+        baseAmount: feeCalculations.baseAmount,
+        finalAmount: feeCalculations.finalAmount,
+        deliveryFee: feeCalculations.deliveryFee,
+        serviceFee: feeCalculations.serviceFee,
+        totalTax: feeCalculations.totalTax,
+        totalDiscount: feeCalculations.totalDiscount,
+        vendorCommission: feeCalculations.vendorCommission,
+        riderEarnings: feeCalculations.riderEarnings,
+        calculatedAt: feeCalculations.calculatedAt,
+        calculatedBy: feeCalculations.calculatedBy
+      })
+      .from(feeCalculations)
+      .where(and(...conditions))
+      .orderBy(desc(feeCalculations.calculatedAt))
+      .limit(parseInt(limit as string))
+      .offset(parseInt(offset as string));
+      
+      const historyData = {
+        calculations: calculations.map(calc => ({
+          ...calc,
+          baseAmount: parseFloat(calc.baseAmount),
+          finalAmount: parseFloat(calc.finalAmount),
+          deliveryFee: parseFloat(calc.deliveryFee),
+          serviceFee: parseFloat(calc.serviceFee),
+          totalTax: parseFloat(calc.totalTax || '0'),
+          totalDiscount: parseFloat(calc.totalDiscount || '0'),
+          vendorCommission: parseFloat(calc.vendorCommission || '0'),
+          riderEarnings: parseFloat(calc.riderEarnings || '0')
+        })),
+        pagination: {
+          total,
+          limit: parseInt(limit as string),
+          offset: parseInt(offset as string),
+          hasMore: (parseInt(offset as string) + parseInt(limit as string)) < total
+        }
+      };
+      
+      res.json({
+        success: true,
+        history: historyData,
+        filters: {
+          orderId,
+          startDate,
+          endDate,
+          limit,
+          offset
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching pricing history:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get pricing history" 
+      });
+    }
+  });
+
+  // Admin endpoint for pricing configuration management
+  app.get("/api/admin/pricing/config", authenticateToken, async (req, res) => {
+    try {
+      // This would fetch current pricing configuration from database
+      const config = {
+        zones: {
+          total: 25,
+          active: 23,
+          lastUpdated: new Date().toISOString()
+        },
+        surgeRules: {
+          total: 15,
+          active: 12,
+          currentSurge: 1.2
+        },
+        feeRules: {
+          total: 45,
+          active: 42,
+          lastModified: new Date().toISOString()
+        },
+        commissionTiers: {
+          total: 8,
+          active: 8,
+          defaultRate: 0.15
+        },
+        taxRules: {
+          total: 5,
+          active: 5,
+          vatRate: 0.12
+        }
+      };
+      
+      res.json({
+        success: true,
+        config,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching pricing config:", error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || "Failed to get pricing configuration" 
       });
     }
   });

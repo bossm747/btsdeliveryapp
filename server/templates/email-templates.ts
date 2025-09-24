@@ -819,6 +819,473 @@ export class EmailTemplateEngine {
     
     return { subject, html, text };
   }
+
+  // Payment Confirmation Template
+  generatePaymentConfirmationEmail(data: TemplateData, lang: 'en' | 'tl' = 'en'): EmailTemplate {
+    const t = (key: string) => this.getTranslation(key, lang);
+    
+    const subject = lang === 'tl' ? 
+      `✅ Bayad na ang Order #${data.orderNumber} - BTS Delivery` : 
+      `✅ Payment Confirmed for Order #${data.orderNumber} - BTS Delivery`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html lang="${lang}">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        ${this.baseStyles}
+      </head>
+      <body>
+        <div class="container">
+          <div class="header" style="background: linear-gradient(135deg, ${this.brandColors.success} 0%, #1e7e34 100%);">
+            <div class="logo">🐝 BTS Delivery</div>
+            <h2 style="margin-top: 20px; position: relative; z-index: 1;">
+              ${lang === 'tl' ? '💳 Bayad Nakumpirma!' : '💳 Payment Confirmed!'}
+            </h2>
+            <div class="status-badge" style="background-color: rgba(255,255,255,0.2); color: white;">
+              ₱${data.amount.toFixed(2)}
+            </div>
+          </div>
+          
+          <div class="content">
+            <h2>${t('greeting')} ${data.customerName}!</h2>
+            <p style="margin: 20px 0; font-size: 16px; line-height: 1.8;">
+              ${lang === 'tl' ? 
+                `Salamat! Nakumpirma na ang inyong bayad na ₱${data.amount.toFixed(2)} para sa Order #${data.orderNumber}.` :
+                `Thank you! Your payment of ₱${data.amount.toFixed(2)} for Order #${data.orderNumber} has been confirmed.`
+              }
+            </p>
+            
+            <div class="order-details" style="border-left-color: ${this.brandColors.success};">
+              <h3 style="color: ${this.brandColors.success}; margin-bottom: 20px;">
+                💳 ${lang === 'tl' ? 'Detalye ng Bayad' : 'Payment Details'}
+              </h3>
+              
+              <div style="margin: 15px 0;">
+                <strong>${lang === 'tl' ? 'Order Number:' : 'Order Number:'}</strong> #${data.orderNumber}<br>
+                <strong>${lang === 'tl' ? 'Halaga:' : 'Amount:'}</strong> ₱${data.amount.toFixed(2)}<br>
+                <strong>${lang === 'tl' ? 'Paraan ng Bayad:' : 'Payment Method:'}</strong> ${data.paymentMethod}<br>
+                <strong>${lang === 'tl' ? 'Transaction ID:' : 'Transaction ID:'}</strong> ${data.transactionId}<br>
+                <strong>${lang === 'tl' ? 'Petsa:' : 'Date:'}</strong> ${new Date(data.paidAt).toLocaleString(lang === 'tl' ? 'tl-PH' : 'en-PH')}
+              </div>
+              
+              ${data.receipt ? `
+                <div style="margin: 20px 0; padding: 15px; background-color: white; border-radius: 8px; border: 1px solid #e9ecef;">
+                  <h4 style="margin-bottom: 10px;">${lang === 'tl' ? '📋 Resibo' : '📋 Receipt'}</h4>
+                  <p style="font-family: monospace; font-size: 12px; color: ${this.brandColors.gray};">
+                    ${data.receipt}
+                  </p>
+                </div>
+              ` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL}/orders/${data.orderId}/track" class="button">
+                📱 ${t('trackOrder')}
+              </a>
+            </div>
+            
+            <div class="info-box">
+              <p style="margin: 0;">
+                <strong>📞 ${t('questions')}</strong><br>
+                ${t('contactUs')} <a href="mailto:support@btsdelivery.com">support@btsdelivery.com</a> ${t('or')} <strong>(043) 123-4567</strong>
+              </p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>${t('copyright')}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const text = `
+      ${lang === 'tl' ? 'Bayad Nakumpirma!' : 'Payment Confirmed!'} - Order #${data.orderNumber}
+      
+      ${t('greeting')} ${data.customerName},
+      
+      ${lang === 'tl' ? 
+        `Salamat! Nakumpirma na ang inyong bayad na ₱${data.amount.toFixed(2)}.` :
+        `Thank you! Your payment of ₱${data.amount.toFixed(2)} has been confirmed.`
+      }
+      
+      ${lang === 'tl' ? 'Detalye ng Bayad:' : 'Payment Details:'}
+      - Order: #${data.orderNumber}
+      - ${lang === 'tl' ? 'Halaga:' : 'Amount:'} ₱${data.amount.toFixed(2)}
+      - ${lang === 'tl' ? 'Paraan ng Bayad:' : 'Payment Method:'} ${data.paymentMethod}
+      - Transaction ID: ${data.transactionId}
+      
+      ${t('trackOrder')}: ${process.env.FRONTEND_URL}/orders/${data.orderId}/track
+      
+      ${t('teamSignature')}
+    `;
+    
+    return { subject, html, text };
+  }
+
+  // Rider Assignment Email Template
+  generateRiderAssignmentEmail(data: TemplateData, lang: 'en' | 'tl' = 'en'): EmailTemplate {
+    const t = (key: string) => this.getTranslation(key, lang);
+    
+    const subject = lang === 'tl' ? 
+      `🚗 Bagong Delivery Assignment - Order #${data.orderNumber}` : 
+      `🚗 New Delivery Assignment - Order #${data.orderNumber}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html lang="${lang}">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        ${this.baseStyles}
+      </head>
+      <body>
+        <div class="container">
+          <div class="header" style="background: linear-gradient(135deg, #00aa88 0%, #007a63 100%);">
+            <div class="logo">🐝 BTS Delivery</div>
+            <h2 style="margin-top: 20px; position: relative; z-index: 1;">
+              ${lang === 'tl' ? '🚗 Bagong Delivery' : '🚗 New Delivery'}
+            </h2>
+            <div class="status-badge" style="background-color: rgba(255,255,255,0.2); color: white;">
+              ${lang === 'tl' ? 'Kumita ng' : 'Earn'} ₱${data.estimatedEarnings}
+            </div>
+          </div>
+          
+          <div class="content">
+            <h2>${t('greeting')} ${data.riderName}!</h2>
+            <p style="margin: 20px 0; font-size: 16px; line-height: 1.8;">
+              ${lang === 'tl' ? 
+                `May bagong delivery assignment para sa inyo. Kumita ng ₱${data.estimatedEarnings} sa delivery na ito!` :
+                `You have a new delivery assignment. Earn ₱${data.estimatedEarnings} for this delivery!`
+              }
+            </p>
+            
+            <div class="order-details">
+              <h3 style="color: ${this.brandColors.secondary}; margin-bottom: 20px;">
+                📦 ${lang === 'tl' ? 'Detalye ng Delivery' : 'Delivery Details'}
+              </h3>
+              
+              <div style="margin: 15px 0;">
+                <strong>${lang === 'tl' ? 'Order Number:' : 'Order Number:'}</strong> #${data.orderNumber}<br>
+                <strong>${lang === 'tl' ? 'Restaurant:' : 'Restaurant:'}</strong> ${data.restaurantName}<br>
+                <strong>${lang === 'tl' ? 'Customer:' : 'Customer:'}</strong> ${data.customerName}<br>
+                <strong>${lang === 'tl' ? 'Phone:' : 'Phone:'}</strong> ${data.customerPhone}
+              </div>
+              
+              <div style="margin: 20px 0;">
+                <h4>${lang === 'tl' ? '📍 Mga Address' : '📍 Addresses'}</h4>
+                <div style="margin: 10px 0; padding: 15px; background-color: white; border-radius: 8px; border-left: 4px solid #ff6b35;">
+                  <strong>${lang === 'tl' ? 'Pickup:' : 'Pickup:'}</strong><br>
+                  ${data.pickupAddress.name}<br>
+                  ${data.pickupAddress.street}, ${data.pickupAddress.barangay}, ${data.pickupAddress.city}
+                </div>
+                <div style="margin: 10px 0; padding: 15px; background-color: white; border-radius: 8px; border-left: 4px solid #28a745;">
+                  <strong>${lang === 'tl' ? 'Delivery:' : 'Delivery:'}</strong><br>
+                  ${data.deliveryAddress.street}, ${data.deliveryAddress.barangay}, ${data.deliveryAddress.city}<br>
+                  ${data.deliveryAddress.landmark ? `<em>Landmark: ${data.deliveryAddress.landmark}</em><br>` : ''}
+                  ${data.deliveryInstructions ? `<em>Instructions: ${data.deliveryInstructions}</em>` : ''}
+                </div>
+              </div>
+              
+              <div class="total">
+                ${lang === 'tl' ? 'Kikitain mo:' : 'Your Earnings:'} ₱${data.estimatedEarnings}
+              </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL}/rider/orders/${data.orderId}/accept" class="button">
+                ✅ ${lang === 'tl' ? 'Tanggapin ang Order' : 'Accept Order'}
+              </a>
+            </div>
+            
+            <div class="warning-box">
+              <p style="margin: 0;">
+                <strong>⏰ ${lang === 'tl' ? 'Importante!' : 'Important!'}</strong><br>
+                ${lang === 'tl' ? 
+                  'Mangyaring i-accept ang order sa loob ng 5 minutos. Mag-expire ito kung hindi.' :
+                  'Please accept this order within 5 minutes, or it will expire.'
+                }
+              </p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>${t('copyright')}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const text = `
+      ${lang === 'tl' ? 'Bagong Delivery Assignment' : 'New Delivery Assignment'} - Order #${data.orderNumber}
+      
+      ${t('greeting')} ${data.riderName},
+      
+      ${lang === 'tl' ? 
+        `May bagong delivery assignment para sa inyo. Kumita ng ₱${data.estimatedEarnings}!` :
+        `You have a new delivery assignment. Earn ₱${data.estimatedEarnings}!`
+      }
+      
+      ${lang === 'tl' ? 'Detalye:' : 'Details:'}
+      - Order: #${data.orderNumber}
+      - Restaurant: ${data.restaurantName}
+      - Customer: ${data.customerName} (${data.customerPhone})
+      - Pickup: ${data.pickupAddress.name}
+      - Delivery: ${data.deliveryAddress.street}, ${data.deliveryAddress.city}
+      
+      ${lang === 'tl' ? 'Tanggapin:' : 'Accept:'} ${process.env.FRONTEND_URL}/rider/orders/${data.orderId}/accept
+      
+      ${t('teamSignature')}
+    `;
+    
+    return { subject, html, text };
+  }
+
+  // Admin Alert Email Template
+  generateAdminAlertEmail(data: TemplateData, lang: 'en' | 'tl' = 'en'): EmailTemplate {
+    const severityColors = {
+      low: '#17a2b8',
+      medium: '#ffc107', 
+      high: '#fd7e14',
+      critical: '#dc3545'
+    };
+    
+    const severityColor = severityColors[data.severity as keyof typeof severityColors] || '#6c757d';
+    
+    const subject = `🚨 ${data.severity.toUpperCase()}: ${data.title} - BTS Delivery Admin Alert`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html lang="${lang}">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        ${this.baseStyles}
+      </head>
+      <body>
+        <div class="container">
+          <div class="header" style="background: linear-gradient(135deg, ${severityColor} 0%, ${severityColor}dd 100%);">
+            <div class="logo">🐝 BTS Delivery</div>
+            <div class="tagline">Admin Alert System</div>
+            <h2 style="margin-top: 20px; position: relative; z-index: 1;">
+              🚨 ${data.severity.toUpperCase()} ALERT
+            </h2>
+            <div class="status-badge" style="background-color: rgba(255,255,255,0.2); color: white;">
+              ${data.category || 'System Alert'}
+            </div>
+          </div>
+          
+          <div class="content">
+            <h2>⚠️ ${data.title}</h2>
+            
+            <div class="order-details" style="border-left-color: ${severityColor};">
+              <h3 style="color: ${severityColor}; margin-bottom: 15px;">
+                📊 Alert Details
+              </h3>
+              <p style="font-size: 16px; margin: 15px 0; padding: 15px; background-color: white; border-radius: 8px; border-left: 4px solid ${severityColor};">
+                ${data.message}
+              </p>
+              
+              <div style="margin: 20px 0;">
+                <strong>Severity:</strong> <span style="color: ${severityColor}; font-weight: bold;">${data.severity.toUpperCase()}</span><br>
+                <strong>Category:</strong> ${data.category || 'System'}<br>
+                <strong>Time:</strong> ${new Date(data.timestamp || Date.now()).toLocaleString('en-PH')}<br>
+                ${data.affectedUsers ? `<strong>Affected Users:</strong> ${data.affectedUsers}<br>` : ''}
+                ${data.systemComponent ? `<strong>Component:</strong> ${data.systemComponent}<br>` : ''}
+                ${data.errorCode ? `<strong>Error Code:</strong> ${data.errorCode}<br>` : ''}
+              </div>
+              
+              ${data.additionalInfo ? `
+                <div style="margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                  <h4>Additional Information:</h4>
+                  <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">${data.additionalInfo}</pre>
+                </div>
+              ` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL}/admin/alerts/${data.alertId}" class="button" style="background: linear-gradient(135deg, ${severityColor} 0%, ${severityColor}dd 100%);">
+                🔍 View Alert Details
+              </a>
+            </div>
+            
+            ${data.severity === 'critical' ? `
+              <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <strong>🆘 CRITICAL ALERT - Immediate Action Required</strong><br>
+                This alert requires immediate attention. Please investigate and resolve as soon as possible.
+              </div>
+            ` : ''}
+          </div>
+          
+          <div class="footer">
+            <p>© 2024 BTS Delivery - Admin Alert System</p>
+            <p>This is an automated alert. Do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const text = `
+      ADMIN ALERT - ${data.severity.toUpperCase()}: ${data.title}
+      
+      ${data.message}
+      
+      Details:
+      - Severity: ${data.severity.toUpperCase()}
+      - Category: ${data.category || 'System'}
+      - Time: ${new Date(data.timestamp || Date.now()).toLocaleString('en-PH')}
+      ${data.affectedUsers ? `- Affected Users: ${data.affectedUsers}` : ''}
+      ${data.systemComponent ? `- Component: ${data.systemComponent}` : ''}
+      ${data.errorCode ? `- Error Code: ${data.errorCode}` : ''}
+      
+      View Details: ${process.env.FRONTEND_URL}/admin/alerts/${data.alertId}
+      
+      BTS Delivery Admin Alert System
+    `;
+    
+    return { subject, html, text };
+  }
+
+  // Promotional Email Template
+  generatePromotionalEmail(data: TemplateData, lang: 'en' | 'tl' = 'en'): EmailTemplate {
+    const t = (key: string) => this.getTranslation(key, lang);
+    
+    const subject = lang === 'tl' ? 
+      `🎉 ${data.title} - Special Offer sa BTS Delivery!` : 
+      `🎉 ${data.title} - Special Offer from BTS Delivery!`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html lang="${lang}">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        ${this.baseStyles}
+      </head>
+      <body>
+        <div class="container">
+          <div class="header" style="background: linear-gradient(135deg, ${this.brandColors.accent} 0%, #e6bc1a 100%); color: ${this.brandColors.dark};">
+            <div class="logo" style="color: ${this.brandColors.dark};">🐝 BTS Delivery</div>
+            <h2 style="margin-top: 20px; position: relative; z-index: 1; color: ${this.brandColors.dark};">
+              🎉 ${data.title}
+            </h2>
+            ${data.discount ? `
+              <div class="status-badge" style="background-color: ${this.brandColors.primary}; color: white;">
+                ${data.discount}% OFF
+              </div>
+            ` : ''}
+          </div>
+          
+          <div class="content">
+            <h2>${t('greeting')} ${data.customerName || 'Valued Customer'}!</h2>
+            
+            ${data.imageUrl ? `
+              <div style="text-align: center; margin: 20px 0;">
+                <img src="${data.imageUrl}" alt="${data.title}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              </div>
+            ` : ''}
+            
+            <p style="margin: 20px 0; font-size: 16px; line-height: 1.8;">
+              ${data.description}
+            </p>
+            
+            <div class="order-details" style="border-left-color: ${this.brandColors.accent};">
+              <h3 style="color: ${this.brandColors.secondary}; margin-bottom: 20px;">
+                🎯 ${lang === 'tl' ? 'Detalye ng Promo' : 'Promotion Details'}
+              </h3>
+              
+              <div style="margin: 15px 0;">
+                ${data.promoCode ? `
+                  <div style="text-align: center; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, ${this.brandColors.accent} 0%, #e6bc1a 100%); border-radius: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: ${this.brandColors.dark};">${lang === 'tl' ? 'Promo Code:' : 'Promo Code:'}</h4>
+                    <div style="font-size: 24px; font-weight: bold; color: ${this.brandColors.dark}; letter-spacing: 2px; font-family: monospace;">
+                      ${data.promoCode}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                ${data.discount ? `<strong>${lang === 'tl' ? 'Discount:' : 'Discount:'}</strong> ${data.discount}% OFF<br>` : ''}
+                ${data.minimumOrder ? `<strong>${lang === 'tl' ? 'Minimum Order:' : 'Minimum Order:'}</strong> ₱${data.minimumOrder}<br>` : ''}
+                ${data.maxDiscount ? `<strong>${lang === 'tl' ? 'Max Discount:' : 'Max Discount:'}</strong> ₱${data.maxDiscount}<br>` : ''}
+                ${data.validUntil ? `<strong>${lang === 'tl' ? 'Valid Until:' : 'Valid Until:'}</strong> ${new Date(data.validUntil).toLocaleDateString(lang === 'tl' ? 'tl-PH' : 'en-PH')}<br>` : ''}
+                ${data.applicableRestaurants ? `<strong>${lang === 'tl' ? 'Available sa:' : 'Available at:'}</strong> ${data.applicableRestaurants}<br>` : ''}
+              </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL}/restaurants${data.promoCode ? `?promo=${data.promoCode}` : ''}" class="button">
+                🛒 ${lang === 'tl' ? 'Mag-Order Ngayon' : 'Order Now'}
+              </a>
+            </div>
+            
+            <div class="info-box">
+              <p style="margin: 0;">
+                ${lang === 'tl' ? 
+                  'Huwag palampasin ang limited-time offer na ito! I-share sa mga kaibigan para mas maraming makakakuha ng discount.' :
+                  "Don't miss this limited-time offer! Share with friends so more people can enjoy the discount."
+                }
+              </p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div class="social-links">
+              <a href="https://facebook.com/BTSDeliveryPH">Facebook</a> • 
+              <a href="https://instagram.com/btsdeliveryph">Instagram</a> • 
+              <a href="https://twitter.com/btsdeliveryph">Twitter</a>
+            </div>
+            
+            <div class="footer-divider"></div>
+            
+            <p>${t('copyright')}</p>
+            <p style="margin-top: 10px; font-size: 11px; opacity: 0.8;">
+              ${lang === 'tl' ? 
+                'Natanggap mo ang promotional email na ito dahil naka-subscribe ka sa BTS Delivery updates.' :
+                'You received this promotional email because you subscribed to BTS Delivery updates.'
+              }
+            </p>
+            <p style="margin-top: 5px;">
+              <a href="${process.env.FRONTEND_URL}/unsubscribe?email=${data.customerEmail}&type=promotional">
+                ${lang === 'tl' ? 'Mag-unsubscribe sa promotional emails' : 'Unsubscribe from promotional emails'}
+              </a>
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const text = `
+      ${data.title} - ${lang === 'tl' ? 'Special Offer sa BTS Delivery!' : 'Special Offer from BTS Delivery!'}
+      
+      ${t('greeting')} ${data.customerName || 'Valued Customer'},
+      
+      ${data.description}
+      
+      ${lang === 'tl' ? 'Detalye ng Promo:' : 'Promotion Details:'}
+      ${data.promoCode ? `- Promo Code: ${data.promoCode}` : ''}
+      ${data.discount ? `- Discount: ${data.discount}% OFF` : ''}
+      ${data.minimumOrder ? `- Minimum Order: ₱${data.minimumOrder}` : ''}
+      ${data.validUntil ? `- Valid Until: ${new Date(data.validUntil).toLocaleDateString(lang === 'tl' ? 'tl-PH' : 'en-PH')}` : ''}
+      
+      ${lang === 'tl' ? 'Mag-order ngayon:' : 'Order now:'} ${process.env.FRONTEND_URL}/restaurants${data.promoCode ? `?promo=${data.promoCode}` : ''}
+      
+      ${t('teamSignature')}
+      
+      ${lang === 'tl' ? 'Mag-unsubscribe:' : 'Unsubscribe:'} ${process.env.FRONTEND_URL}/unsubscribe?email=${data.customerEmail}&type=promotional
+    `;
+    
+    return { subject, html, text };
+  }
 }
 
 // Export singleton instance
@@ -836,3 +1303,6 @@ export const generateWelcomeEmail = (data: TemplateData, lang: 'en' | 'tl' = 'en
 
 export const generateVendorNewOrder = (data: TemplateData, lang: 'en' | 'tl' = 'en') => 
   emailTemplateEngine.generateVendorNewOrderEmail(data, lang);
+
+export const generatePromotional = (data: TemplateData, lang: 'en' | 'tl' = 'en') => 
+  emailTemplateEngine.generatePromotionalEmail(data, lang);

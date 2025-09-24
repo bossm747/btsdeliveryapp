@@ -1719,6 +1719,581 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoritesSchema>;
 
+// User Push Subscriptions for web push notifications
+export const userPushSubscriptions = pgTable("user_push_subscriptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dhKey: text("p256dh_key").notNull(),
+  authKey: text("auth_key").notNull(),
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").default(true),
+  lastUsed: timestamp("last_used").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notification Analytics for tracking delivery and engagement
+export const notificationAnalytics = pgTable("notification_analytics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  notificationId: uuid("notification_id").references(() => orderNotifications.id),
+  userId: uuid("user_id").references(() => users.id),
+  notificationType: varchar("notification_type", { length: 20 }).notNull(), // email, sms, push
+  channel: varchar("channel", { length: 50 }), // SendGrid, Twilio, WebPush, etc.
+  status: varchar("status", { length: 20 }).notNull(), // sent, delivered, opened, clicked, failed
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  openedAt: timestamp("opened_at"),
+  clickedAt: timestamp("clicked_at"),
+  failedAt: timestamp("failed_at"),
+  failureReason: text("failure_reason"),
+  metadata: jsonb("metadata"), // Additional tracking data
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Bulk Notification Campaigns
+export const notificationCampaigns = pgTable("notification_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  type: varchar("type", { length: 50 }).notNull(), // promotional, announcement, alert
+  channels: jsonb("channels").notNull(), // ["email", "sms", "push"]
+  targetAudience: jsonb("target_audience"), // Targeting criteria
+  templateData: jsonb("template_data").notNull(),
+  scheduledFor: timestamp("scheduled_for"),
+  status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, scheduled, sending, sent, failed
+  totalRecipients: integer("total_recipients").default(0),
+  sentCount: integer("sent_count").default(0),
+  deliveredCount: integer("delivered_count").default(0),
+  openedCount: integer("opened_count").default(0),
+  clickedCount: integer("clicked_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notification Queue for reliable delivery
+export const notificationQueue = pgTable("notification_queue", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id),
+  campaignId: uuid("campaign_id").references(() => notificationCampaigns.id),
+  notificationType: varchar("notification_type", { length: 20 }).notNull(),
+  recipient: varchar("recipient", { length: 255 }).notNull(), // email or phone
+  subject: varchar("subject", { length: 500 }),
+  content: text("content").notNull(),
+  templateData: jsonb("template_data"),
+  priority: varchar("priority", { length: 10 }).notNull().default("normal"), // low, normal, high, critical
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, sent, failed, retrying
+  attempts: integer("attempts").default(0),
+  maxAttempts: integer("max_attempts").default(3),
+  scheduledFor: timestamp("scheduled_for").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notification Templates Management
+export const notificationTemplates = pgTable("notification_templates", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull(), // order, payment, promotional, admin
+  type: varchar("type", { length: 20 }).notNull(), // email, sms, push
+  language: varchar("language", { length: 5 }).notNull().default("en"), // en, tl
+  subject: varchar("subject", { length: 500 }),
+  content: text("content").notNull(),
+  variables: jsonb("variables"), // Available template variables
+  isActive: boolean("is_active").default(true),
+  version: integer("version").default(1),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ==================== COMPREHENSIVE FINANCIAL ENGINE TABLES ====================
+// Dynamic Pricing Engine - Geographic zone-based pricing configuration
+export const pricingZones = pgTable("pricing_zones", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon defining zone boundaries
+  baseDeliveryFee: decimal("base_delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  perKilometerRate: decimal("per_kilometer_rate", { precision: 8, scale: 2 }).notNull(),
+  minimumFee: decimal("minimum_fee", { precision: 10, scale: 2 }).notNull(),
+  maximumDistance: decimal("maximum_distance", { precision: 8, scale: 2 }).notNull(), // km
+  surchargeMultiplier: decimal("surcharge_multiplier", { precision: 5, scale: 3 }).default("1.000"),
+  serviceTypes: jsonb("service_types").notNull(), // ["food", "pabili", "pabayad", "parcel"]
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1), // Higher priority zones override lower ones
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Time-based Surge Pricing Schedules
+export const surgeSchedules = pgTable("surge_schedules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  scheduleType: varchar("schedule_type", { length: 50 }).notNull(), // peak_hour, weekend, holiday, weather, event
+  timeRules: jsonb("time_rules").notNull(), // {dayOfWeek: [1,2,3], timeStart: "11:00", timeEnd: "14:00"}
+  surgeMultiplier: decimal("surge_multiplier", { precision: 5, scale: 3 }).notNull(),
+  weatherConditions: jsonb("weather_conditions"), // ["rain", "storm", "typhoon"]
+  eventTriggers: jsonb("event_triggers"), // External event triggers
+  zoneRestrictions: jsonb("zone_restrictions"), // Specific zones or "all"
+  serviceTypeRestrictions: jsonb("service_type_restrictions"), // Specific service types
+  minimumOrderValue: decimal("minimum_order_value", { precision: 10, scale: 2 }),
+  maximumSurgeAmount: decimal("maximum_surge_amount", { precision: 10, scale: 2 }),
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Real-time Demand-based Pricing
+export const demandPricing = pgTable("demand_pricing", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  zoneId: uuid("zone_id").references(() => pricingZones.id).notNull(),
+  serviceType: varchar("service_type", { length: 50 }).notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  activeBidders: integer("active_bidders").default(0), // Number of riders available
+  demandLevel: varchar("demand_level", { length: 20 }).notNull(), // low, medium, high, critical
+  surgeMultiplier: decimal("surge_multiplier", { precision: 5, scale: 3 }).notNull(),
+  averageWaitTime: integer("average_wait_time"), // minutes
+  completionRate: decimal("completion_rate", { precision: 5, scale: 2 }), // percentage
+  weatherFactor: decimal("weather_factor", { precision: 3, scale: 2 }).default("1.00"),
+  eventFactor: decimal("event_factor", { precision: 3, scale: 2 }).default("1.00"),
+  isActive: boolean("is_active").default(true),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+// Vehicle Type Pricing Configuration
+export const vehicleTypePricing = pgTable("vehicle_type_pricing", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleType: varchar("vehicle_type", { length: 50 }).notNull(), // motorcycle, bicycle, car, truck
+  serviceType: varchar("service_type", { length: 50 }).notNull(),
+  baseFeeMultiplier: decimal("base_fee_multiplier", { precision: 5, scale: 3 }).notNull(),
+  perKilometerMultiplier: decimal("per_kilometer_multiplier", { precision: 5, scale: 3 }).notNull(),
+  maxWeightCapacity: decimal("max_weight_capacity", { precision: 8, scale: 2 }), // kg
+  maxVolumeCapacity: decimal("max_volume_capacity", { precision: 8, scale: 2 }), // cubic meters
+  weightSurcharge: decimal("weight_surcharge", { precision: 8, scale: 2 }), // per kg over limit
+  volumeSurcharge: decimal("volume_surcharge", { precision: 8, scale: 2 }), // per cubic meter over
+  environmentFee: decimal("environment_fee", { precision: 8, scale: 2 }).default("0"), // Environmental impact fee
+  isActive: boolean("is_active").default(true),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Comprehensive Fee Rules Configuration
+export const feeRules = pgTable("fee_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleName: varchar("rule_name", { length: 255 }).notNull(),
+  ruleType: varchar("rule_type", { length: 50 }).notNull(), // service_fee, processing_fee, small_order_fee, packaging_fee, insurance_fee, cancellation_fee
+  calculationType: varchar("calculation_type", { length: 50 }).notNull(), // percentage, fixed, tiered, conditional
+  serviceTypes: jsonb("service_types").notNull(), // ["food", "pabili", "pabayad", "parcel"]
+  feeStructure: jsonb("fee_structure").notNull(), // Configuration based on calculation type
+  minimumOrderValue: decimal("minimum_order_value", { precision: 10, scale: 2 }),
+  maximumOrderValue: decimal("maximum_order_value", { precision: 10, scale: 2 }),
+  minimumFee: decimal("minimum_fee", { precision: 10, scale: 2 }),
+  maximumFee: decimal("maximum_fee", { precision: 10, scale: 2 }),
+  conditions: jsonb("conditions"), // Additional conditions for fee application
+  taxable: boolean("taxable").default(true),
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payment Method Fee Configuration
+export const paymentMethodFees = pgTable("payment_method_fees", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentMethod: varchar("payment_method", { length: 50 }).notNull(), // cash, gcash, maya, card, bank_transfer
+  feeType: varchar("fee_type", { length: 50 }).notNull(), // processing, convenience, transaction
+  feeCalculation: varchar("fee_calculation", { length: 20 }).notNull(), // percentage, fixed, hybrid
+  feeValue: decimal("fee_value", { precision: 8, scale: 4 }).notNull(),
+  minimumFee: decimal("minimum_fee", { precision: 8, scale: 2 }),
+  maximumFee: decimal("maximum_fee", { precision: 8, scale: 2 }),
+  freeThreshold: decimal("free_threshold", { precision: 10, scale: 2 }), // Amount above which fee is waived
+  supportedServiceTypes: jsonb("supported_service_types"),
+  merchantFeeShare: decimal("merchant_fee_share", { precision: 5, scale: 4 }), // Percentage shared with merchant
+  isActive: boolean("is_active").default(true),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Vendor Commission Tier System
+export const vendorCommissionTiers = pgTable("vendor_commission_tiers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tierName: varchar("tier_name", { length: 100 }).notNull(),
+  description: text("description"),
+  serviceType: varchar("service_type", { length: 50 }).notNull(),
+  vendorCategory: varchar("vendor_category", { length: 100 }), // fast_food, fine_dining, grocery, etc.
+  requirementType: varchar("requirement_type", { length: 50 }).notNull(), // volume, performance, partnership_level
+  requirements: jsonb("requirements").notNull(), // Specific requirements to qualify
+  commissionStructure: jsonb("commission_structure").notNull(), // Complex commission rules
+  performanceBonus: decimal("performance_bonus", { precision: 5, scale: 4 }), // Additional bonus for high performers
+  volumeDiscounts: jsonb("volume_discounts"), // Volume-based discount tiers
+  promotionalRates: jsonb("promotional_rates"), // Special promotional commission rates
+  contractualBenefits: jsonb("contractual_benefits"), // Additional benefits
+  reviewPeriod: integer("review_period").default(30), // Days between tier reviews
+  autoUpgrade: boolean("auto_upgrade").default(false),
+  autoDowngrade: boolean("auto_downgrade").default(false),
+  isActive: boolean("is_active").default(true),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Rider Earning Rules and Incentive Structure
+export const riderEarningRules = pgTable("rider_earning_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleName: varchar("rule_name", { length: 255 }).notNull(),
+  earningType: varchar("earning_type", { length: 50 }).notNull(), // base, performance_bonus, surge_bonus, fuel_allowance, maintenance_subsidy
+  calculationType: varchar("calculation_type", { length: 50 }).notNull(), // fixed, percentage, tiered, performance_based
+  serviceTypes: jsonb("service_types"),
+  vehicleTypes: jsonb("vehicle_types"),
+  earningStructure: jsonb("earning_structure").notNull(), // Detailed calculation rules
+  performanceCriteria: jsonb("performance_criteria"), // Rating, completion rate, etc.
+  timePeriod: varchar("time_period", { length: 50 }), // per_order, daily, weekly, monthly
+  minimumRequirements: jsonb("minimum_requirements"),
+  maximumEarning: decimal("maximum_earning", { precision: 10, scale: 2 }),
+  penaltyStructure: jsonb("penalty_structure"), // Deductions for violations
+  bonusMultipliers: jsonb("bonus_multipliers"), // Peak hour, surge, etc.
+  isActive: boolean("is_active").default(true),
+  effectiveFrom: timestamp("effective_from").defaultNow(),
+  effectiveTo: timestamp("effective_to"),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tax Rules and Regulatory Compliance
+export const taxRules = pgTable("tax_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  taxType: varchar("tax_type", { length: 50 }).notNull(), // vat, withholding, local_tax, business_permit
+  description: text("description"),
+  taxRate: decimal("tax_rate", { precision: 8, scale: 5 }).notNull(),
+  applicableServices: jsonb("applicable_services"), // Which services this tax applies to
+  applicableFees: jsonb("applicable_fees"), // Which fees are taxable
+  minimumAmount: decimal("minimum_amount", { precision: 10, scale: 2 }),
+  maximumAmount: decimal("maximum_amount", { precision: 10, scale: 2 }),
+  geographicScope: jsonb("geographic_scope"), // Cities, provinces, or nationwide
+  exemptionConditions: jsonb("exemption_conditions"),
+  reportingRequirements: jsonb("reporting_requirements"),
+  remittanceSchedule: varchar("remittance_schedule", { length: 50 }), // monthly, quarterly, annually
+  penaltyStructure: jsonb("penalty_structure"), // Late payment penalties
+  isActive: boolean("is_active").default(true),
+  effectiveFrom: timestamp("effective_from").notNull(),
+  effectiveTo: timestamp("effective_to"),
+  regulatoryReference: varchar("regulatory_reference", { length: 255 }), // Government reference
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tax Exemption Management
+export const taxExemptions = pgTable("tax_exemptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  exemptionType: varchar("exemption_type", { length: 50 }).notNull(), // senior_citizen, pwd, government, charitable
+  description: text("description"),
+  applicableTaxes: jsonb("applicable_taxes").notNull(), // Which taxes are exempted
+  exemptionRate: decimal("exemption_rate", { precision: 5, scale: 4 }).notNull(), // 0-1 (percentage exempted)
+  requiredDocuments: jsonb("required_documents"), // Required documentation
+  verificationProcess: jsonb("verification_process"),
+  maximumExemptionAmount: decimal("maximum_exemption_amount", { precision: 10, scale: 2 }),
+  validityPeriod: integer("validity_period"), // Days
+  geographicLimitations: jsonb("geographic_limitations"),
+  serviceTypeLimitations: jsonb("service_type_limitations"),
+  isActive: boolean("is_active").default(true),
+  regulatoryBasis: text("regulatory_basis"), // Legal basis for exemption
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Pricing History and Audit Trail
+export const pricingHistory = pgTable("pricing_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  changeType: varchar("change_type", { length: 50 }).notNull(), // zone_pricing, surge_pricing, fee_rule, commission_rule
+  entityId: uuid("entity_id").notNull(), // ID of the changed entity
+  entityType: varchar("entity_type", { length: 50 }).notNull(), // pricing_zone, surge_schedule, fee_rule, etc.
+  previousValues: jsonb("previous_values"), // Previous configuration
+  newValues: jsonb("new_values").notNull(), // New configuration
+  reason: text("reason"), // Reason for change
+  impactAnalysis: jsonb("impact_analysis"), // Projected impact of the change
+  approvalStatus: varchar("approval_status", { length: 20 }).default("pending"), // pending, approved, rejected
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  implementedAt: timestamp("implemented_at"),
+  rollbackAt: timestamp("rollback_at"), // If change was rolled back
+  changedBy: uuid("changed_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Fee Calculation Storage for Orders
+export const feeCalculations = pgTable("fee_calculations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  calculationType: varchar("calculation_type", { length: 50 }).notNull(), // initial, updated, final
+  pricingSnapshot: jsonb("pricing_snapshot").notNull(), // Complete pricing rules at time of calculation
+  baseAmount: decimal("base_amount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Delivery Fees
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  distanceFee: decimal("distance_fee", { precision: 10, scale: 2 }).default("0"),
+  surgeFee: decimal("surge_fee", { precision: 10, scale: 2 }).default("0"),
+  vehicleTypeFee: decimal("vehicle_type_fee", { precision: 10, scale: 2 }).default("0"),
+  
+  // Service Fees
+  serviceFee: decimal("service_fee", { precision: 10, scale: 2 }).notNull(),
+  processingFee: decimal("processing_fee", { precision: 10, scale: 2 }).notNull(),
+  smallOrderFee: decimal("small_order_fee", { precision: 10, scale: 2 }).default("0"),
+  packagingFee: decimal("packaging_fee", { precision: 10, scale: 2 }).default("0"),
+  insuranceFee: decimal("insurance_fee", { precision: 10, scale: 2 }).default("0"),
+  expressFee: decimal("express_fee", { precision: 10, scale: 2 }).default("0"),
+  
+  // Payment Processing Fees
+  paymentMethodFee: decimal("payment_method_fee", { precision: 10, scale: 2 }).default("0"),
+  
+  // Subtotals
+  subtotalBeforeTax: decimal("subtotal_before_tax", { precision: 10, scale: 2 }).notNull(),
+  
+  // Taxes
+  vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }).default("0"),
+  withholdingTax: decimal("withholding_tax", { precision: 10, scale: 2 }).default("0"),
+  localTax: decimal("local_tax", { precision: 10, scale: 2 }).default("0"),
+  totalTax: decimal("total_tax", { precision: 10, scale: 2 }).notNull(),
+  
+  // Discounts
+  promotionalDiscount: decimal("promotional_discount", { precision: 10, scale: 2 }).default("0"),
+  loyaltyDiscount: decimal("loyalty_discount", { precision: 10, scale: 2 }).default("0"),
+  couponDiscount: decimal("coupon_discount", { precision: 10, scale: 2 }).default("0"),
+  volumeDiscount: decimal("volume_discount", { precision: 10, scale: 2 }).default("0"),
+  totalDiscount: decimal("total_discount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Final Amount
+  finalAmount: decimal("final_amount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Tips and Additional
+  tip: decimal("tip", { precision: 10, scale: 2 }).default("0"),
+  
+  // Commissions and Earnings
+  vendorCommission: decimal("vendor_commission", { precision: 10, scale: 2 }).default("0"),
+  riderEarnings: decimal("rider_earnings", { precision: 10, scale: 2 }).default("0"),
+  platformRevenue: decimal("platform_revenue", { precision: 10, scale: 2 }).notNull(),
+  
+  calculatedAt: timestamp("calculated_at").defaultNow(),
+  calculatedBy: varchar("calculated_by", { length: 100 }), // system, admin, api
+  isActive: boolean("is_active").default(true),
+});
+
+// Revenue Tracking and Analytics
+export const revenueTracking = pgTable("revenue_tracking", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  trackingDate: timestamp("tracking_date").notNull(),
+  period: varchar("period", { length: 20 }).notNull(), // hourly, daily, weekly, monthly
+  serviceType: varchar("service_type", { length: 50 }).notNull(),
+  zoneId: uuid("zone_id").references(() => pricingZones.id),
+  
+  // Order Metrics
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  cancelledOrders: integer("cancelled_orders").default(0),
+  
+  // Revenue Breakdown
+  grossRevenue: decimal("gross_revenue", { precision: 12, scale: 2 }).default("0"),
+  netRevenue: decimal("net_revenue", { precision: 12, scale: 2 }).default("0"),
+  deliveryFeeRevenue: decimal("delivery_fee_revenue", { precision: 12, scale: 2 }).default("0"),
+  serviceFeeRevenue: decimal("service_fee_revenue", { precision: 12, scale: 2 }).default("0"),
+  surgeRevenue: decimal("surge_revenue", { precision: 12, scale: 2 }).default("0"),
+  
+  // Costs and Commissions
+  totalCommissions: decimal("total_commissions", { precision: 12, scale: 2 }).default("0"),
+  vendorCommissions: decimal("vendor_commissions", { precision: 12, scale: 2 }).default("0"),
+  riderEarnings: decimal("rider_earnings", { precision: 12, scale: 2 }).default("0"),
+  paymentProcessingFees: decimal("payment_processing_fees", { precision: 12, scale: 2 }).default("0"),
+  
+  // Tax Collections
+  vatCollected: decimal("vat_collected", { precision: 12, scale: 2 }).default("0"),
+  withholdingTaxCollected: decimal("withholding_tax_collected", { precision: 12, scale: 2 }).default("0"),
+  localTaxCollected: decimal("local_tax_collected", { precision: 12, scale: 2 }).default("0"),
+  
+  // Discounts Given
+  totalDiscounts: decimal("total_discounts", { precision: 12, scale: 2 }).default("0"),
+  promotionalDiscounts: decimal("promotional_discounts", { precision: 12, scale: 2 }).default("0"),
+  loyaltyDiscounts: decimal("loyalty_discounts", { precision: 12, scale: 2 }).default("0"),
+  
+  // Performance Metrics
+  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }),
+  averageDeliveryFee: decimal("average_delivery_fee", { precision: 10, scale: 2 }),
+  conversionRate: decimal("conversion_rate", { precision: 5, scale: 4 }),
+  profitMargin: decimal("profit_margin", { precision: 5, scale: 4 }),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Advanced Promotion Rules Engine
+export const promotionRules = pgTable("promotion_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  promotionCode: varchar("promotion_code", { length: 50 }).unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  promotionType: varchar("promotion_type", { length: 50 }).notNull(), // discount, cashback, loyalty_multiplier, free_delivery
+  discountType: varchar("discount_type", { length: 50 }), // percentage, fixed, tiered, bogo
+  discountValue: decimal("discount_value", { precision: 10, scale: 4 }),
+  
+  // Eligibility Criteria
+  customerType: varchar("customer_type", { length: 50 }), // new, returning, vip, all
+  serviceTypes: jsonb("service_types"), // Applicable service types
+  vendorRestrictions: jsonb("vendor_restrictions"), // Specific vendors or categories
+  minimumOrderValue: decimal("minimum_order_value", { precision: 10, scale: 2 }),
+  maximumOrderValue: decimal("maximum_order_value", { precision: 10, scale: 2 }),
+  geographicRestrictions: jsonb("geographic_restrictions"),
+  timeRestrictions: jsonb("time_restrictions"), // Valid days/hours
+  
+  // Usage Limits
+  usageLimitPerCustomer: integer("usage_limit_per_customer"),
+  totalUsageLimit: integer("total_usage_limit"),
+  currentUsageCount: integer("current_usage_count").default(0),
+  
+  // Financial Limits
+  maximumDiscountAmount: decimal("maximum_discount_amount", { precision: 10, scale: 2 }),
+  budgetLimit: decimal("budget_limit", { precision: 12, scale: 2 }),
+  currentSpend: decimal("current_spend", { precision: 12, scale: 2 }).default("0"),
+  
+  // Stacking Rules
+  stackableWithOthers: boolean("stackable_with_others").default(false),
+  stackingPriority: integer("stacking_priority").default(1),
+  exclusiveWith: jsonb("exclusive_with"), // Promotion codes that can't be used together
+  
+  // Validity Period
+  validFrom: timestamp("valid_from").notNull(),
+  validUntil: timestamp("valid_until").notNull(),
+  
+  isActive: boolean("is_active").default(true),
+  requiresApproval: boolean("requires_approval").default(false),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Financial Report Generation and Storage
+export const financialReports = pgTable("financial_reports", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportType: varchar("report_type", { length: 50 }).notNull(), // revenue_summary, commission_report, tax_report, profit_loss
+  reportPeriod: varchar("report_period", { length: 20 }).notNull(), // daily, weekly, monthly, quarterly, yearly
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  
+  // Report Filters
+  serviceTypes: jsonb("service_types"),
+  zones: jsonb("zones"),
+  vendorCategories: jsonb("vendor_categories"),
+  
+  // Report Data
+  reportData: jsonb("report_data").notNull(), // Complete report data
+  summary: jsonb("summary").notNull(), // Key metrics summary
+  
+  // Financial Totals
+  totalRevenue: decimal("total_revenue", { precision: 15, scale: 2 }),
+  totalCosts: decimal("total_costs", { precision: 15, scale: 2 }),
+  netProfit: decimal("net_profit", { precision: 15, scale: 2 }),
+  taxLiability: decimal("tax_liability", { precision: 15, scale: 2 }),
+  
+  // Generation Info
+  generatedBy: uuid("generated_by").references(() => users.id).notNull(),
+  generationStatus: varchar("generation_status", { length: 20 }).default("generating"), // generating, completed, failed
+  filePath: varchar("file_path", { length: 500 }), // Path to generated report file
+  fileFormat: varchar("file_format", { length: 10 }), // pdf, excel, csv
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Insert schemas for new notification tables
+export const insertUserPushSubscriptionSchema = createInsertSchema(userPushSubscriptions);
+export const insertNotificationAnalyticsSchema = createInsertSchema(notificationAnalytics);
+export const insertNotificationCampaignSchema = createInsertSchema(notificationCampaigns);
+export const insertNotificationQueueSchema = createInsertSchema(notificationQueue);
+export const insertNotificationTemplateSchema = createInsertSchema(notificationTemplates);
+
+// Insert schemas for comprehensive financial engine tables
+export const insertPricingZoneSchema = createInsertSchema(pricingZones);
+export const insertSurgeScheduleSchema = createInsertSchema(surgeSchedules);
+export const insertDemandPricingSchema = createInsertSchema(demandPricing);
+export const insertVehicleTypePricingSchema = createInsertSchema(vehicleTypePricing);
+export const insertFeeRuleSchema = createInsertSchema(feeRules);
+export const insertPaymentMethodFeeSchema = createInsertSchema(paymentMethodFees);
+export const insertVendorCommissionTierSchema = createInsertSchema(vendorCommissionTiers);
+export const insertRiderEarningRuleSchema = createInsertSchema(riderEarningRules);
+export const insertTaxRuleSchema = createInsertSchema(taxRules);
+export const insertTaxExemptionSchema = createInsertSchema(taxExemptions);
+export const insertPricingHistorySchema = createInsertSchema(pricingHistory);
+export const insertFeeCalculationSchema = createInsertSchema(feeCalculations);
+export const insertRevenueTrackingSchema = createInsertSchema(revenueTracking);
+export const insertPromotionRuleSchema = createInsertSchema(promotionRules);
+export const insertFinancialReportSchema = createInsertSchema(financialReports);
+
+// Types for new notification tables
+export type UserPushSubscription = typeof userPushSubscriptions.$inferSelect;
+export type InsertUserPushSubscription = z.infer<typeof insertUserPushSubscriptionSchema>;
+export type NotificationAnalytics = typeof notificationAnalytics.$inferSelect;
+export type InsertNotificationAnalytics = z.infer<typeof insertNotificationAnalyticsSchema>;
+export type NotificationCampaign = typeof notificationCampaigns.$inferSelect;
+export type InsertNotificationCampaign = z.infer<typeof insertNotificationCampaignSchema>;
+export type NotificationQueue = typeof notificationQueue.$inferSelect;
+export type InsertNotificationQueue = z.infer<typeof insertNotificationQueueSchema>;
+export type NotificationTemplate = typeof notificationTemplates.$inferSelect;
+export type InsertNotificationTemplate = z.infer<typeof insertNotificationTemplateSchema>;
+
+// Types for comprehensive financial engine tables
+export type PricingZone = typeof pricingZones.$inferSelect;
+export type InsertPricingZone = z.infer<typeof insertPricingZoneSchema>;
+export type SurgeSchedule = typeof surgeSchedules.$inferSelect;
+export type InsertSurgeSchedule = z.infer<typeof insertSurgeScheduleSchema>;
+export type DemandPricing = typeof demandPricing.$inferSelect;
+export type InsertDemandPricing = z.infer<typeof insertDemandPricingSchema>;
+export type VehicleTypePricing = typeof vehicleTypePricing.$inferSelect;
+export type InsertVehicleTypePricing = z.infer<typeof insertVehicleTypePricingSchema>;
+export type FeeRule = typeof feeRules.$inferSelect;
+export type InsertFeeRule = z.infer<typeof insertFeeRuleSchema>;
+export type PaymentMethodFee = typeof paymentMethodFees.$inferSelect;
+export type InsertPaymentMethodFee = z.infer<typeof insertPaymentMethodFeeSchema>;
+export type VendorCommissionTier = typeof vendorCommissionTiers.$inferSelect;
+export type InsertVendorCommissionTier = z.infer<typeof insertVendorCommissionTierSchema>;
+export type RiderEarningRule = typeof riderEarningRules.$inferSelect;
+export type InsertRiderEarningRule = z.infer<typeof insertRiderEarningRuleSchema>;
+export type TaxRule = typeof taxRules.$inferSelect;
+export type InsertTaxRule = z.infer<typeof insertTaxRuleSchema>;
+export type TaxExemption = typeof taxExemptions.$inferSelect;
+export type InsertTaxExemption = z.infer<typeof insertTaxExemptionSchema>;
+export type PricingHistory = typeof pricingHistory.$inferSelect;
+export type InsertPricingHistory = z.infer<typeof insertPricingHistorySchema>;
+export type FeeCalculation = typeof feeCalculations.$inferSelect;
+export type InsertFeeCalculation = z.infer<typeof insertFeeCalculationSchema>;
+export type RevenueTracking = typeof revenueTracking.$inferSelect;
+export type InsertRevenueTracking = z.infer<typeof insertRevenueTrackingSchema>;
+export type PromotionRule = typeof promotionRules.$inferSelect;
+export type InsertPromotionRule = z.infer<typeof insertPromotionRuleSchema>;
+export type FinancialReport = typeof financialReports.$inferSelect;
+export type InsertFinancialReport = z.infer<typeof insertFinancialReportSchema>;
+
 // BTS System Types
 export type BtsRider = typeof btsRiders.$inferSelect;
 export type BtsSalesRemittance = typeof btsSalesRemittance.$inferSelect;
