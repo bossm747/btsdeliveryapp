@@ -100,7 +100,12 @@ export const corsConfig = cors({
       process.env.DOMAIN_URL
     ].filter(Boolean);
     
-    if (allowedOrigins.includes(origin)) {
+    // Allow all Replit domains in development
+    const isReplitDomain = origin.includes('.replit.dev') || 
+                          origin.includes('.replit.app') ||
+                          origin.includes('.repl.co');
+    
+    if (allowedOrigins.includes(origin) || (process.env.NODE_ENV === 'development' && isReplitDomain)) {
       callback(null, true);
     } else {
       console.warn(`CORS: Origin ${origin} not allowed`);
