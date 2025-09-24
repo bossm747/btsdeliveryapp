@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 interface NexusPayConfig {
   baseUrl: string;
@@ -91,7 +91,7 @@ export class NexusPayService {
         this.authToken = data.data.token;
         // Set token expiry to 1 hour from now
         this.tokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
-        return this.authToken;
+        return data.data.token;
       }
 
       throw new Error(data.message || 'Authentication failed');
@@ -200,7 +200,7 @@ export class NexusPayService {
       throw new Error('Payment amount exceeds maximum limit of ₱500,000');
     }
 
-    if (paymentMethodCode && !Object.values(NEXUSPAY_CODES).includes(paymentMethodCode)) {
+    if (paymentMethodCode && !Object.values(NEXUSPAY_CODES).includes(paymentMethodCode as any)) {
       throw new Error(`Invalid payment method code: ${paymentMethodCode}`);
     }
   }
