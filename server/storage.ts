@@ -107,6 +107,12 @@ import {
   type InsertPromotion,
   type VendorEarnings,
   type InsertVendorEarnings,
+  type VendorSettlement,
+  type InsertVendorSettlement,
+  type VendorPayout,
+  type InsertVendorPayout,
+  vendorSettlements,
+  vendorPayouts,
   type RestaurantStaff,
   type InsertRestaurantStaff,
   type ReviewResponse,
@@ -129,7 +135,14 @@ import {
   type UserDietaryPreferences,
   type InsertUserDietaryPreferences,
   type UserNotificationPreferences,
-  type InsertUserNotificationPreferences
+  type InsertUserNotificationPreferences,
+  // Promo Code Types
+  promoCodes,
+  promoUsage,
+  type PromoCode,
+  type InsertPromoCode,
+  type PromoUsage,
+  type InsertPromoUsage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -282,19 +295,60 @@ export interface IStorage {
   createMenuItemModifier(itemModifier: InsertMenuItemModifier): Promise<MenuItemModifier>;
   deleteMenuItemModifier(id: string): Promise<void>;
   
-  // Promotions Operations
+  // Promotions Operations (legacy - vendor specific)
   getPromotions(restaurantId: string): Promise<Promotion[]>;
   getPromotion(id: string): Promise<Promotion | undefined>;
   getPromotionByCode(code: string): Promise<Promotion | undefined>;
   createPromotion(promotion: InsertPromotion): Promise<Promotion>;
   updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion | undefined>;
   deletePromotion(id: string): Promise<void>;
-  
+
+  // Advanced Promo Code Operations (platform-wide)
+  getPromoCodes(filters?: { isActive?: boolean; fundingType?: string; applicableTo?: string }): Promise<PromoCode[]>;
+  getPromoCode(id: string): Promise<PromoCode | undefined>;
+  getPromoCodeByCode(code: string): Promise<PromoCode | undefined>;
+  createPromoCode(promo: InsertPromoCode): Promise<PromoCode>;
+  updatePromoCode(id: string, updates: Partial<PromoCode>): Promise<PromoCode | undefined>;
+  deletePromoCode(id: string): Promise<void>;
+  incrementPromoUsageCount(id: string): Promise<PromoCode | undefined>;
+
+  // Promo Usage Operations
+  getPromoUsageByUser(userId: string, promoId: string): Promise<PromoUsage[]>;
+  getPromoUsageCount(promoId: string): Promise<number>;
+  getUserPromoUsageCount(userId: string, promoId: string): Promise<number>;
+  createPromoUsage(usage: InsertPromoUsage): Promise<PromoUsage>;
+  getPromoUsageStats(promoId: string): Promise<{ totalUses: number; totalDiscount: number; uniqueUsers: number }>;
+
   // Financial Operations
   getVendorEarnings(restaurantId: string, startDate?: string, endDate?: string): Promise<VendorEarnings[]>;
   createVendorEarnings(earnings: InsertVendorEarnings): Promise<VendorEarnings>;
   getEarningsSummary(restaurantId: string, period: 'day' | 'week' | 'month'): Promise<any>;
-  
+
+  // Vendor Settlement Operations
+  getVendorSettlements(vendorId: string, filters?: { status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }): Promise<{ settlements: VendorSettlement[]; total: number }>;
+  getVendorSettlement(id: string): Promise<VendorSettlement | undefined>;
+  createVendorSettlement(settlement: InsertVendorSettlement): Promise<VendorSettlement>;
+  updateVendorSettlement(id: string, updates: Partial<VendorSettlement>): Promise<VendorSettlement | undefined>;
+  getAllSettlements(filters?: { status?: string; vendorId?: string; startDate?: string; endDate?: string; page?: number; limit?: number }): Promise<{ settlements: VendorSettlement[]; total: number }>;
+
+  // Vendor Payout Operations
+  getVendorPayouts(vendorId: string, filters?: { status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }): Promise<{ payouts: VendorPayout[]; total: number }>;
+  getVendorPayout(id: string): Promise<VendorPayout | undefined>;
+  createVendorPayout(payout: InsertVendorPayout): Promise<VendorPayout>;
+  updateVendorPayout(id: string, updates: Partial<VendorPayout>): Promise<VendorPayout | undefined>;
+  processPayoutBatch(payoutIds: string[], processedBy: string): Promise<{ successful: string[]; failed: { id: string; error: string }[] }>;
+
+  // Settlement Calculation
+  calculateDailySettlement(vendorId: string, restaurantId: string, date: Date): Promise<VendorSettlement>;
+  getVendorEarningsSummary(vendorId: string, period?: 'day' | 'week' | 'month' | 'year'): Promise<{
+    grossEarnings: number;
+    totalCommission: number;
+    netEarnings: number;
+    pendingPayout: number;
+    completedPayouts: number;
+    totalOrders: number;
+  }>;
+
   // Staff Management Operations
   getRestaurantStaff(restaurantId: string): Promise<RestaurantStaff[]>;
   getStaffMember(id: string): Promise<RestaurantStaff | undefined>;
@@ -1402,6 +1456,125 @@ export class DatabaseStorage implements IStorage {
     await db.delete(promotions).where(eq(promotions.id, id));
   }
 
+  // Advanced Promo Code Operations (platform-wide)
+  async getPromoCodes(filters?: { isActive?: boolean; fundingType?: string; applicableTo?: string }): Promise<PromoCode[]> {
+    let conditions: any[] = [];
+
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(promoCodes.isActive, filters.isActive));
+    }
+    if (filters?.fundingType) {
+      conditions.push(eq(promoCodes.fundingType, filters.fundingType));
+    }
+    if (filters?.applicableTo) {
+      conditions.push(eq(promoCodes.applicableTo, filters.applicableTo));
+    }
+
+    if (conditions.length > 0) {
+      return await db.select().from(promoCodes)
+        .where(and(...conditions))
+        .orderBy(desc(promoCodes.createdAt));
+    }
+
+    return await db.select().from(promoCodes).orderBy(desc(promoCodes.createdAt));
+  }
+
+  async getPromoCode(id: string): Promise<PromoCode | undefined> {
+    const [promo] = await db.select().from(promoCodes).where(eq(promoCodes.id, id));
+    return promo;
+  }
+
+  async getPromoCodeByCode(code: string): Promise<PromoCode | undefined> {
+    const [promo] = await db.select().from(promoCodes)
+      .where(eq(promoCodes.code, code.toUpperCase()));
+    return promo;
+  }
+
+  async createPromoCode(promo: InsertPromoCode): Promise<PromoCode> {
+    const [record] = await db.insert(promoCodes).values({
+      ...promo,
+      code: promo.code.toUpperCase()
+    }).returning();
+    return record;
+  }
+
+  async updatePromoCode(id: string, updates: Partial<PromoCode>): Promise<PromoCode | undefined> {
+    const updateData: any = { ...updates, updatedAt: new Date() };
+    if (updates.code) {
+      updateData.code = updates.code.toUpperCase();
+    }
+    const [updated] = await db.update(promoCodes)
+      .set(updateData)
+      .where(eq(promoCodes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePromoCode(id: string): Promise<void> {
+    await db.delete(promoCodes).where(eq(promoCodes.id, id));
+  }
+
+  async incrementPromoUsageCount(id: string): Promise<PromoCode | undefined> {
+    const [updated] = await db.update(promoCodes)
+      .set({
+        timesUsed: sql`${promoCodes.timesUsed} + 1`,
+        updatedAt: new Date()
+      })
+      .where(eq(promoCodes.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Promo Usage Operations
+  async getPromoUsageByUser(userId: string, promoId: string): Promise<PromoUsage[]> {
+    return await db.select().from(promoUsage)
+      .where(and(
+        eq(promoUsage.userId, userId),
+        eq(promoUsage.promoId, promoId)
+      ))
+      .orderBy(desc(promoUsage.usedAt));
+  }
+
+  async getPromoUsageCount(promoId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(promoUsage)
+      .where(eq(promoUsage.promoId, promoId));
+    return Number(result[0]?.count) || 0;
+  }
+
+  async getUserPromoUsageCount(userId: string, promoId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(promoUsage)
+      .where(and(
+        eq(promoUsage.userId, userId),
+        eq(promoUsage.promoId, promoId)
+      ));
+    return Number(result[0]?.count) || 0;
+  }
+
+  async createPromoUsage(usage: InsertPromoUsage): Promise<PromoUsage> {
+    const [record] = await db.insert(promoUsage).values(usage).returning();
+    return record;
+  }
+
+  async getPromoUsageStats(promoId: string): Promise<{ totalUses: number; totalDiscount: number; uniqueUsers: number }> {
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*) as total_uses,
+        COALESCE(SUM(discount_amount), 0) as total_discount,
+        COUNT(DISTINCT user_id) as unique_users
+      FROM promo_usage
+      WHERE promo_id = ${promoId}
+    `);
+
+    const row = result.rows[0] as any;
+    return {
+      totalUses: Number(row?.total_uses) || 0,
+      totalDiscount: Number(row?.total_discount) || 0,
+      uniqueUsers: Number(row?.unique_users) || 0
+    };
+  }
+
   // Financial Operations
   async getVendorEarnings(restaurantId: string, startDate?: string, endDate?: string): Promise<VendorEarnings[]> {
     let whereConditions = [eq(vendorEarnings.restaurantId, restaurantId)];
@@ -1449,6 +1622,368 @@ export class DatabaseStorage implements IStorage {
     `);
     
     return result.rows[0];
+  }
+
+  // Vendor Settlement Operations
+  async getVendorSettlements(
+    vendorId: string,
+    filters?: { status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }
+  ): Promise<{ settlements: VendorSettlement[]; total: number }> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const offset = (page - 1) * limit;
+
+    let whereConditions: any[] = [eq(vendorSettlements.vendorId, vendorId)];
+
+    if (filters?.status) {
+      whereConditions.push(eq(vendorSettlements.status, filters.status));
+    }
+
+    if (filters?.startDate) {
+      whereConditions.push(sql`${vendorSettlements.periodStart} >= ${filters.startDate}`);
+    }
+
+    if (filters?.endDate) {
+      whereConditions.push(sql`${vendorSettlements.periodEnd} <= ${filters.endDate}`);
+    }
+
+    const settlements = await db.select()
+      .from(vendorSettlements)
+      .where(and(...whereConditions))
+      .orderBy(desc(vendorSettlements.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM vendor_settlements
+      WHERE vendor_id = ${vendorId}
+      ${filters?.status ? sql`AND status = ${filters.status}` : sql``}
+    `);
+
+    return {
+      settlements,
+      total: parseInt(countResult.rows[0]?.count as string || '0')
+    };
+  }
+
+  async getVendorSettlement(id: string): Promise<VendorSettlement | undefined> {
+    const [settlement] = await db.select()
+      .from(vendorSettlements)
+      .where(eq(vendorSettlements.id, id));
+    return settlement;
+  }
+
+  async createVendorSettlement(settlement: InsertVendorSettlement): Promise<VendorSettlement> {
+    const [result] = await db.insert(vendorSettlements).values(settlement).returning();
+    return result;
+  }
+
+  async updateVendorSettlement(id: string, updates: Partial<VendorSettlement>): Promise<VendorSettlement | undefined> {
+    const [updated] = await db.update(vendorSettlements)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(vendorSettlements.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAllSettlements(
+    filters?: { status?: string; vendorId?: string; startDate?: string; endDate?: string; page?: number; limit?: number }
+  ): Promise<{ settlements: VendorSettlement[]; total: number }> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 50;
+    const offset = (page - 1) * limit;
+
+    let whereConditions: any[] = [];
+
+    if (filters?.vendorId) {
+      whereConditions.push(eq(vendorSettlements.vendorId, filters.vendorId));
+    }
+
+    if (filters?.status) {
+      whereConditions.push(eq(vendorSettlements.status, filters.status));
+    }
+
+    if (filters?.startDate) {
+      whereConditions.push(sql`${vendorSettlements.periodStart} >= ${filters.startDate}`);
+    }
+
+    if (filters?.endDate) {
+      whereConditions.push(sql`${vendorSettlements.periodEnd} <= ${filters.endDate}`);
+    }
+
+    const query = whereConditions.length > 0
+      ? db.select().from(vendorSettlements).where(and(...whereConditions))
+      : db.select().from(vendorSettlements);
+
+    const settlements = await query
+      .orderBy(desc(vendorSettlements.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Get total count
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM vendor_settlements
+      ${filters?.status ? sql`WHERE status = ${filters.status}` : sql``}
+    `);
+
+    return {
+      settlements,
+      total: parseInt(countResult.rows[0]?.count as string || '0')
+    };
+  }
+
+  // Vendor Payout Operations
+  async getVendorPayouts(
+    vendorId: string,
+    filters?: { status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }
+  ): Promise<{ payouts: VendorPayout[]; total: number }> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const offset = (page - 1) * limit;
+
+    let whereConditions: any[] = [eq(vendorPayouts.vendorId, vendorId)];
+
+    if (filters?.status) {
+      whereConditions.push(eq(vendorPayouts.status, filters.status));
+    }
+
+    if (filters?.startDate) {
+      whereConditions.push(sql`${vendorPayouts.createdAt} >= ${filters.startDate}`);
+    }
+
+    if (filters?.endDate) {
+      whereConditions.push(sql`${vendorPayouts.createdAt} <= ${filters.endDate}`);
+    }
+
+    const payouts = await db.select()
+      .from(vendorPayouts)
+      .where(and(...whereConditions))
+      .orderBy(desc(vendorPayouts.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM vendor_payouts
+      WHERE vendor_id = ${vendorId}
+      ${filters?.status ? sql`AND status = ${filters.status}` : sql``}
+    `);
+
+    return {
+      payouts,
+      total: parseInt(countResult.rows[0]?.count as string || '0')
+    };
+  }
+
+  async getVendorPayout(id: string): Promise<VendorPayout | undefined> {
+    const [payout] = await db.select()
+      .from(vendorPayouts)
+      .where(eq(vendorPayouts.id, id));
+    return payout;
+  }
+
+  async createVendorPayout(payout: InsertVendorPayout): Promise<VendorPayout> {
+    const [result] = await db.insert(vendorPayouts).values(payout).returning();
+    return result;
+  }
+
+  async updateVendorPayout(id: string, updates: Partial<VendorPayout>): Promise<VendorPayout | undefined> {
+    const [updated] = await db.update(vendorPayouts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(vendorPayouts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async processPayoutBatch(
+    payoutIds: string[],
+    processedBy: string
+  ): Promise<{ successful: string[]; failed: { id: string; error: string }[] }> {
+    const successful: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+
+    for (const payoutId of payoutIds) {
+      try {
+        const payout = await this.getVendorPayout(payoutId);
+        if (!payout) {
+          failed.push({ id: payoutId, error: 'Payout not found' });
+          continue;
+        }
+
+        if (payout.status !== 'pending') {
+          failed.push({ id: payoutId, error: `Cannot process payout with status: ${payout.status}` });
+          continue;
+        }
+
+        // Update payout status to processing
+        await this.updateVendorPayout(payoutId, {
+          status: 'processing',
+          processedBy,
+          processedAt: new Date()
+        });
+
+        // In a real implementation, you would call the payment provider here
+        // For now, we'll simulate a successful payout
+        const transactionRef = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+        await this.updateVendorPayout(payoutId, {
+          status: 'completed',
+          transactionRef,
+          processedAt: new Date()
+        });
+
+        // Update associated settlement if exists
+        if (payout.settlementId) {
+          await this.updateVendorSettlement(payout.settlementId, {
+            status: 'paid',
+            payoutId: payout.id,
+            processedAt: new Date()
+          });
+        }
+
+        successful.push(payoutId);
+      } catch (error) {
+        failed.push({ id: payoutId, error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    }
+
+    return { successful, failed };
+  }
+
+  // Settlement Calculation
+  async calculateDailySettlement(vendorId: string, restaurantId: string, date: Date): Promise<VendorSettlement> {
+    // Calculate period (start and end of the day)
+    const periodStart = new Date(date);
+    periodStart.setHours(0, 0, 0, 0);
+
+    const periodEnd = new Date(date);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    // Get orders for this vendor's restaurant for this day
+    const ordersResult = await db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status != 'cancelled') as total_orders,
+        COUNT(*) FILTER (WHERE status = 'completed' OR status = 'delivered') as completed_orders,
+        COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_orders,
+        COUNT(*) FILTER (WHERE payment_status = 'refunded') as refunded_orders,
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'delivered') THEN total_amount ELSE 0 END), 0) as gross_amount
+      FROM orders
+      WHERE restaurant_id = ${restaurantId}
+        AND created_at >= ${periodStart.toISOString()}
+        AND created_at <= ${periodEnd.toISOString()}
+    `);
+
+    const orderStats = ordersResult.rows[0] || {
+      total_orders: 0,
+      completed_orders: 0,
+      cancelled_orders: 0,
+      refunded_orders: 0,
+      gross_amount: '0'
+    };
+
+    // Get commission rate from commission rules or use default
+    const commissionRulesResult = await db.execute(sql`
+      SELECT value FROM commission_rules
+      WHERE service_type = 'food_delivery'
+        AND is_active = true
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    const commissionRate = commissionRulesResult.rows[0]?.value
+      ? parseFloat(commissionRulesResult.rows[0].value as string)
+      : 0.15; // Default 15%
+
+    const grossAmount = parseFloat(orderStats.gross_amount as string || '0');
+    const commissionAmount = grossAmount * commissionRate;
+    const netAmount = grossAmount - commissionAmount;
+
+    // Generate unique settlement number
+    const settlementNumber = `SET-${date.toISOString().split('T')[0].replace(/-/g, '')}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+    // Create the settlement record
+    const settlement = await this.createVendorSettlement({
+      vendorId,
+      restaurantId,
+      settlementNumber,
+      periodStart,
+      periodEnd,
+      settlementType: 'daily',
+      totalOrders: parseInt(orderStats.total_orders as string || '0'),
+      completedOrders: parseInt(orderStats.completed_orders as string || '0'),
+      cancelledOrders: parseInt(orderStats.cancelled_orders as string || '0'),
+      refundedOrders: parseInt(orderStats.refunded_orders as string || '0'),
+      grossAmount: grossAmount.toString(),
+      commissionAmount: commissionAmount.toString(),
+      commissionRate: commissionRate.toString(),
+      netAmount: netAmount.toString(),
+      status: 'pending'
+    });
+
+    return settlement;
+  }
+
+  async getVendorEarningsSummary(
+    vendorId: string,
+    period?: 'day' | 'week' | 'month' | 'year'
+  ): Promise<{
+    grossEarnings: number;
+    totalCommission: number;
+    netEarnings: number;
+    pendingPayout: number;
+    completedPayouts: number;
+    totalOrders: number;
+  }> {
+    let dateFilter = '';
+    switch (period) {
+      case 'day':
+        dateFilter = "AND period_start >= NOW() - INTERVAL '1 day'";
+        break;
+      case 'week':
+        dateFilter = "AND period_start >= NOW() - INTERVAL '1 week'";
+        break;
+      case 'month':
+        dateFilter = "AND period_start >= NOW() - INTERVAL '1 month'";
+        break;
+      case 'year':
+        dateFilter = "AND period_start >= NOW() - INTERVAL '1 year'";
+        break;
+      default:
+        dateFilter = '';
+    }
+
+    // Get settlement totals
+    const settlementResult = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(gross_amount), 0) as gross_earnings,
+        COALESCE(SUM(commission_amount), 0) as total_commission,
+        COALESCE(SUM(net_amount), 0) as net_earnings,
+        COALESCE(SUM(total_orders), 0) as total_orders
+      FROM vendor_settlements
+      WHERE vendor_id = ${vendorId}
+      ${sql.raw(dateFilter)}
+    `);
+
+    // Get payout totals
+    const payoutResult = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_payout,
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as completed_payouts
+      FROM vendor_payouts
+      WHERE vendor_id = ${vendorId}
+      ${sql.raw(dateFilter.replace('period_start', 'created_at'))}
+    `);
+
+    const settlement = settlementResult.rows[0] || {};
+    const payout = payoutResult.rows[0] || {};
+
+    return {
+      grossEarnings: parseFloat(settlement.gross_earnings as string || '0'),
+      totalCommission: parseFloat(settlement.total_commission as string || '0'),
+      netEarnings: parseFloat(settlement.net_earnings as string || '0'),
+      pendingPayout: parseFloat(payout.pending_payout as string || '0'),
+      completedPayouts: parseFloat(payout.completed_payouts as string || '0'),
+      totalOrders: parseInt(settlement.total_orders as string || '0')
+    };
   }
 
   // Staff Management Operations

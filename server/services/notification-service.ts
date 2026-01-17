@@ -584,7 +584,6 @@ export class OrderNotificationService {
       }
     }
   }
-}
 
   // Smart timing logic for notifications
   private shouldSendNotification(preferences: any, urgency: 'low' | 'medium' | 'high' | 'critical') {

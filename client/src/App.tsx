@@ -20,6 +20,11 @@ import RestaurantDetail from "@/pages/shared/restaurant-detail";
 import Cart from "@/pages/customer/cart";
 import OrderTracking from "@/pages/shared/order-tracking";
 import CustomerOrders from "@/pages/customer/customer-orders";
+import CustomerAddresses from "@/pages/customer/addresses";
+import CustomerFavorites from "@/pages/customer/favorites";
+import CustomerProfileSettings from "@/pages/customer/profile-settings";
+import CustomerLoyalty from "@/pages/customer/loyalty";
+import CustomerWallet from "@/pages/customer/wallet";
 import Pabili from "@/pages/shared/pabili";
 import Pabayad from "@/pages/shared/pabayad";
 import Parcel from "@/pages/shared/parcel";
@@ -27,6 +32,9 @@ import Parcel from "@/pages/shared/parcel";
 // Role-specific dashboards
 import CustomerDashboard from "@/pages/customer/customer-dashboard";
 import RiderDashboard from "@/pages/rider/rider-dashboard";
+import RiderPendingOrders from "@/pages/rider/pending-orders";
+import RiderEarnings from "@/pages/rider/earnings";
+import RiderPerformance from "@/pages/rider/performance";
 
 // Vendor components
 import VendorLayout from "@/pages/vendor/vendor-layout";
@@ -38,14 +46,28 @@ import VendorStaff from "@/pages/vendor/staff";
 import VendorInventory from "@/pages/vendor/inventory";
 import VendorEarnings from "@/pages/vendor/earnings";
 import VendorProfile from "@/pages/vendor/profile";
+import VendorAnalytics from "@/pages/vendor/analytics";
+import VendorCommission from "@/pages/vendor/commission";
+import VendorBusinessSettings from "@/pages/vendor/business-settings";
 import AIAssistant from "@/pages/vendor/ai-assistant";
 
 import AdminDashboard from "@/pages/admin/admin-dashboard";
 import AdminDispatch from "@/pages/admin/admin-dispatch";
+import DispatchConsoleEnhanced from "@/pages/admin/dispatch-console-enhanced";
 import AdminAnalyticsPage from "@/pages/admin/admin-analytics";
 import AdminOrders from "@/pages/admin/admin-orders";
 import AdminRestaurants from "@/pages/admin/admin-restaurants";
 import AdminUsers from "@/pages/admin/admin-users";
+import VendorApproval from "@/pages/admin/vendor-approval";
+import RiderVerification from "@/pages/admin/rider-verification";
+import SupportTickets from "@/pages/admin/support-tickets";
+import CommissionSettings from "@/pages/admin/commission-settings";
+import DeliveryZones from "@/pages/admin/delivery-zones";
+import PromoManagement from "@/pages/admin/promo-management";
+import FinancialDashboard from "@/pages/admin/financial-dashboard";
+import FraudDashboard from "@/pages/admin/fraud-dashboard";
+import TaxManagement from "@/pages/admin/tax-management";
+import VendorTaxReports from "@/pages/vendor/tax-reports";
 
 // Customer layout components
 import Navbar from "@/components/navbar";
@@ -187,6 +209,46 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/addresses">
+        <ProtectedRoute allowedRoles={["customer"]}>
+          <CustomerLayout>
+            <CustomerAddresses />
+          </CustomerLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/favorites">
+        <ProtectedRoute allowedRoles={["customer"]}>
+          <CustomerLayout>
+            <CustomerFavorites />
+          </CustomerLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/profile-settings">
+        <ProtectedRoute allowedRoles={["customer"]}>
+          <CustomerLayout>
+            <CustomerProfileSettings />
+          </CustomerLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/loyalty">
+        <ProtectedRoute allowedRoles={["customer"]}>
+          <CustomerLayout>
+            <CustomerLoyalty />
+          </CustomerLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/wallet">
+        <ProtectedRoute allowedRoles={["customer"]}>
+          <CustomerLayout>
+            <CustomerWallet />
+          </CustomerLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* Vendor Routes - protected for vendors only */}
       <Route path="/vendor-dashboard">
         <ProtectedRoute allowedRoles={["vendor"]}>
@@ -252,6 +314,38 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/vendor-dashboard/analytics">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorAnalytics />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/commission">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorCommission />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/business-settings">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorBusinessSettings />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/vendor-dashboard/tax-reports">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorLayout>
+            <VendorTaxReports />
+          </VendorLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* AI Assistant - protected for vendors only */}
       <Route path="/ai-assistant">
         <ProtectedRoute allowedRoles={["vendor"]}>
@@ -270,6 +364,30 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/rider-dashboard/pending-orders">
+        <ProtectedRoute allowedRoles={["rider"]}>
+          <DashboardLayout>
+            <RiderPendingOrders />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/rider-dashboard/earnings">
+        <ProtectedRoute allowedRoles={["rider"]}>
+          <DashboardLayout>
+            <RiderEarnings />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/rider-dashboard/performance">
+        <ProtectedRoute allowedRoles={["rider"]}>
+          <DashboardLayout>
+            <RiderPerformance />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* Admin Routes - protected for admins only */}
       <Route path="/admin-dashboard">
         <ProtectedRoute allowedRoles={["admin"]}>
@@ -283,6 +401,14 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
             <AdminDispatch />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/dispatch-enhanced">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <DispatchConsoleEnhanced />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
@@ -319,11 +445,81 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* Vendor Approval Workflow */}
+      <Route path="/admin/vendor-approval">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <VendorApproval />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Rider Verification */}
+      <Route path="/admin/rider-verification">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <RiderVerification />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Support Tickets */}
+      <Route path="/admin/support">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <SupportTickets />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Commission Settings */}
+      <Route path="/admin/commission">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <CommissionSettings />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Delivery Zones */}
+      <Route path="/admin/zones">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <DeliveryZones />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Promo Management */}
+      <Route path="/admin/promos">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <PromoManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/fraud">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <FraudDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/tax">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <TaxManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* Placeholder routes for remaining admin sections */}
       <Route path="/admin/riders">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
-            <AdminDashboard />
+            <RiderVerification />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
@@ -331,55 +527,7 @@ function Router() {
       <Route path="/admin/financial">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/zones">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/support">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/monitoring">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/alerts">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/reports">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/config">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
-            <AdminDashboard />
+            <FinancialDashboard />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

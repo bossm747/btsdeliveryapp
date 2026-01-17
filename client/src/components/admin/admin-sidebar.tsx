@@ -8,15 +8,17 @@ import {
   Store,
   Truck,
   ShoppingCart,
-  AlertCircle,
-  Settings,
   HeadphonesIcon,
   MapPin,
   DollarSign,
-  Activity,
   FileText,
-  Bell,
-  Radio
+  Radio,
+  CheckSquare,
+  Shield,
+  ShieldAlert,
+  Percent,
+  Tag,
+  Layers
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
@@ -48,11 +50,26 @@ const navigationItems: NavItem[] = [
     path: "/admin/dispatch"
   },
   {
+    id: "dispatch-enhanced",
+    label: "Enhanced Dispatch",
+    icon: Layers,
+    badgeColor: "bg-purple-500",
+    description: "Batch orders, SLA monitoring, escalations",
+    path: "/admin/dispatch-enhanced"
+  },
+  {
     id: "analytics",
     label: "Analytics",
     icon: BarChart3,
     description: "Platform performance metrics",
     path: "/admin/analytics"
+  },
+  {
+    id: "financial",
+    label: "Financial Analytics",
+    icon: DollarSign,
+    description: "Revenue, profit & financial insights",
+    path: "/admin/financial"
   },
   {
     id: "orders",
@@ -64,13 +81,22 @@ const navigationItems: NavItem[] = [
     path: "/admin/orders"
   },
   {
-    id: "restaurants", 
+    id: "restaurants",
     label: "Restaurant Partners",
     icon: Store,
     badge: 3,
     badgeColor: "bg-orange-500",
     description: "Manage vendor partnerships",
     path: "/admin/restaurants"
+  },
+  {
+    id: "vendor-approval",
+    label: "Vendor Approval",
+    icon: CheckSquare,
+    badge: 5,
+    badgeColor: "bg-yellow-500",
+    description: "Review pending vendor applications",
+    path: "/admin/vendor-approval"
   },
   {
     id: "riders",
@@ -82,6 +108,15 @@ const navigationItems: NavItem[] = [
     path: "/admin/riders"
   },
   {
+    id: "rider-verification",
+    label: "Rider Verification",
+    icon: Shield,
+    badge: 8,
+    badgeColor: "bg-purple-500",
+    description: "Verify rider documents & background",
+    path: "/admin/rider-verification"
+  },
+  {
     id: "users",
     label: "User Management",
     icon: Users,
@@ -89,11 +124,34 @@ const navigationItems: NavItem[] = [
     path: "/admin/users"
   },
   {
-    id: "financial",
-    label: "Financial Reports",
-    icon: DollarSign,
-    description: "Revenue, commissions & settlements",
-    path: "/admin/financial"
+    id: "fraud",
+    label: "Fraud Detection",
+    icon: ShieldAlert,
+    badge: 0,
+    badgeColor: "bg-red-500",
+    description: "Fraud alerts & prevention",
+    path: "/admin/fraud"
+  },
+  {
+    id: "commission",
+    label: "Commission Settings",
+    icon: Percent,
+    description: "Manage commission rates & tiers",
+    path: "/admin/commission"
+  },
+  {
+    id: "promos",
+    label: "Promo Codes",
+    icon: Tag,
+    description: "Promotional codes & discounts",
+    path: "/admin/promos"
+  },
+  {
+    id: "tax",
+    label: "Tax Management",
+    icon: FileText,
+    description: "Tax exemptions & compliance",
+    path: "/admin/tax"
   },
   {
     id: "zones",
@@ -110,36 +168,6 @@ const navigationItems: NavItem[] = [
     badgeColor: "bg-purple-500",
     description: "Customer support tickets",
     path: "/admin/support"
-  },
-  {
-    id: "monitoring",
-    label: "System Health",
-    icon: Activity,
-    description: "Platform monitoring & alerts",
-    path: "/admin/monitoring"
-  },
-  {
-    id: "alerts",
-    label: "Alert Center",
-    icon: AlertCircle,
-    badge: 7,
-    badgeColor: "bg-red-500",
-    description: "System alerts & notifications",
-    path: "/admin/alerts"
-  },
-  {
-    id: "reports",
-    label: "Reports",
-    icon: FileText,
-    description: "Generate business reports",
-    path: "/admin/reports"
-  },
-  {
-    id: "config",
-    label: "Configuration",
-    icon: Settings,
-    description: "Platform settings & rules",
-    path: "/admin/config"
   }
 ];
 

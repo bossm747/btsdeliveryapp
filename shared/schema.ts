@@ -395,6 +395,90 @@ export const vendorEarnings = pgTable("vendor_earnings", {
   recordDate: timestamp("record_date").defaultNow(),
 });
 
+// Vendor Settlements - Aggregated settlement records for vendors
+export const vendorSettlements = pgTable("vendor_settlements", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id).notNull(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
+  settlementNumber: varchar("settlement_number", { length: 50 }).unique().notNull(),
+
+  // Settlement Period
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  settlementType: varchar("settlement_type", { length: 20 }).notNull().default("daily"), // daily, weekly, monthly
+
+  // Order Summary
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  cancelledOrders: integer("cancelled_orders").default(0),
+  refundedOrders: integer("refunded_orders").default(0),
+
+  // Financial Summary
+  grossAmount: decimal("gross_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  commissionAmount: decimal("commission_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }).notNull().default("0.15"), // Default 15%
+  serviceFees: decimal("service_fees", { precision: 10, scale: 2 }).default("0"),
+  adjustments: decimal("adjustments", { precision: 10, scale: 2 }).default("0"), // Refunds, credits, etc.
+  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).default("0"),
+  netAmount: decimal("net_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+
+  // Status Tracking
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, approved, processing, paid, disputed
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  processedAt: timestamp("processed_at"),
+
+  // Payout Reference (if paid)
+  payoutId: uuid("payout_id"),
+
+  // Notes and Metadata
+  notes: text("notes"),
+  metadata: jsonb("metadata"), // Additional data like commission tier info
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Vendor Payouts - Track actual money transfers to vendors
+export const vendorPayouts = pgTable("vendor_payouts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id).notNull(),
+  settlementId: uuid("settlement_id").references(() => vendorSettlements.id),
+
+  // Payout Details
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("PHP"),
+
+  // Bank/Payment Details
+  bankAccountId: uuid("bank_account_id"), // Reference to vendor's saved bank account
+  payoutMethod: varchar("payout_method", { length: 50 }).notNull(), // bank_transfer, gcash, maya
+  accountDetails: jsonb("account_details"), // Encrypted: {bank_name, account_number, account_name}
+
+  // Status and Processing
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed, cancelled
+  transactionRef: varchar("transaction_ref", { length: 100 }),
+  providerRef: varchar("provider_ref", { length: 100 }), // Reference from payment provider
+
+  // Processing Info
+  processedBy: uuid("processed_by").references(() => users.id),
+  processedAt: timestamp("processed_at"),
+  scheduledFor: timestamp("scheduled_for"),
+
+  // Failure Handling
+  failureReason: text("failure_reason"),
+  retryCount: integer("retry_count").default(0),
+  lastRetryAt: timestamp("last_retry_at"),
+
+  // Batch Processing
+  batchId: varchar("batch_id", { length: 100 }),
+
+  // Notes
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Staff management for restaurant teams
 export const restaurantStaff = pgTable("restaurant_staff", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -932,24 +1016,79 @@ export const reviews = pgTable("reviews", {
 });
 
 // Loyalty Points System Tables
-export const loyaltyPoints = pgTable("loyalty_points", {
-  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid("user_id").notNull().references(() => users.id),
-  points: integer("points").notNull().default(0),
-  lifetimePoints: integer("lifetime_points").notNull().default(0),
-  tier: varchar("tier", { length: 50 }).notNull().default("Bronze"),
-  lastEarnedAt: timestamp("last_earned_at"),
+
+// Loyalty Tiers Configuration
+export const LOYALTY_TIERS = {
+  BRONZE: 'bronze',
+  SILVER: 'silver',
+  GOLD: 'gold',
+  PLATINUM: 'platinum'
+} as const;
+
+export const LOYALTY_TRANSACTION_TYPES = {
+  EARN: 'earn',
+  REDEEM: 'redeem',
+  EXPIRE: 'expire',
+  BONUS: 'bonus',
+  ADJUSTMENT: 'adjustment',
+  SIGNUP: 'signup',
+  BIRTHDAY: 'birthday',
+  PROMO: 'promo'
+} as const;
+
+// Loyalty Tiers table - configurable tier definitions
+export const loyaltyTiers = pgTable("loyalty_tiers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 50 }).notNull().unique(), // bronze, silver, gold, platinum
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  minPoints: integer("min_points").notNull().default(0),
+  maxPoints: integer("max_points"), // null for highest tier
+  multiplier: decimal("multiplier", { precision: 4, scale: 2 }).notNull().default("1.00"), // Points multiplier
+  benefits: jsonb("benefits").notNull().default("[]"), // Array of benefit strings
+  icon: varchar("icon", { length: 50 }), // Icon name
+  color: varchar("color", { length: 20 }), // Hex color code
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Enhanced Loyalty Points/Accounts table
+export const loyaltyPoints = pgTable("loyalty_points", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id).unique(),
+  points: integer("points").notNull().default(0), // Current available balance
+  lifetimePoints: integer("lifetime_points").notNull().default(0), // Total earned (for tier calculation)
+  pendingPoints: integer("pending_points").notNull().default(0), // Points pending from incomplete orders
+  expiredPoints: integer("expired_points").notNull().default(0), // Total expired points
+  redeemedPoints: integer("redeemed_points").notNull().default(0), // Total redeemed points
+  tier: varchar("tier", { length: 50 }).notNull().default("bronze"),
+  tierUpdatedAt: timestamp("tier_updated_at"),
+  nextTierProgress: integer("next_tier_progress").default(0), // Percentage to next tier
+  lastEarnedAt: timestamp("last_earned_at"),
+  lastRedeemedAt: timestamp("last_redeemed_at"),
+  signupBonusAwarded: boolean("signup_bonus_awarded").default(false),
+  birthdayBonusYear: integer("birthday_bonus_year"), // Track which year birthday bonus was given
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// Enhanced Points Transactions table with expiry
 export const pointsTransactions = pgTable("points_transactions", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  accountId: varchar("account_id", { length: 255 }).references(() => loyaltyPoints.id),
   userId: uuid("user_id").notNull().references(() => users.id),
   orderId: uuid("order_id").references(() => orders.id),
-  type: varchar("type", { length: 50 }).notNull(),
-  points: integer("points").notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // earn, redeem, expire, bonus, adjustment
+  points: integer("points").notNull(), // Positive for earn/bonus, negative for redeem/expire
+  balanceBefore: integer("balance_before"),
+  balanceAfter: integer("balance_after"),
   description: varchar("description", { length: 500 }),
+  metadata: jsonb("metadata"), // Additional info like order amount, multiplier used, etc.
+  expiresAt: timestamp("expires_at"), // When these points expire (for earned points)
+  expiredAt: timestamp("expired_at"), // When points actually expired
+  isExpired: boolean("is_expired").default(false),
+  referenceId: varchar("reference_id", { length: 255 }), // For tracking related transactions
   createdAt: timestamp("created_at").defaultNow()
 });
 
@@ -1602,8 +1741,11 @@ export const insertRefundSchema = createInsertSchema(refunds);
 export const insertPayoutSchema = createInsertSchema(payouts);
 
 // Loyalty Types
+export const insertLoyaltyTierSchema = createInsertSchema(loyaltyTiers);
 export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPoints);
-export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions);
+export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions, {
+  type: z.enum(['earn', 'redeem', 'expire', 'bonus', 'adjustment', 'signup', 'birthday', 'promo'])
+});
 export const insertRewardSchema = createInsertSchema(rewards);
 export const insertRedemptionSchema = createInsertSchema(redemptions);
 
@@ -1613,6 +1755,8 @@ export const insertModifierOptionSchema = createInsertSchema(modifierOptions);
 export const insertMenuItemModifierSchema = createInsertSchema(menuItemModifiers);
 export const insertPromotionSchema = createInsertSchema(promotions);
 export const insertVendorEarningsSchema = createInsertSchema(vendorEarnings);
+export const insertVendorSettlementSchema = createInsertSchema(vendorSettlements);
+export const insertVendorPayoutSchema = createInsertSchema(vendorPayouts);
 export const insertRestaurantStaffSchema = createInsertSchema(restaurantStaff);
 export const insertReviewResponseSchema = createInsertSchema(reviewResponses);
 export const insertCustomerNoteSchema = createInsertSchema(customerNotes);
@@ -1686,6 +1830,8 @@ export type InsertRefund = z.infer<typeof insertRefundSchema>;
 export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 
+export type LoyaltyTier = typeof loyaltyTiers.$inferSelect;
+export type InsertLoyaltyTier = z.infer<typeof insertLoyaltyTierSchema>;
 export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
 export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
 export type PointsTransaction = typeof pointsTransactions.$inferSelect;
@@ -1706,6 +1852,10 @@ export type Promotion = typeof promotions.$inferSelect;
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
 export type VendorEarnings = typeof vendorEarnings.$inferSelect;
 export type InsertVendorEarnings = z.infer<typeof insertVendorEarningsSchema>;
+export type VendorSettlement = typeof vendorSettlements.$inferSelect;
+export type InsertVendorSettlement = z.infer<typeof insertVendorSettlementSchema>;
+export type VendorPayout = typeof vendorPayouts.$inferSelect;
+export type InsertVendorPayout = z.infer<typeof insertVendorPayoutSchema>;
 export type RestaurantStaff = typeof restaurantStaff.$inferSelect;
 export type InsertRestaurantStaff = z.infer<typeof insertRestaurantStaffSchema>;
 export type ReviewResponse = typeof reviewResponses.$inferSelect;
@@ -2193,6 +2343,82 @@ export const promotionRules = pgTable("promotion_rules", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Daily Financial Snapshots - Pre-computed daily financial metrics for fast analytics
+export const dailyFinancialSnapshots = pgTable("daily_financial_snapshots", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").notNull().unique(),
+
+  // Revenue Metrics
+  totalRevenue: decimal("total_revenue", { precision: 15, scale: 2 }).notNull().default("0"),
+  orderCount: integer("order_count").notNull().default(0),
+  completedOrderCount: integer("completed_order_count").notNull().default(0),
+  cancelledOrderCount: integer("cancelled_order_count").notNull().default(0),
+  avgOrderValue: decimal("avg_order_value", { precision: 10, scale: 2 }).default("0"),
+
+  // Revenue by Service Type
+  foodRevenue: decimal("food_revenue", { precision: 15, scale: 2 }).default("0"),
+  pabiliRevenue: decimal("pabili_revenue", { precision: 15, scale: 2 }).default("0"),
+  pabayadRevenue: decimal("pabayad_revenue", { precision: 15, scale: 2 }).default("0"),
+  parcelRevenue: decimal("parcel_revenue", { precision: 15, scale: 2 }).default("0"),
+
+  // Fee Revenue Breakdown
+  deliveryRevenue: decimal("delivery_revenue", { precision: 15, scale: 2 }).default("0"),
+  serviceFees: decimal("service_fees", { precision: 15, scale: 2 }).default("0"),
+  processingFees: decimal("processing_fees", { precision: 15, scale: 2 }).default("0"),
+  surgeRevenue: decimal("surge_revenue", { precision: 15, scale: 2 }).default("0"),
+  tipsCollected: decimal("tips_collected", { precision: 15, scale: 2 }).default("0"),
+
+  // Commissions and Payouts
+  commissionsEarned: decimal("commissions_earned", { precision: 15, scale: 2 }).default("0"),
+  vendorCommissionsPaid: decimal("vendor_commissions_paid", { precision: 15, scale: 2 }).default("0"),
+  riderEarningsPaid: decimal("rider_earnings_paid", { precision: 15, scale: 2 }).default("0"),
+
+  // Discounts and Refunds
+  discountsGiven: decimal("discounts_given", { precision: 15, scale: 2 }).default("0"),
+  promoDiscounts: decimal("promo_discounts", { precision: 15, scale: 2 }).default("0"),
+  loyaltyDiscounts: decimal("loyalty_discounts", { precision: 15, scale: 2 }).default("0"),
+  refundsIssued: decimal("refunds_issued", { precision: 15, scale: 2 }).default("0"),
+  refundCount: integer("refund_count").default(0),
+
+  // Tax Collection
+  vatCollected: decimal("vat_collected", { precision: 15, scale: 2 }).default("0"),
+  otherTaxesCollected: decimal("other_taxes_collected", { precision: 15, scale: 2 }).default("0"),
+
+  // Profit Metrics
+  grossProfit: decimal("gross_profit", { precision: 15, scale: 2 }).default("0"),
+  netProfit: decimal("net_profit", { precision: 15, scale: 2 }).default("0"),
+  profitMargin: decimal("profit_margin", { precision: 5, scale: 4 }).default("0"),
+
+  // User Activity
+  newCustomers: integer("new_customers").default(0),
+  activeCustomers: integer("active_customers").default(0),
+  activeVendors: integer("active_vendors").default(0),
+  activeRiders: integer("active_riders").default(0),
+
+  // Performance Metrics
+  avgDeliveryTime: integer("avg_delivery_time"), // minutes
+  onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 4 }).default("0"),
+  cancellationRate: decimal("cancellation_rate", { precision: 5, scale: 4 }).default("0"),
+
+  // Payment Method Breakdown
+  cashPayments: decimal("cash_payments", { precision: 15, scale: 2 }).default("0"),
+  gcashPayments: decimal("gcash_payments", { precision: 15, scale: 2 }).default("0"),
+  mayaPayments: decimal("maya_payments", { precision: 15, scale: 2 }).default("0"),
+  cardPayments: decimal("card_payments", { precision: 15, scale: 2 }).default("0"),
+  walletPayments: decimal("wallet_payments", { precision: 15, scale: 2 }).default("0"),
+
+  // Regional Breakdown (stored as JSON for flexibility)
+  revenueByRegion: jsonb("revenue_by_region"),
+  ordersByRegion: jsonb("orders_by_region"),
+
+  // Peak Hours Analysis
+  peakHourRevenue: jsonb("peak_hour_revenue"), // Revenue by hour
+  peakHourOrders: jsonb("peak_hour_orders"), // Orders by hour
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Financial Report Generation and Storage
 export const financialReports = pgTable("financial_reports", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2200,7 +2426,7 @@ export const financialReports = pgTable("financial_reports", {
   reportPeriod: varchar("report_period", { length: 20 }).notNull(), // daily, weekly, monthly, quarterly, yearly
   periodStart: timestamp("period_start").notNull(),
   periodEnd: timestamp("period_end").notNull(),
-  
+
   // Report Filters
   serviceTypes: jsonb("service_types"),
   zones: jsonb("zones"),
@@ -2249,6 +2475,7 @@ export const insertFeeCalculationSchema = createInsertSchema(feeCalculations);
 export const insertRevenueTrackingSchema = createInsertSchema(revenueTracking);
 export const insertPromotionRuleSchema = createInsertSchema(promotionRules);
 export const insertFinancialReportSchema = createInsertSchema(financialReports);
+export const insertDailyFinancialSnapshotSchema = createInsertSchema(dailyFinancialSnapshots);
 
 // Types for new notification tables
 export type UserPushSubscription = typeof userPushSubscriptions.$inferSelect;
@@ -2293,6 +2520,8 @@ export type PromotionRule = typeof promotionRules.$inferSelect;
 export type InsertPromotionRule = z.infer<typeof insertPromotionRuleSchema>;
 export type FinancialReport = typeof financialReports.$inferSelect;
 export type InsertFinancialReport = z.infer<typeof insertFinancialReportSchema>;
+export type DailyFinancialSnapshot = typeof dailyFinancialSnapshots.$inferSelect;
+export type InsertDailyFinancialSnapshot = z.infer<typeof insertDailyFinancialSnapshotSchema>;
 
 // BTS System Types
 export type BtsRider = typeof btsRiders.$inferSelect;
@@ -2303,3 +2532,1567 @@ export type BtsPayroll = typeof btsPayroll.$inferSelect;
 export type BtsIncentive = typeof btsIncentives.$inferSelect;
 export type BtsAuditReport = typeof btsAuditReports.$inferSelect;
 export type BtsUndeclaredBooking = typeof btsUndeclaredBookings.$inferSelect;
+
+// ==================== RIDER VERIFICATION SYSTEM ====================
+
+// Document types and verification statuses
+export const RIDER_DOC_TYPES = {
+  GOVERNMENT_ID: 'government_id',
+  DRIVERS_LICENSE: 'drivers_license',
+  VEHICLE_REGISTRATION: 'vehicle_registration',
+  VEHICLE_INSURANCE: 'vehicle_insurance',
+  NBI_CLEARANCE: 'nbi_clearance',
+  BARANGAY_CLEARANCE: 'barangay_clearance',
+  SELFIE_WITH_ID: 'selfie_with_id',
+  PROFILE_PHOTO: 'profile_photo'
+} as const;
+
+export const RIDER_DOC_STATUSES = {
+  PENDING: 'pending',
+  UNDER_REVIEW: 'under_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired'
+} as const;
+
+export const RIDER_VERIFICATION_STATUSES = {
+  NOT_STARTED: 'not_started',
+  IN_PROGRESS: 'in_progress',
+  PENDING_REVIEW: 'pending_review',
+  VERIFIED: 'verified',
+  REJECTED: 'rejected',
+  SUSPENDED: 'suspended'
+} as const;
+
+export const BACKGROUND_CHECK_STATUSES = {
+  NOT_STARTED: 'not_started',
+  IN_PROGRESS: 'in_progress',
+  PASSED: 'passed',
+  FAILED: 'failed',
+  PENDING: 'pending'
+} as const;
+
+// Rider Documents table - stores all verification documents uploaded by riders
+export const riderDocuments = pgTable("rider_documents", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id, { onDelete: "cascade" }).notNull(),
+  docType: varchar("doc_type", { length: 50 }).notNull(), // government_id, drivers_license, vehicle_registration, etc.
+  documentUrl: varchar("document_url", { length: 500 }).notNull(),
+  documentName: varchar("document_name", { length: 255 }), // Original filename
+  documentNumber: varchar("document_number", { length: 100 }), // License number, ID number, etc.
+  issueDate: timestamp("issue_date"),
+  expiryDate: timestamp("expiry_date"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, under_review, approved, rejected, expired
+  rejectionReason: text("rejection_reason"),
+  verifiedBy: uuid("verified_by").references(() => users.id),
+  verifiedAt: timestamp("verified_at"),
+  metadata: jsonb("metadata"), // Additional document-specific data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Rider Verification Status table - tracks overall verification status for each rider
+export const riderVerificationStatus = pgTable("rider_verification_status", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id, { onDelete: "cascade" }).notNull().unique(),
+
+  // Individual verification flags
+  idVerified: boolean("id_verified").default(false),
+  licenseVerified: boolean("license_verified").default(false),
+  vehicleVerified: boolean("vehicle_verified").default(false),
+  insuranceVerified: boolean("insurance_verified").default(false),
+
+  // Background check
+  backgroundCheckStatus: varchar("background_check_status", { length: 20 }).default("not_started"), // not_started, in_progress, passed, failed, pending
+  backgroundCheckDate: timestamp("background_check_date"),
+  backgroundCheckNotes: text("background_check_notes"),
+
+  // Overall verification status
+  overallStatus: varchar("overall_status", { length: 20 }).notNull().default("not_started"), // not_started, in_progress, pending_review, verified, rejected, suspended
+
+  // Verification completion tracking
+  verificationStartedAt: timestamp("verification_started_at"),
+  verificationCompletedAt: timestamp("verification_completed_at"),
+  verificationCompletedBy: uuid("verification_completed_by").references(() => users.id),
+
+  // Additional notes and flags
+  adminNotes: text("admin_notes"),
+  requiresReVerification: boolean("requires_re_verification").default(false),
+  reVerificationReason: text("re_verification_reason"),
+  nextReviewDate: timestamp("next_review_date"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for rider verification tables
+export const riderDocumentsRelations = relations(riderDocuments, ({ one }) => ({
+  rider: one(riders, { fields: [riderDocuments.riderId], references: [riders.id] }),
+  verifier: one(users, { fields: [riderDocuments.verifiedBy], references: [users.id] }),
+}));
+
+export const riderVerificationStatusRelations = relations(riderVerificationStatus, ({ one }) => ({
+  rider: one(riders, { fields: [riderVerificationStatus.riderId], references: [riders.id] }),
+  completedByAdmin: one(users, { fields: [riderVerificationStatus.verificationCompletedBy], references: [users.id] }),
+}));
+
+// Insert schemas for rider verification tables
+export const insertRiderDocumentSchema = createInsertSchema(riderDocuments, {
+  docType: z.enum([
+    'government_id',
+    'drivers_license',
+    'vehicle_registration',
+    'vehicle_insurance',
+    'nbi_clearance',
+    'barangay_clearance',
+    'selfie_with_id',
+    'profile_photo'
+  ]),
+  status: z.enum(['pending', 'under_review', 'approved', 'rejected', 'expired']).default('pending'),
+});
+
+export const insertRiderVerificationStatusSchema = createInsertSchema(riderVerificationStatus, {
+  backgroundCheckStatus: z.enum(['not_started', 'in_progress', 'passed', 'failed', 'pending']).default('not_started'),
+  overallStatus: z.enum(['not_started', 'in_progress', 'pending_review', 'verified', 'rejected', 'suspended']).default('not_started'),
+});
+
+// Types for rider verification tables
+export type RiderDocument = typeof riderDocuments.$inferSelect;
+export type InsertRiderDocument = z.infer<typeof insertRiderDocumentSchema>;
+export type RiderVerificationStatus = typeof riderVerificationStatus.$inferSelect;
+export type InsertRiderVerificationStatus = z.infer<typeof insertRiderVerificationStatusSchema>;
+
+// ============= VENDOR ONBOARDING & KYC SYSTEM =============
+
+// KYC Document Status Constants
+export const KYC_DOC_STATUS = {
+  PENDING: 'pending',
+  UNDER_REVIEW: 'under_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired'
+} as const;
+
+// KYC Document Types
+export const KYC_DOC_TYPES = {
+  BUSINESS_PERMIT: 'business_permit',
+  DTI_REGISTRATION: 'dti_registration',
+  SEC_REGISTRATION: 'sec_registration',
+  BIR_REGISTRATION: 'bir_registration',
+  MAYORS_PERMIT: 'mayors_permit',
+  SANITARY_PERMIT: 'sanitary_permit',
+  FOOD_HANDLER_CERTIFICATE: 'food_handler_certificate',
+  VALID_ID: 'valid_id',
+  PROOF_OF_ADDRESS: 'proof_of_address',
+  OTHER: 'other'
+} as const;
+
+// Vendor KYC Status
+export const VENDOR_KYC_STATUS = {
+  NOT_STARTED: 'not_started',
+  IN_PROGRESS: 'in_progress',
+  PENDING_REVIEW: 'pending_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  SUSPENDED: 'suspended'
+} as const;
+
+// Vendor KYC Documents table
+export const vendorKycDocuments = pgTable("vendor_kyc_documents", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  docType: varchar("doc_type", { length: 50 }).notNull(), // business_permit, dti_registration, bir_registration, etc.
+  documentUrl: varchar("document_url", { length: 500 }).notNull(),
+  documentName: varchar("document_name", { length: 255 }), // Original file name
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, under_review, approved, rejected, expired
+  rejectionReason: text("rejection_reason"), // Reason for rejection if status is rejected
+  expiryDate: timestamp("expiry_date"), // Document expiry date if applicable
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: uuid("verified_by").references(() => users.id),
+  metadata: jsonb("metadata"), // Additional document metadata
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Vendor Bank Accounts table
+export const vendorBankAccounts = pgTable("vendor_bank_accounts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  bankName: varchar("bank_name", { length: 100 }).notNull(),
+  bankCode: varchar("bank_code", { length: 20 }), // SWIFT/BIC code
+  accountName: varchar("account_name", { length: 255 }).notNull(),
+  accountNumber: varchar("account_number", { length: 50 }).notNull(),
+  accountType: varchar("account_type", { length: 20 }).default("savings"), // savings, checking
+  branchName: varchar("branch_name", { length: 100 }),
+  branchCode: varchar("branch_code", { length: 20 }),
+  isVerified: boolean("is_verified").default(false),
+  isDefault: boolean("is_default").default(false),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: uuid("verified_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Vendor Onboarding Status table - tracks overall vendor onboarding progress
+export const vendorOnboardingStatus = pgTable("vendor_onboarding_status", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+
+  // KYC Status
+  kycStatus: varchar("kyc_status", { length: 20 }).notNull().default("not_started"), // not_started, in_progress, pending_review, approved, rejected, suspended
+  kycSubmittedAt: timestamp("kyc_submitted_at"),
+  kycReviewedAt: timestamp("kyc_reviewed_at"),
+  kycReviewedBy: uuid("kyc_reviewed_by").references(() => users.id),
+  kycRejectionReason: text("kyc_rejection_reason"),
+
+  // Required Documents Checklist
+  requiredDocuments: jsonb("required_documents").default("[]"), // Array of required doc types
+  submittedDocuments: jsonb("submitted_documents").default("[]"), // Array of submitted doc types
+
+  // Bank Account Status
+  bankAccountAdded: boolean("bank_account_added").default(false),
+  bankAccountVerified: boolean("bank_account_verified").default(false),
+
+  // Restaurant/Business Profile Status
+  businessProfileComplete: boolean("business_profile_complete").default(false),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
+
+  // Overall Onboarding Status
+  onboardingStep: varchar("onboarding_step", { length: 50 }).default("registration"), // registration, kyc_documents, bank_account, business_profile, review, completed
+  isOnboardingComplete: boolean("is_onboarding_complete").default(false),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+
+  // Admin Notes
+  adminNotes: text("admin_notes"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for Vendor KYC tables
+export const vendorKycDocumentsRelations = relations(vendorKycDocuments, ({ one }) => ({
+  vendor: one(users, { fields: [vendorKycDocuments.vendorId], references: [users.id] }),
+  verifier: one(users, { fields: [vendorKycDocuments.verifiedBy], references: [users.id] }),
+}));
+
+export const vendorBankAccountsRelations = relations(vendorBankAccounts, ({ one }) => ({
+  vendor: one(users, { fields: [vendorBankAccounts.vendorId], references: [users.id] }),
+  verifier: one(users, { fields: [vendorBankAccounts.verifiedBy], references: [users.id] }),
+}));
+
+export const vendorOnboardingStatusRelations = relations(vendorOnboardingStatus, ({ one }) => ({
+  vendor: one(users, { fields: [vendorOnboardingStatus.vendorId], references: [users.id] }),
+  reviewer: one(users, { fields: [vendorOnboardingStatus.kycReviewedBy], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [vendorOnboardingStatus.restaurantId], references: [restaurants.id] }),
+}));
+
+// Insert schemas for Vendor KYC tables
+export const insertVendorKycDocumentSchema = createInsertSchema(vendorKycDocuments, {
+  docType: z.enum([
+    'business_permit',
+    'dti_registration',
+    'sec_registration',
+    'bir_registration',
+    'mayors_permit',
+    'sanitary_permit',
+    'food_handler_certificate',
+    'valid_id',
+    'proof_of_address',
+    'other'
+  ]),
+  status: z.enum(['pending', 'under_review', 'approved', 'rejected', 'expired']).default('pending'),
+});
+
+export const insertVendorBankAccountSchema = createInsertSchema(vendorBankAccounts, {
+  accountType: z.enum(['savings', 'checking']).default('savings'),
+});
+
+export const insertVendorOnboardingStatusSchema = createInsertSchema(vendorOnboardingStatus, {
+  kycStatus: z.enum(['not_started', 'in_progress', 'pending_review', 'approved', 'rejected', 'suspended']).default('not_started'),
+  onboardingStep: z.enum(['registration', 'kyc_documents', 'bank_account', 'business_profile', 'review', 'completed']).default('registration'),
+});
+
+// Types for Vendor KYC tables
+export type VendorKycDocument = typeof vendorKycDocuments.$inferSelect;
+export type InsertVendorKycDocument = z.infer<typeof insertVendorKycDocumentSchema>;
+export type VendorBankAccount = typeof vendorBankAccounts.$inferSelect;
+export type InsertVendorBankAccount = z.infer<typeof insertVendorBankAccountSchema>;
+export type VendorOnboardingStatus = typeof vendorOnboardingStatus.$inferSelect;
+export type InsertVendorOnboardingStatus = z.infer<typeof insertVendorOnboardingStatusSchema>;
+
+// ==================== ADVANCED PROMO CODE SYSTEM ====================
+
+export const PROMO_DISCOUNT_TYPES = {
+  PERCENTAGE: 'percentage',
+  FIXED: 'fixed',
+  FREE_DELIVERY: 'free_delivery',
+  FIRST_ORDER: 'first_order',
+  TIERED: 'tiered'
+} as const;
+
+export const PROMO_APPLICABLE_TO = {
+  ALL: 'all',
+  NEW_USERS: 'new_users',
+  SPECIFIC_RESTAURANTS: 'specific_restaurants'
+} as const;
+
+export const PROMO_FUNDING_TYPES = {
+  PLATFORM: 'platform',
+  VENDOR: 'vendor',
+  SPLIT: 'split'
+} as const;
+
+// Promo Codes table - comprehensive promotional codes for the platform
+export const promoCodes = pgTable("promo_codes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).unique().notNull(), // SAVE20, WELCOME50, etc.
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+
+  // Discount Configuration
+  discountType: varchar("discount_type", { length: 30 }).notNull(), // percentage, fixed, free_delivery, first_order, tiered
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }), // Discount amount or percentage
+  tieredDiscounts: jsonb("tiered_discounts"), // For tiered discounts: [{minOrder: 500, discount: 50}, {minOrder: 1000, discount: 100}]
+
+  // Order Requirements
+  minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0"),
+  maxDiscount: decimal("max_discount", { precision: 10, scale: 2 }), // Cap for percentage discounts
+
+  // Usage Limits
+  usageLimit: integer("usage_limit"), // Total times this code can be used (null = unlimited)
+  perUserLimit: integer("per_user_limit").default(1), // Times a single user can use it
+  timesUsed: integer("times_used").default(0),
+
+  // Validity Period
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+
+  // Scheduling (for day/time restrictions)
+  validDaysOfWeek: jsonb("valid_days_of_week"), // [0,1,2,3,4,5,6] - 0=Sunday, 6=Saturday
+  validTimeStart: varchar("valid_time_start", { length: 10 }), // "09:00"
+  validTimeEnd: varchar("valid_time_end", { length: 10 }), // "21:00"
+
+  // Applicability
+  applicableTo: varchar("applicable_to", { length: 30 }).notNull().default("all"), // all, new_users, specific_restaurants
+  restaurantIds: jsonb("restaurant_ids"), // Array of restaurant IDs if specific_restaurants
+  excludedRestaurantIds: jsonb("excluded_restaurant_ids"), // Restaurants where promo doesn't apply
+  applicableServiceTypes: jsonb("applicable_service_types"), // ['food', 'pabili', 'parcel'] - null means all
+
+  // Funding Configuration
+  fundingType: varchar("funding_type", { length: 20 }).notNull().default("platform"), // platform, vendor, split
+  vendorContribution: decimal("vendor_contribution", { precision: 5, scale: 2 }), // Percentage vendor pays (for split)
+  vendorId: uuid("vendor_id").references(() => users.id), // For vendor-funded promos
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id), // For restaurant-specific vendor promos
+
+  // Status
+  isActive: boolean("is_active").default(true),
+
+  // Stacking
+  isStackable: boolean("is_stackable").default(false), // Can be combined with other promos
+
+  // First Order Specific
+  firstOrderOnly: boolean("first_order_only").default(false),
+
+  // Audit Fields
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Promo Usage tracking - records every promo code usage
+export const promoUsage = pgTable("promo_usage", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  promoId: uuid("promo_id").references(() => promoCodes.id, { onDelete: "cascade" }).notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+
+  // Discount Applied
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull(),
+  originalOrderAmount: decimal("original_order_amount", { precision: 10, scale: 2 }).notNull(),
+  finalOrderAmount: decimal("final_order_amount", { precision: 10, scale: 2 }).notNull(),
+
+  // Funding Breakdown
+  platformContribution: decimal("platform_contribution", { precision: 10, scale: 2 }).default("0"),
+  vendorContribution: decimal("vendor_contribution", { precision: 10, scale: 2 }).default("0"),
+
+  // Status
+  status: varchar("status", { length: 20 }).default("applied"), // applied, refunded, expired
+
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+// Relations for Promo Code tables
+export const promoCodesRelations = relations(promoCodes, ({ one, many }) => ({
+  creator: one(users, { fields: [promoCodes.createdBy], references: [users.id] }),
+  vendor: one(users, { fields: [promoCodes.vendorId], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [promoCodes.restaurantId], references: [restaurants.id] }),
+  usages: many(promoUsage),
+}));
+
+export const promoUsageRelations = relations(promoUsage, ({ one }) => ({
+  promo: one(promoCodes, { fields: [promoUsage.promoId], references: [promoCodes.id] }),
+  user: one(users, { fields: [promoUsage.userId], references: [users.id] }),
+  order: one(orders, { fields: [promoUsage.orderId], references: [orders.id] }),
+}));
+
+// Insert schemas for Promo Code tables
+export const insertPromoCodeSchema = createInsertSchema(promoCodes, {
+  discountType: z.enum(['percentage', 'fixed', 'free_delivery', 'first_order', 'tiered']),
+  applicableTo: z.enum(['all', 'new_users', 'specific_restaurants']).default('all'),
+  fundingType: z.enum(['platform', 'vendor', 'split']).default('platform'),
+});
+
+export const insertPromoUsageSchema = createInsertSchema(promoUsage, {
+  status: z.enum(['applied', 'refunded', 'expired']).default('applied'),
+});
+
+// Types for Promo Code tables
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
+export type PromoUsage = typeof promoUsage.$inferSelect;
+export type InsertPromoUsage = z.infer<typeof insertPromoUsageSchema>;
+
+// ============= CUSTOMER WALLET SYSTEM =============
+
+// Wallet Transaction Types
+export const WALLET_TRANSACTION_TYPES = {
+  TOPUP: 'topup',
+  PAYMENT: 'payment',
+  REFUND: 'refund',
+  CASHBACK: 'cashback',
+  WITHDRAWAL: 'withdrawal',
+  ADJUSTMENT: 'adjustment'
+} as const;
+
+// Wallet Transaction Reference Types
+export const WALLET_REFERENCE_TYPES = {
+  ORDER: 'order',
+  REFUND: 'refund',
+  TOPUP: 'topup',
+  PROMO: 'promo',
+  ADMIN: 'admin'
+} as const;
+
+// Wallet Transaction Statuses
+export const WALLET_TRANSACTION_STATUSES = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled'
+} as const;
+
+// Customer Wallets table - stores wallet information for each customer
+export const customerWallets = pgTable("customer_wallets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: uuid("customer_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  currency: varchar("currency", { length: 3 }).notNull().default("PHP"),
+  isActive: boolean("is_active").notNull().default(true),
+
+  // Settings
+  autoUseWallet: boolean("auto_use_wallet").default(true), // Auto-use wallet at checkout
+  lowBalanceAlert: decimal("low_balance_alert", { precision: 10, scale: 2 }).default("100"), // Alert when balance falls below
+
+  // Statistics
+  totalTopups: decimal("total_topups", { precision: 12, scale: 2 }).default("0"),
+  totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).default("0"),
+  totalCashback: decimal("total_cashback", { precision: 12, scale: 2 }).default("0"),
+  totalRefunds: decimal("total_refunds", { precision: 12, scale: 2 }).default("0"),
+
+  // Last activity
+  lastTopupAt: timestamp("last_topup_at"),
+  lastTransactionAt: timestamp("last_transaction_at"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Wallet Transactions table - stores all wallet transaction history
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletId: uuid("wallet_id").references(() => customerWallets.id, { onDelete: "cascade" }).notNull(),
+
+  // Transaction details
+  type: varchar("type", { length: 20 }).notNull(), // topup, payment, refund, cashback, withdrawal, adjustment
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  balanceBefore: decimal("balance_before", { precision: 12, scale: 2 }).notNull(),
+  balanceAfter: decimal("balance_after", { precision: 12, scale: 2 }).notNull(),
+
+  // Reference
+  referenceId: uuid("reference_id"), // Order ID, Topup ID, etc.
+  referenceType: varchar("reference_type", { length: 20 }), // order, refund, topup, promo, admin
+
+  // Description and metadata
+  description: text("description"),
+  metadata: jsonb("metadata"), // Additional data like payment method, order details, etc.
+
+  // Status
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, completed, failed, cancelled
+  failureReason: text("failure_reason"),
+
+  // External reference (for topups)
+  externalTransactionId: varchar("external_transaction_id", { length: 100 }),
+  paymentProvider: varchar("payment_provider", { length: 50 }),
+  paymentMethod: varchar("payment_method", { length: 50 }),
+
+  // Admin adjustment fields
+  adjustedBy: uuid("adjusted_by").references(() => users.id),
+  adjustmentReason: text("adjustment_reason"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Wallet Topup Requests - for tracking payment gateway topup requests
+export const walletTopupRequests = pgTable("wallet_topup_requests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletId: uuid("wallet_id").references(() => customerWallets.id, { onDelete: "cascade" }).notNull(),
+  transactionId: uuid("transaction_id").references(() => walletTransactions.id),
+
+  // Amount
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("PHP"),
+
+  // Payment details
+  paymentProvider: varchar("payment_provider", { length: 50 }).notNull(), // nexuspay, gcash, maya
+  paymentMethod: varchar("payment_method", { length: 50 }), // gcash, maya, card, bank
+
+  // External reference
+  externalTransactionId: varchar("external_transaction_id", { length: 100 }),
+  paymentLink: varchar("payment_link", { length: 500 }),
+
+  // Status
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed, expired
+  failureReason: text("failure_reason"),
+
+  // Expiry
+  expiresAt: timestamp("expires_at"),
+
+  // Callback tracking
+  callbackReceived: boolean("callback_received").default(false),
+  callbackData: jsonb("callback_data"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Cashback Rules - configurable cashback system
+export const cashbackRules = pgTable("cashback_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+
+  // Cashback configuration
+  cashbackType: varchar("cashback_type", { length: 20 }).notNull(), // percentage, fixed
+  cashbackValue: decimal("cashback_value", { precision: 8, scale: 4 }).notNull(), // Percentage (0.05 = 5%) or fixed amount
+
+  // Limits
+  minimumOrderValue: decimal("minimum_order_value", { precision: 10, scale: 2 }),
+  maximumCashback: decimal("maximum_cashback", { precision: 10, scale: 2 }),
+
+  // Eligibility
+  serviceTypes: jsonb("service_types"), // ["food", "pabili", "pabayad", "parcel"] or null for all
+  restaurantIds: jsonb("restaurant_ids"), // Specific restaurants or null for all
+  customerTypes: jsonb("customer_types"), // ["new", "returning", "vip"] or null for all
+
+  // Time constraints
+  validFrom: timestamp("valid_from").notNull(),
+  validUntil: timestamp("valid_until"),
+  dayOfWeekRestrictions: jsonb("day_of_week_restrictions"), // [0,1,2,3,4,5,6] for days
+  timeRestrictions: jsonb("time_restrictions"), // {start: "11:00", end: "14:00"}
+
+  // Usage limits
+  usageLimitPerCustomer: integer("usage_limit_per_customer"),
+  totalUsageLimit: integer("total_usage_limit"),
+  currentUsageCount: integer("current_usage_count").default(0),
+
+  // Budget
+  budgetLimit: decimal("budget_limit", { precision: 12, scale: 2 }),
+  currentSpend: decimal("current_spend", { precision: 12, scale: 2 }).default("0"),
+
+  // Status
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1), // Higher priority rules apply first
+
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for wallet tables
+export const customerWalletsRelations = relations(customerWallets, ({ one, many }) => ({
+  customer: one(users, { fields: [customerWallets.customerId], references: [users.id] }),
+  transactions: many(walletTransactions),
+  topupRequests: many(walletTopupRequests),
+}));
+
+export const walletTransactionsRelations = relations(walletTransactions, ({ one }) => ({
+  wallet: one(customerWallets, { fields: [walletTransactions.walletId], references: [customerWallets.id] }),
+  adjustedByUser: one(users, { fields: [walletTransactions.adjustedBy], references: [users.id] }),
+}));
+
+export const walletTopupRequestsRelations = relations(walletTopupRequests, ({ one }) => ({
+  wallet: one(customerWallets, { fields: [walletTopupRequests.walletId], references: [customerWallets.id] }),
+  transaction: one(walletTransactions, { fields: [walletTopupRequests.transactionId], references: [walletTransactions.id] }),
+}));
+
+export const cashbackRulesRelations = relations(cashbackRules, ({ one }) => ({
+  createdByUser: one(users, { fields: [cashbackRules.createdBy], references: [users.id] }),
+}));
+
+// Insert schemas for wallet tables
+export const insertCustomerWalletSchema = createInsertSchema(customerWallets);
+
+export const insertWalletTransactionSchema = createInsertSchema(walletTransactions, {
+  type: z.enum(['topup', 'payment', 'refund', 'cashback', 'withdrawal', 'adjustment']),
+  referenceType: z.enum(['order', 'refund', 'topup', 'promo', 'admin']).optional(),
+  status: z.enum(['pending', 'completed', 'failed', 'cancelled']).default('pending'),
+});
+
+export const insertWalletTopupRequestSchema = createInsertSchema(walletTopupRequests, {
+  status: z.enum(['pending', 'processing', 'completed', 'failed', 'expired']).default('pending'),
+});
+
+export const insertCashbackRuleSchema = createInsertSchema(cashbackRules, {
+  cashbackType: z.enum(['percentage', 'fixed']),
+});
+
+// Types for wallet tables
+export type CustomerWallet = typeof customerWallets.$inferSelect;
+export type InsertCustomerWallet = z.infer<typeof insertCustomerWalletSchema>;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
+export type WalletTopupRequest = typeof walletTopupRequests.$inferSelect;
+export type InsertWalletTopupRequest = z.infer<typeof insertWalletTopupRequestSchema>;
+export type CashbackRule = typeof cashbackRules.$inferSelect;
+export type InsertCashbackRule = z.infer<typeof insertCashbackRuleSchema>;
+
+// ==================== ENHANCED DISPATCH SYSTEM ====================
+
+// Dispatch Batch Status Constants
+export const DISPATCH_BATCH_STATUS = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled'
+} as const;
+
+// Dispatch Escalation Level Constants
+export const ESCALATION_LEVELS = {
+  LEVEL_1: 1, // Notify supervisor (10 min delay)
+  LEVEL_2: 2, // Alert dispatch manager (20 min)
+  LEVEL_3: 3  // Emergency escalation (30 min)
+} as const;
+
+// Emergency Priority Constants
+export const EMERGENCY_PRIORITY = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+  CRITICAL: 4
+} as const;
+
+// Dispatch Batches table - group multiple orders for batch assignment to riders
+export const dispatchBatches = pgTable("dispatch_batches", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  batchNumber: varchar("batch_number", { length: 20 }).unique().notNull(),
+  orderCount: integer("order_count").default(0),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, in_progress, completed, cancelled
+  assignedRiderId: uuid("assigned_rider_id").references(() => riders.id),
+  assignedBy: uuid("assigned_by").references(() => users.id).notNull(),
+  notes: text("notes"),
+  estimatedTotalDistance: decimal("estimated_total_distance", { precision: 8, scale: 2 }), // km
+  estimatedTotalDuration: integer("estimated_total_duration"), // minutes
+  optimizedRoute: jsonb("optimized_route"), // Array of order IDs in optimal sequence
+  pickupLocations: jsonb("pickup_locations"), // Array of pickup coordinates
+  deliveryLocations: jsonb("delivery_locations"), // Array of delivery coordinates
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Dispatch Batch Orders table - links orders to batches with sequence
+export const dispatchBatchOrders = pgTable("dispatch_batch_orders", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  batchId: uuid("batch_id").references(() => dispatchBatches.id, { onDelete: "cascade" }).notNull(),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  sequence: integer("sequence").notNull(), // Order in the route
+  pickupSequence: integer("pickup_sequence").notNull(), // Order of pickup
+  deliverySequence: integer("delivery_sequence").notNull(), // Order of delivery
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, picked_up, delivered
+  estimatedPickupTime: timestamp("estimated_pickup_time"),
+  actualPickupTime: timestamp("actual_pickup_time"),
+  estimatedDeliveryTime: timestamp("estimated_delivery_time"),
+  actualDeliveryTime: timestamp("actual_delivery_time"),
+  distanceFromPrevious: decimal("distance_from_previous", { precision: 8, scale: 2 }), // km from previous stop
+  durationFromPrevious: integer("duration_from_previous"), // minutes from previous stop
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Dispatch Escalations table - SLA breach auto-escalation tracking
+export const dispatchEscalations = pgTable("dispatch_escalations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  escalationLevel: integer("escalation_level").notNull().default(1), // 1, 2, 3
+  reason: varchar("reason", { length: 255 }).notNull(), // sla_breach, rider_unresponsive, customer_complaint, etc.
+  description: text("description"),
+  previousRiderId: uuid("previous_rider_id").references(() => riders.id),
+  escalatedAt: timestamp("escalated_at").defaultNow(),
+  notifiedUsers: jsonb("notified_users"), // Array of user IDs who were notified
+  responseDeadline: timestamp("response_deadline"), // When escalation must be handled
+  status: varchar("status", { length: 20 }).notNull().default("open"), // open, acknowledged, resolved, escalated_further
+  acknowledgedBy: uuid("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: uuid("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  resolutionAction: varchar("resolution_action", { length: 100 }), // reassigned, customer_notified, refunded, etc.
+  metadata: jsonb("metadata"), // Additional tracking data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Rider Capacity table - track concurrent order capacity per rider
+export const riderCapacity = pgTable("rider_capacity", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  riderId: uuid("rider_id").references(() => riders.id, { onDelete: "cascade" }).notNull().unique(),
+  maxConcurrentOrders: integer("max_concurrent_orders").notNull().default(3),
+  currentOrders: integer("current_orders").notNull().default(0),
+  currentBatchId: uuid("current_batch_id").references(() => dispatchBatches.id),
+  isAvailableForDispatch: boolean("is_available_for_dispatch").default(true),
+  preferredZones: jsonb("preferred_zones"), // Array of zone IDs
+  excludedZones: jsonb("excluded_zones"), // Zones rider doesn't want
+  maxDistanceKm: decimal("max_distance_km", { precision: 5, scale: 2 }).default("15"), // Max distance willing to travel
+  vehicleCapacity: jsonb("vehicle_capacity"), // {maxWeight: 10, maxItems: 20, maxVolume: 0.5}
+  currentLoadWeight: decimal("current_load_weight", { precision: 6, scale: 2 }).default("0"),
+  currentLoadItems: integer("current_load_items").default(0),
+  lastDispatchedAt: timestamp("last_dispatched_at"),
+  totalDispatchesToday: integer("total_dispatches_today").default(0),
+  successfulDeliveriesToday: integer("successful_deliveries_today").default(0),
+  averageDeliveryTimeToday: integer("average_delivery_time_today"), // minutes
+  lastLocationUpdate: timestamp("last_location_update"),
+  currentLocation: jsonb("current_location"), // {lat, lng, accuracy}
+  lastUpdated: timestamp("last_updated").defaultNow(),
+});
+
+// Emergency Dispatches table - priority reassignment and backup riders
+export const emergencyDispatches = pgTable("emergency_dispatches", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  originalRiderId: uuid("original_rider_id").references(() => riders.id),
+  reason: varchar("reason", { length: 255 }).notNull(), // rider_accident, vehicle_breakdown, rider_unresponsive, weather_emergency
+  description: text("description"),
+  priority: integer("priority").notNull().default(2), // 1=low, 2=medium, 3=high, 4=critical
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, assigned, resolved, cancelled
+  reassignedRiderId: uuid("reassigned_rider_id").references(() => riders.id),
+  handledBy: uuid("handled_by").references(() => users.id),
+  customerNotified: boolean("customer_notified").default(false),
+  customerNotifiedAt: timestamp("customer_notified_at"),
+  customerNotificationMethod: varchar("customer_notification_method", { length: 50 }), // sms, push, call
+  vendorNotified: boolean("vendor_notified").default(false),
+  vendorNotifiedAt: timestamp("vendor_notified_at"),
+  responseTimeMinutes: integer("response_time_minutes"), // How long it took to handle
+  resolutionNotes: text("resolution_notes"),
+  compensationOffered: jsonb("compensation_offered"), // {type, amount, description}
+  metadata: jsonb("metadata"), // Additional tracking data
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Dispatch Override Logs table - track manual assignment overrides
+export const dispatchOverrideLogs = pgTable("dispatch_override_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  previousRiderId: uuid("previous_rider_id").references(() => riders.id),
+  newRiderId: uuid("new_rider_id").references(() => riders.id).notNull(),
+  overriddenBy: uuid("overridden_by").references(() => users.id).notNull(),
+  reason: varchar("reason", { length: 255 }).notNull(),
+  description: text("description"),
+  wasAutomaticAssignment: boolean("was_automatic_assignment").default(false),
+  automaticAssignmentReason: text("automatic_assignment_reason"), // Why auto-assignment failed/was overridden
+  distanceToPickup: decimal("distance_to_pickup", { precision: 8, scale: 2 }), // km
+  estimatedPickupTime: integer("estimated_pickup_time"), // minutes
+  riderCapacityAtOverride: integer("rider_capacity_at_override"), // Current orders for new rider
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// SLA Tracking Events table - real-time SLA monitoring
+export const slaTrackingEvents = pgTable("sla_tracking_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  eventType: varchar("event_type", { length: 50 }).notNull(), // approaching_breach, breach, resolved, extended
+  slaType: varchar("sla_type", { length: 50 }).notNull(), // pickup_time, delivery_time, total_time, vendor_acceptance
+  targetTime: timestamp("target_time").notNull(), // When SLA should be met
+  actualTime: timestamp("actual_time"), // When SLA was actually met (if resolved)
+  delayMinutes: integer("delay_minutes"), // How many minutes delayed (negative if early)
+  escalationTriggered: boolean("escalation_triggered").default(false),
+  escalationId: uuid("escalation_id").references(() => dispatchEscalations.id),
+  notificationsSent: jsonb("notifications_sent"), // Array of {userId, type, sentAt}
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Dispatch Zones Config - geographic dispatch zones for routing
+export const dispatchZonesConfig = pgTable("dispatch_zones_config", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }).unique().notNull(),
+  boundaries: jsonb("boundaries").notNull(), // GeoJSON polygon
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(1), // Higher priority zones get riders first
+  maxRiders: integer("max_riders").default(10),
+  currentActiveRiders: integer("current_active_riders").default(0),
+  averageDeliveryTime: integer("average_delivery_time"), // minutes
+  demandLevel: varchar("demand_level", { length: 20 }).default("normal"), // low, normal, high, critical
+  surgeMultiplier: decimal("surge_multiplier", { precision: 3, scale: 2 }).default("1.00"),
+  operatingHours: jsonb("operating_hours"), // {monday: {open: "08:00", close: "22:00"}, ...}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for dispatch tables
+export const dispatchBatchesRelations = relations(dispatchBatches, ({ one, many }) => ({
+  rider: one(riders, { fields: [dispatchBatches.assignedRiderId], references: [riders.id] }),
+  assignedByUser: one(users, { fields: [dispatchBatches.assignedBy], references: [users.id] }),
+  orders: many(dispatchBatchOrders),
+}));
+
+export const dispatchBatchOrdersRelations = relations(dispatchBatchOrders, ({ one }) => ({
+  batch: one(dispatchBatches, { fields: [dispatchBatchOrders.batchId], references: [dispatchBatches.id] }),
+  order: one(orders, { fields: [dispatchBatchOrders.orderId], references: [orders.id] }),
+}));
+
+export const dispatchEscalationsRelations = relations(dispatchEscalations, ({ one }) => ({
+  order: one(orders, { fields: [dispatchEscalations.orderId], references: [orders.id] }),
+  previousRider: one(riders, { fields: [dispatchEscalations.previousRiderId], references: [riders.id] }),
+  acknowledgedByUser: one(users, { fields: [dispatchEscalations.acknowledgedBy], references: [users.id] }),
+  resolvedByUser: one(users, { fields: [dispatchEscalations.resolvedBy], references: [users.id] }),
+}));
+
+export const riderCapacityRelations = relations(riderCapacity, ({ one }) => ({
+  rider: one(riders, { fields: [riderCapacity.riderId], references: [riders.id] }),
+  currentBatch: one(dispatchBatches, { fields: [riderCapacity.currentBatchId], references: [dispatchBatches.id] }),
+}));
+
+export const emergencyDispatchesRelations = relations(emergencyDispatches, ({ one }) => ({
+  order: one(orders, { fields: [emergencyDispatches.orderId], references: [orders.id] }),
+  originalRider: one(riders, { fields: [emergencyDispatches.originalRiderId], references: [riders.id] }),
+  reassignedRider: one(riders, { fields: [emergencyDispatches.reassignedRiderId], references: [riders.id] }),
+  handler: one(users, { fields: [emergencyDispatches.handledBy], references: [users.id] }),
+}));
+
+export const dispatchOverrideLogsRelations = relations(dispatchOverrideLogs, ({ one }) => ({
+  order: one(orders, { fields: [dispatchOverrideLogs.orderId], references: [orders.id] }),
+  previousRider: one(riders, { fields: [dispatchOverrideLogs.previousRiderId], references: [riders.id] }),
+  newRider: one(riders, { fields: [dispatchOverrideLogs.newRiderId], references: [riders.id] }),
+  overriddenByUser: one(users, { fields: [dispatchOverrideLogs.overriddenBy], references: [users.id] }),
+}));
+
+// Insert schemas for dispatch tables
+export const insertDispatchBatchSchema = createInsertSchema(dispatchBatches, {
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).default('pending'),
+});
+
+export const insertDispatchBatchOrderSchema = createInsertSchema(dispatchBatchOrders, {
+  status: z.enum(['pending', 'picked_up', 'delivered']).default('pending'),
+});
+
+export const insertDispatchEscalationSchema = createInsertSchema(dispatchEscalations, {
+  escalationLevel: z.number().min(1).max(3).default(1),
+  status: z.enum(['open', 'acknowledged', 'resolved', 'escalated_further']).default('open'),
+});
+
+export const insertRiderCapacitySchema = createInsertSchema(riderCapacity);
+
+export const insertEmergencyDispatchSchema = createInsertSchema(emergencyDispatches, {
+  priority: z.number().min(1).max(4).default(2),
+  status: z.enum(['pending', 'assigned', 'resolved', 'cancelled']).default('pending'),
+});
+
+export const insertDispatchOverrideLogSchema = createInsertSchema(dispatchOverrideLogs);
+
+export const insertSlaTrackingEventSchema = createInsertSchema(slaTrackingEvents);
+
+export const insertDispatchZonesConfigSchema = createInsertSchema(dispatchZonesConfig);
+
+// Types for dispatch tables
+export type DispatchBatch = typeof dispatchBatches.$inferSelect;
+export type InsertDispatchBatch = z.infer<typeof insertDispatchBatchSchema>;
+export type DispatchBatchOrder = typeof dispatchBatchOrders.$inferSelect;
+export type InsertDispatchBatchOrder = z.infer<typeof insertDispatchBatchOrderSchema>;
+export type DispatchEscalation = typeof dispatchEscalations.$inferSelect;
+export type InsertDispatchEscalation = z.infer<typeof insertDispatchEscalationSchema>;
+export type RiderCapacity = typeof riderCapacity.$inferSelect;
+export type InsertRiderCapacity = z.infer<typeof insertRiderCapacitySchema>;
+export type EmergencyDispatch = typeof emergencyDispatches.$inferSelect;
+export type InsertEmergencyDispatch = z.infer<typeof insertEmergencyDispatchSchema>;
+export type DispatchOverrideLog = typeof dispatchOverrideLogs.$inferSelect;
+export type InsertDispatchOverrideLog = z.infer<typeof insertDispatchOverrideLogSchema>;
+export type SlaTrackingEvent = typeof slaTrackingEvents.$inferSelect;
+export type InsertSlaTrackingEvent = z.infer<typeof insertSlaTrackingEventSchema>;
+export type DispatchZonesConfig = typeof dispatchZonesConfig.$inferSelect;
+export type InsertDispatchZonesConfig = z.infer<typeof insertDispatchZonesConfigSchema>;
+
+// ==================== FRAUD DETECTION SYSTEM TABLES ====================
+// Comprehensive fraud prevention and detection for platform security
+
+// Fraud Rule Severity Levels
+export const FRAUD_SEVERITY = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical'
+} as const;
+
+// Fraud Alert Statuses
+export const FRAUD_ALERT_STATUS = {
+  PENDING: 'pending',
+  REVIEWED: 'reviewed',
+  DISMISSED: 'dismissed',
+  CONFIRMED: 'confirmed'
+} as const;
+
+// Fraud Rule Types
+export const FRAUD_RULE_TYPES = {
+  VELOCITY: 'velocity',
+  GEOLOCATION: 'geolocation',
+  DEVICE: 'device',
+  PAYMENT: 'payment',
+  BEHAVIOR: 'behavior',
+  IDENTITY: 'identity'
+} as const;
+
+// Fraud Rule Actions
+export const FRAUD_ACTIONS = {
+  ALLOW: 'allow',
+  FLAG: 'flag',
+  BLOCK: 'block',
+  REVIEW: 'review',
+  NOTIFY: 'notify'
+} as const;
+
+// Fraud Rules - Configurable rules for detecting fraudulent activity
+export const fraudRules = pgTable("fraud_rules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  ruleType: varchar("rule_type", { length: 50 }).notNull(), // velocity, geolocation, device, payment, behavior, identity
+
+  // Rule conditions in JSON format
+  conditions: jsonb("conditions").notNull(), // Complex conditions based on rule type
+  /*
+    velocity: {
+      metric: "orders_per_hour" | "payment_attempts" | "account_creations",
+      threshold: number,
+      timeWindow: number (seconds),
+      scope: "user" | "ip" | "device"
+    }
+    geolocation: {
+      maxDistance: number (km),
+      checkVpn: boolean,
+      checkProxy: boolean,
+      allowedCountries: string[]
+    }
+    device: {
+      maxAccountsPerDevice: number,
+      trustNewDevices: boolean,
+      flagDeviceChanges: boolean
+    }
+    payment: {
+      maxFailedAttempts: number,
+      minTransactionAmount: number,
+      maxTransactionAmount: number,
+      flagSmallTransactions: boolean
+    }
+    behavior: {
+      minAccountAge: number (days),
+      maxRefundRate: number (percentage),
+      unusualOrderPatterns: boolean
+    }
+  */
+
+  action: varchar("action", { length: 20 }).notNull().default("flag"), // allow, flag, block, review, notify
+  severity: varchar("severity", { length: 20 }).notNull().default("medium"), // low, medium, high, critical
+
+  // Score contribution
+  scoreImpact: integer("score_impact").default(10), // Points added to risk score when triggered
+
+  // Rule status and targeting
+  isActive: boolean("is_active").default(true),
+  applicableOrderTypes: jsonb("applicable_order_types"), // ["food", "pabili", "pabayad", "parcel"] or null for all
+  applicableUserRoles: jsonb("applicable_user_roles"), // ["customer", "vendor", "rider"] or null for all
+
+  // Statistics
+  triggerCount: integer("trigger_count").default(0),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  falsePositiveCount: integer("false_positive_count").default(0),
+
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Fraud Alerts - Records of potential fraudulent activity
+export const fraudAlerts = pgTable("fraud_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id),
+  ruleId: uuid("rule_id").references(() => fraudRules.id),
+
+  // Alert classification
+  alertType: varchar("alert_type", { length: 50 }).notNull(), // velocity, geolocation, device, payment, behavior, identity, manual
+  severity: varchar("severity", { length: 20 }).notNull(), // low, medium, high, critical
+
+  // Alert details
+  details: jsonb("details").notNull(), // Specific details about what triggered the alert
+  /*
+    {
+      triggeredRule: string,
+      riskScore: number,
+      factors: Array<{name: string, score: number, description: string}>,
+      rawData: object,
+      location: {lat, lng},
+      device: {fingerprint, userAgent, ip}
+    }
+  */
+
+  riskScore: integer("risk_score").default(0), // 0-100 risk score at time of alert
+
+  // Alert status
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, reviewed, dismissed, confirmed
+  statusReason: text("status_reason"),
+
+  // Resolution tracking
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  resolutionNotes: text("resolution_notes"),
+
+  // User action taken
+  userBlocked: boolean("user_blocked").default(false),
+  orderCancelled: boolean("order_cancelled").default(false),
+  refundIssued: boolean("refund_issued").default(false),
+
+  // Metadata
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Risk Scores - Calculated risk profiles for each user
+export const userRiskScores = pgTable("user_risk_scores", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+
+  // Risk assessment
+  riskScore: integer("risk_score").notNull().default(0), // 0-100, higher = more risky
+  riskLevel: varchar("risk_level", { length: 20 }).notNull().default("low"), // low, medium, high, critical
+
+  // Risk factors breakdown
+  factors: jsonb("factors").notNull().default("[]"), // Array of contributing factors
+  /*
+    [
+      { name: "account_age", score: 5, weight: 0.1, description: "Account less than 7 days old" },
+      { name: "payment_failures", score: 20, weight: 0.2, description: "3 failed payments in last 24h" },
+      { name: "velocity", score: 15, weight: 0.15, description: "5 orders in last hour" },
+      ...
+    ]
+  */
+
+  // Historical data
+  flagCount: integer("flag_count").default(0), // Total number of times flagged
+  confirmedFraudCount: integer("confirmed_fraud_count").default(0),
+  dismissedAlertCount: integer("dismissed_alert_count").default(0),
+
+  // Activity metrics
+  totalOrders: integer("total_orders").default(0),
+  cancelledOrders: integer("cancelled_orders").default(0),
+  refundedOrders: integer("refunded_orders").default(0),
+  chargebackCount: integer("chargeback_count").default(0),
+
+  // Payment metrics
+  failedPaymentCount: integer("failed_payment_count").default(0),
+  lastFailedPaymentAt: timestamp("last_failed_payment_at"),
+  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }),
+
+  // Behavioral metrics
+  deviceCount: integer("device_count").default(0),
+  ipAddressCount: integer("ip_address_count").default(0),
+  unusualActivityCount: integer("unusual_activity_count").default(0),
+
+  // Account status
+  isBlocked: boolean("is_blocked").default(false),
+  blockedAt: timestamp("blocked_at"),
+  blockedBy: uuid("blocked_by").references(() => users.id),
+  blockedReason: text("blocked_reason"),
+  unblockAt: timestamp("unblock_at"), // For temporary blocks
+
+  // Calculation tracking
+  lastCalculated: timestamp("last_calculated").defaultNow(),
+  calculationVersion: varchar("calculation_version", { length: 20 }).default("v1"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Device Fingerprints - Track devices used by users
+export const deviceFingerprints = pgTable("device_fingerprints", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+
+  // Fingerprint identification
+  fingerprintHash: varchar("fingerprint_hash", { length: 64 }).notNull(), // SHA-256 hash of device fingerprint
+
+  // Device information
+  deviceInfo: jsonb("device_info").notNull(), // Detailed device information
+  /*
+    {
+      userAgent: string,
+      platform: string,
+      screenResolution: string,
+      timezone: string,
+      language: string,
+      colorDepth: number,
+      deviceMemory: number,
+      hardwareConcurrency: number,
+      plugins: string[],
+      canvas: string (hash),
+      webgl: string (hash),
+      fonts: string[],
+      audioContext: string (hash)
+    }
+  */
+
+  // IP information
+  ipAddress: varchar("ip_address", { length: 45 }),
+  ipInfo: jsonb("ip_info"), // GeoIP data
+  /*
+    {
+      country: string,
+      region: string,
+      city: string,
+      isp: string,
+      asn: string,
+      isVpn: boolean,
+      isProxy: boolean,
+      isTor: boolean,
+      isDatacenter: boolean
+    }
+  */
+
+  // Trust status
+  isTrusted: boolean("is_trusted").default(false),
+  trustScore: integer("trust_score").default(50), // 0-100
+
+  // Activity tracking
+  firstSeen: timestamp("first_seen").defaultNow(),
+  lastSeen: timestamp("last_seen").defaultNow(),
+  sessionCount: integer("session_count").default(1),
+  orderCount: integer("order_count").default(0),
+
+  // Flags
+  isBlocked: boolean("is_blocked").default(false),
+  isSuspicious: boolean("is_suspicious").default(false),
+  suspiciousReasons: jsonb("suspicious_reasons"), // Array of reasons
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Fraud Check Logs - Log of all fraud checks performed
+export const fraudCheckLogs = pgTable("fraud_check_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id),
+  orderId: uuid("order_id").references(() => orders.id),
+
+  // Check context
+  checkType: varchar("check_type", { length: 50 }).notNull(), // order_creation, payment, login, account_update
+
+  // Input data
+  inputData: jsonb("input_data").notNull(), // Data submitted for checking
+
+  // Check results
+  riskScore: integer("risk_score").notNull(), // Calculated risk score
+  riskLevel: varchar("risk_level", { length: 20 }).notNull(), // low, medium, high, critical
+  triggeredRules: jsonb("triggered_rules").notNull().default("[]"), // Array of rule IDs that triggered
+
+  // Decision
+  recommendation: varchar("recommendation", { length: 20 }).notNull(), // allow, review, block
+  finalDecision: varchar("final_decision", { length: 20 }).notNull(), // allow, review, block
+  decisionOverridden: boolean("decision_overridden").default(false),
+  overriddenBy: uuid("overridden_by").references(() => users.id),
+  overrideReason: text("override_reason"),
+
+  // Performance tracking
+  processingTimeMs: integer("processing_time_ms"),
+
+  // Request metadata
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  deviceFingerprint: varchar("device_fingerprint", { length: 64 }),
+
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// IP Intelligence Cache - Cache for IP lookup results
+export const ipIntelligenceCache = pgTable("ip_intelligence_cache", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: varchar("ip_address", { length: 45 }).notNull().unique(),
+
+  // GeoIP data
+  country: varchar("country", { length: 2 }),
+  countryName: varchar("country_name", { length: 100 }),
+  region: varchar("region", { length: 100 }),
+  city: varchar("city", { length: 100 }),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }),
+  timezone: varchar("timezone", { length: 50 }),
+
+  // ISP data
+  isp: varchar("isp", { length: 255 }),
+  organization: varchar("organization", { length: 255 }),
+  asn: varchar("asn", { length: 20 }),
+
+  // Threat intelligence
+  isVpn: boolean("is_vpn").default(false),
+  isProxy: boolean("is_proxy").default(false),
+  isTor: boolean("is_tor").default(false),
+  isDatacenter: boolean("is_datacenter").default(false),
+  isKnownAttacker: boolean("is_known_attacker").default(false),
+  threatScore: integer("threat_score").default(0), // 0-100
+
+  // Caching
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  source: varchar("source", { length: 50 }), // Provider name
+
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Relations for fraud tables
+export const fraudRulesRelations = relations(fraudRules, ({ one, many }) => ({
+  createdByUser: one(users, { fields: [fraudRules.createdBy], references: [users.id] }),
+  alerts: many(fraudAlerts),
+}));
+
+export const fraudAlertsRelations = relations(fraudAlerts, ({ one }) => ({
+  user: one(users, { fields: [fraudAlerts.userId], references: [users.id] }),
+  order: one(orders, { fields: [fraudAlerts.orderId], references: [orders.id] }),
+  rule: one(fraudRules, { fields: [fraudAlerts.ruleId], references: [fraudRules.id] }),
+  reviewer: one(users, { fields: [fraudAlerts.reviewedBy], references: [users.id] }),
+}));
+
+export const userRiskScoresRelations = relations(userRiskScores, ({ one }) => ({
+  user: one(users, { fields: [userRiskScores.userId], references: [users.id] }),
+  blockedByUser: one(users, { fields: [userRiskScores.blockedBy], references: [users.id] }),
+}));
+
+export const deviceFingerprintsRelations = relations(deviceFingerprints, ({ one }) => ({
+  user: one(users, { fields: [deviceFingerprints.userId], references: [users.id] }),
+}));
+
+export const fraudCheckLogsRelations = relations(fraudCheckLogs, ({ one }) => ({
+  user: one(users, { fields: [fraudCheckLogs.userId], references: [users.id] }),
+  order: one(orders, { fields: [fraudCheckLogs.orderId], references: [orders.id] }),
+  overriddenByUser: one(users, { fields: [fraudCheckLogs.overriddenBy], references: [users.id] }),
+}));
+
+// Insert schemas for fraud tables
+export const insertFraudRuleSchema = createInsertSchema(fraudRules, {
+  ruleType: z.enum(['velocity', 'geolocation', 'device', 'payment', 'behavior', 'identity']),
+  action: z.enum(['allow', 'flag', 'block', 'review', 'notify']),
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+});
+
+export const insertFraudAlertSchema = createInsertSchema(fraudAlerts, {
+  alertType: z.enum(['velocity', 'geolocation', 'device', 'payment', 'behavior', 'identity', 'manual']),
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  status: z.enum(['pending', 'reviewed', 'dismissed', 'confirmed']).default('pending'),
+});
+
+export const insertUserRiskScoreSchema = createInsertSchema(userRiskScores, {
+  riskLevel: z.enum(['low', 'medium', 'high', 'critical']).default('low'),
+});
+
+export const insertDeviceFingerprintSchema = createInsertSchema(deviceFingerprints);
+
+export const insertFraudCheckLogSchema = createInsertSchema(fraudCheckLogs, {
+  checkType: z.enum(['order_creation', 'payment', 'login', 'account_update']),
+  riskLevel: z.enum(['low', 'medium', 'high', 'critical']),
+  recommendation: z.enum(['allow', 'review', 'block']),
+  finalDecision: z.enum(['allow', 'review', 'block']),
+});
+
+export const insertIpIntelligenceCacheSchema = createInsertSchema(ipIntelligenceCache);
+
+// Types for fraud tables
+export type FraudRule = typeof fraudRules.$inferSelect;
+export type InsertFraudRule = z.infer<typeof insertFraudRuleSchema>;
+export type FraudAlert = typeof fraudAlerts.$inferSelect;
+export type InsertFraudAlert = z.infer<typeof insertFraudAlertSchema>;
+export type UserRiskScore = typeof userRiskScores.$inferSelect;
+export type InsertUserRiskScore = z.infer<typeof insertUserRiskScoreSchema>;
+export type DeviceFingerprint = typeof deviceFingerprints.$inferSelect;
+export type InsertDeviceFingerprint = z.infer<typeof insertDeviceFingerprintSchema>;
+export type FraudCheckLog = typeof fraudCheckLogs.$inferSelect;
+export type InsertFraudCheckLog = z.infer<typeof insertFraudCheckLogSchema>;
+export type IpIntelligenceCache = typeof ipIntelligenceCache.$inferSelect;
+export type InsertIpIntelligenceCache = z.infer<typeof insertIpIntelligenceCacheSchema>;
+
+// ============= TAX COMPLIANCE TABLES (Philippine BIR) =============
+
+// Tax Type Constants
+export const TAX_TYPES = {
+  VAT: 'vat',
+  WITHHOLDING: 'withholding',
+  SERVICE: 'service'
+} as const;
+
+export const TAX_EXEMPTION_TYPES = {
+  SENIOR: 'senior',
+  PWD: 'pwd',
+  DIPLOMATIC: 'diplomatic'
+} as const;
+
+export const TAX_REPORT_TYPES = {
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  ANNUAL: 'annual'
+} as const;
+
+export const TAX_REPORT_STATUSES = {
+  DRAFT: 'draft',
+  GENERATED: 'generated',
+  SUBMITTED: 'submitted',
+  FILED: 'filed'
+} as const;
+
+export const TAX_EXEMPTION_STATUSES = {
+  PENDING: 'pending',
+  VERIFIED: 'verified',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired'
+} as const;
+
+// Tax Rates - Configurable tax rates for VAT, withholding, service fees
+export const taxRates = pgTable("tax_rates", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(), // "Standard VAT", "Senior/PWD VAT Exempt", "Withholding 1%"
+  description: text("description"),
+  rate: decimal("rate", { precision: 8, scale: 4 }).notNull(), // 0.12 for 12% VAT, 0.01 for 1% withholding
+  type: varchar("type", { length: 20 }).notNull(), // vat, withholding, service
+
+  // Applicability
+  applicableToVendors: boolean("applicable_to_vendors").default(true),
+  applicableToCustomers: boolean("applicable_to_customers").default(true),
+  minimumAmount: decimal("minimum_amount", { precision: 10, scale: 2 }), // Minimum order amount for tax to apply
+
+  // Status and validity
+  isActive: boolean("is_active").default(true),
+  effectiveDate: timestamp("effective_date").notNull(),
+  expiryDate: timestamp("expiry_date"), // null = no expiry
+
+  // Audit
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Customer Tax Exemptions - Senior citizen, PWD, diplomatic exemptions for specific customers
+export const customerTaxExemptions = pgTable("customer_tax_exemptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+
+  // Exemption details
+  exemptionType: varchar("exemption_type", { length: 20 }).notNull(), // senior, pwd, diplomatic
+  idNumber: varchar("id_number", { length: 50 }).notNull(), // SC ID number, PWD ID number, diplomatic ID
+  idDocumentUrl: varchar("id_document_url", { length: 500 }), // Uploaded ID photo
+
+  // Personal details for verification
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  dateOfBirth: timestamp("date_of_birth"),
+
+  // Validity period
+  validFrom: timestamp("valid_from").defaultNow(),
+  validUntil: timestamp("valid_until"), // For IDs with expiry
+
+  // Verification status
+  status: varchar("status", { length: 20 }).default("pending"), // pending, verified, rejected, expired
+  verifiedBy: uuid("verified_by").references(() => users.id),
+  verifiedAt: timestamp("verified_at"),
+  rejectionReason: text("rejection_reason"),
+
+  // Audit
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tax Invoices - Official receipts/invoices for orders with tax breakdown
+export const taxInvoices = pgTable("tax_invoices", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+
+  // Invoice identification
+  invoiceNumber: varchar("invoice_number", { length: 50 }).unique().notNull(), // BIR-compliant format
+  invoiceSeries: varchar("invoice_series", { length: 20 }), // Series identifier
+
+  // Customer information
+  customerId: uuid("customer_id").references(() => users.id).notNull(),
+  customerName: varchar("customer_name", { length: 200 }),
+  customerTin: varchar("customer_tin", { length: 20 }), // Tax Identification Number
+  customerAddress: text("customer_address"),
+
+  // Vendor information
+  vendorId: uuid("vendor_id").references(() => users.id),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
+  vendorTin: varchar("vendor_tin", { length: 20 }),
+  vendorName: varchar("vendor_name", { length: 200 }),
+  vendorAddress: text("vendor_address"),
+
+  // Amount breakdown
+  grossAmount: decimal("gross_amount", { precision: 12, scale: 2 }).notNull(), // Total before tax/discounts
+  vatableAmount: decimal("vatable_amount", { precision: 12, scale: 2 }).default("0"), // Amount subject to VAT
+  vatExemptAmount: decimal("vat_exempt_amount", { precision: 12, scale: 2 }).default("0"), // VAT-exempt amount
+  zeroRatedAmount: decimal("zero_rated_amount", { precision: 12, scale: 2 }).default("0"), // Zero-rated sales
+  vatAmount: decimal("vat_amount", { precision: 12, scale: 2 }).default("0"), // 12% VAT
+
+  // Discounts
+  seniorDiscount: decimal("senior_discount", { precision: 12, scale: 2 }).default("0"), // 20% senior discount
+  pwdDiscount: decimal("pwd_discount", { precision: 12, scale: 2 }).default("0"), // 20% PWD discount
+  otherDiscounts: decimal("other_discounts", { precision: 12, scale: 2 }).default("0"),
+
+  // Withholding tax (for vendor payments)
+  withholdingTax: decimal("withholding_tax", { precision: 12, scale: 2 }).default("0"), // 1-2% withholding
+  withholdingRate: decimal("withholding_rate", { precision: 5, scale: 4 }), // Rate applied
+
+  // Final amounts
+  netAmount: decimal("net_amount", { precision: 12, scale: 2 }).notNull(), // Final amount after all calculations
+
+  // Tax exemption reference
+  exemptionId: uuid("exemption_id").references(() => customerTaxExemptions.id),
+  exemptionType: varchar("exemption_type", { length: 20 }), // senior, pwd, diplomatic
+
+  // Status
+  status: varchar("status", { length: 20 }).default("issued"), // draft, issued, cancelled, voided
+  voidedAt: timestamp("voided_at"),
+  voidedBy: uuid("voided_by").references(() => users.id),
+  voidReason: text("void_reason"),
+
+  // Timestamps
+  issuedAt: timestamp("issued_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Vendor Tax Reports - BIR reporting for vendors
+export const vendorTaxReports = pgTable("vendor_tax_reports", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: uuid("vendor_id").references(() => users.id).notNull(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
+
+  // Report period
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  reportType: varchar("report_type", { length: 20 }).notNull(), // monthly, quarterly, annual
+
+  // Report identification
+  reportNumber: varchar("report_number", { length: 50 }).unique(),
+
+  // Sales summary
+  grossSales: decimal("gross_sales", { precision: 14, scale: 2 }).notNull().default("0"),
+  vatableSales: decimal("vatable_sales", { precision: 14, scale: 2 }).default("0"),
+  vatExemptSales: decimal("vat_exempt_sales", { precision: 14, scale: 2 }).default("0"),
+  zeroRatedSales: decimal("zero_rated_sales", { precision: 14, scale: 2 }).default("0"),
+
+  // Tax collected
+  vatCollected: decimal("vat_collected", { precision: 14, scale: 2 }).default("0"),
+
+  // Deductions and payments
+  inputVat: decimal("input_vat", { precision: 14, scale: 2 }).default("0"), // VAT on purchases/expenses
+  vatPayable: decimal("vat_payable", { precision: 14, scale: 2 }).default("0"), // Output VAT - Input VAT
+
+  // Withholding summary
+  withholdingCollected: decimal("withholding_collected", { precision: 14, scale: 2 }).default("0"),
+  withholdingPaid: decimal("withholding_paid", { precision: 14, scale: 2 }).default("0"),
+
+  // Order statistics
+  totalOrders: integer("total_orders").default(0),
+  totalInvoices: integer("total_invoices").default(0),
+  seniorTransactions: integer("senior_transactions").default(0),
+  pwdTransactions: integer("pwd_transactions").default(0),
+
+  // Report status
+  status: varchar("status", { length: 20 }).default("draft"), // draft, generated, submitted, filed
+
+  // Export and filing
+  exportedAt: timestamp("exported_at"),
+  exportFormat: varchar("export_format", { length: 20 }), // csv, pdf, xml
+  exportUrl: varchar("export_url", { length: 500 }), // Link to exported file
+  filedAt: timestamp("filed_at"),
+  filingReference: varchar("filing_reference", { length: 100 }), // BIR filing reference
+
+  // Audit
+  generatedBy: uuid("generated_by").references(() => users.id),
+  generatedAt: timestamp("generated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for tax tables
+export const taxRatesRelations = relations(taxRates, ({ one }) => ({
+  createdByUser: one(users, { fields: [taxRates.createdBy], references: [users.id] }),
+}));
+
+export const customerTaxExemptionsRelations = relations(customerTaxExemptions, ({ one }) => ({
+  user: one(users, { fields: [customerTaxExemptions.userId], references: [users.id] }),
+  verifiedByUser: one(users, { fields: [customerTaxExemptions.verifiedBy], references: [users.id] }),
+}));
+
+export const taxInvoicesRelations = relations(taxInvoices, ({ one }) => ({
+  order: one(orders, { fields: [taxInvoices.orderId], references: [orders.id] }),
+  customer: one(users, { fields: [taxInvoices.customerId], references: [users.id] }),
+  vendor: one(users, { fields: [taxInvoices.vendorId], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [taxInvoices.restaurantId], references: [restaurants.id] }),
+  exemption: one(customerTaxExemptions, { fields: [taxInvoices.exemptionId], references: [customerTaxExemptions.id] }),
+}));
+
+export const vendorTaxReportsRelations = relations(vendorTaxReports, ({ one }) => ({
+  vendor: one(users, { fields: [vendorTaxReports.vendorId], references: [users.id] }),
+  restaurant: one(restaurants, { fields: [vendorTaxReports.restaurantId], references: [restaurants.id] }),
+  generatedByUser: one(users, { fields: [vendorTaxReports.generatedBy], references: [users.id] }),
+}));
+
+// Insert schemas for tax tables
+export const insertTaxRateSchema = createInsertSchema(taxRates, {
+  type: z.enum(['vat', 'withholding', 'service']),
+});
+
+export const insertCustomerTaxExemptionSchema = createInsertSchema(customerTaxExemptions, {
+  exemptionType: z.enum(['senior', 'pwd', 'diplomatic']),
+  status: z.enum(['pending', 'verified', 'rejected', 'expired']).default('pending'),
+});
+
+export const insertTaxInvoiceSchema = createInsertSchema(taxInvoices, {
+  status: z.enum(['draft', 'issued', 'cancelled', 'voided']).default('issued'),
+  exemptionType: z.enum(['senior', 'pwd', 'diplomatic']).optional(),
+});
+
+export const insertVendorTaxReportSchema = createInsertSchema(vendorTaxReports, {
+  reportType: z.enum(['monthly', 'quarterly', 'annual']),
+  status: z.enum(['draft', 'generated', 'submitted', 'filed']).default('draft'),
+});
+
+// Types for tax tables
+export type TaxRate = typeof taxRates.$inferSelect;
+export type InsertTaxRate = z.infer<typeof insertTaxRateSchema>;
+export type CustomerTaxExemption = typeof customerTaxExemptions.$inferSelect;
+export type InsertCustomerTaxExemption = z.infer<typeof insertCustomerTaxExemptionSchema>;
+export type TaxInvoice = typeof taxInvoices.$inferSelect;
+export type InsertTaxInvoice = z.infer<typeof insertTaxInvoiceSchema>;
+export type VendorTaxReport = typeof vendorTaxReports.$inferSelect;
+export type InsertVendorTaxReport = z.infer<typeof insertVendorTaxReportSchema>;

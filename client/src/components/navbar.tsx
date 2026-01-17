@@ -49,9 +49,8 @@ export default function Navbar() {
   // Admin management items
   const adminItems = [
     { label: "Admin Dashboard", href: "/admin-dashboard", icon: Settings },
-    { label: "Manage Riders", href: "/admin-riders", icon: Users },
-    { label: "BTS Tracking", href: "/bts-dashboard", icon: BarChart3 },
-    { label: "Map Demo", href: "/map-tracking-demo", icon: Package },
+    { label: "Dispatch Console", href: "/admin/dispatch-enhanced", icon: BarChart3 },
+    { label: "Manage Riders", href: "/admin/riders", icon: Users },
   ];
 
   return (

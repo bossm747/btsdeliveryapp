@@ -4,11 +4,11 @@ import { WebSocketServer, WebSocket } from "ws";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { 
-  insertRestaurantSchema, 
-  insertMenuCategorySchema, 
-  insertMenuItemSchema, 
-  insertOrderSchema, 
+import {
+  insertRestaurantSchema,
+  insertMenuCategorySchema,
+  insertMenuItemSchema,
+  insertOrderSchema,
   insertUserSchema,
   insertRiderLocationHistorySchema,
   insertRiderAssignmentQueueSchema,
@@ -22,14 +22,43 @@ import {
   insertMenuItemModifierSchema,
   insertPromotionSchema,
   insertRestaurantStaffSchema,
+  insertRefundSchema,
+  insertRiderDocumentSchema,
+  insertRiderVerificationStatusSchema,
   type RiderLocationHistory,
   type RiderAssignmentQueue,
+  type Refund,
+  type InsertRefund,
+  type RiderDocument,
+  type RiderVerificationStatus,
   riders,
   users,
   userSessions,
   orders,
   restaurants,
-  feeCalculations
+  feeCalculations,
+  refunds,
+  payments,
+  orderStatusHistory,
+  riderDocuments,
+  riderVerificationStatus,
+  RIDER_DOC_TYPES,
+  RIDER_DOC_STATUSES,
+  RIDER_VERIFICATION_STATUSES,
+  BACKGROUND_CHECK_STATUSES,
+  // Vendor KYC System
+  vendorKycDocuments,
+  vendorBankAccounts,
+  vendorOnboardingStatus,
+  insertVendorKycDocumentSchema,
+  insertVendorBankAccountSchema,
+  insertVendorOnboardingStatusSchema,
+  type VendorKycDocument,
+  type VendorBankAccount,
+  type VendorOnboardingStatus,
+  KYC_DOC_STATUS,
+  KYC_DOC_TYPES,
+  VENDOR_KYC_STATUS
 } from "@shared/schema";
 import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
@@ -43,9 +72,18 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
 import * as aiServices from "./ai-services";
+import { registerVendorKycRoutes } from "./vendor-kyc-routes";
 import { riderAssignmentService } from "./riderAssignmentService";
 import { emailService } from "./integrations/email";
 import { orderNotificationService, OrderNotificationService } from './services/notification-service.js';
+import { wsManager, type LocationUpdate } from './services/websocket-manager';
+import { registerRefundEndpoints } from './refund-endpoints';
+import riderVerificationRoutes from './routes/rider-verification';
+import walletRoutes, { processCashback } from './routes/wallet';
+import taxRoutes from './routes/tax';
+import fraudRoutes from './routes/fraud';
+import { fraudCheckMiddleware } from './middleware/fraud-check';
+import { registerNexusPayRoutes } from './routes/nexuspay';
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -586,7 +624,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============= OTHER ROUTES =============
-  
+
+  // ============= PUBLIC CONFIG ENDPOINT =============
+  // Provides public configuration to the client (no authentication required)
+  app.get("/api/config/public", async (req, res) => {
+    try {
+      res.json({
+        success: true,
+        config: {
+          // Google Maps - only expose if configured
+          googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null,
+          googleMapsEnabled: !!process.env.GOOGLE_MAPS_API_KEY,
+
+          // App info
+          appName: "BTS Delivery",
+          appVersion: "1.0.0",
+          defaultLocation: {
+            lat: 13.7565,
+            lng: 121.0583,
+            name: "Batangas City"
+          },
+
+          // Feature flags
+          features: {
+            realTimeTracking: true,
+            liveChat: false,
+            aiAssistant: !!process.env.GEMINI_API_KEY,
+            pushNotifications: !!process.env.FIREBASE_PROJECT_ID,
+          },
+
+          // Payment providers
+          paymentProviders: {
+            nexuspay: !!process.env.NEXUSPAY_USERNAME,
+            cod: true, // Cash on delivery always available
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching public config:", error);
+      res.status(500).json({ message: "Failed to fetch configuration" });
+    }
+  });
+
   // User routes
   app.post("/api/users", async (req, res) => {
     try {
@@ -733,6 +812,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= ORDER TRACKING ENDPOINT =============
+
+  /**
+   * Get comprehensive tracking information for an order
+   * Includes rider location, order status, ETA, and tracking events
+   */
+  app.get("/api/orders/:id/tracking", authenticateToken, async (req: any, res) => {
+    try {
+      const orderId = req.params.id;
+
+      // Get order details
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify user has access to this order
+      const canTrack = (
+        order.customerId === req.user.id ||   // Customer can track own orders
+        order.riderId === req.user.id ||      // Rider can track assigned orders
+        req.user.role === 'admin'             // Admin can track all orders
+      );
+
+      // Check if user is vendor for this restaurant
+      if (!canTrack && req.user.role === 'vendor') {
+        const restaurant = await storage.getRestaurant(order.restaurantId);
+        if (restaurant?.ownerId === req.user.id) {
+          // Vendor can track their restaurant's orders
+        } else {
+          return res.status(403).json({ message: "Insufficient permissions to track this order" });
+        }
+      } else if (!canTrack) {
+        return res.status(403).json({ message: "Insufficient permissions to track this order" });
+      }
+
+      // Get order status history
+      const statusHistory = await storage.getOrderStatusHistory(orderId);
+
+      // Get rider information and current location
+      let riderInfo = null;
+      let currentLocation = null;
+      let locationHistory: any[] = [];
+
+      if (order.riderId) {
+        // Get rider details
+        const rider = await storage.getRiderByUserId(order.riderId);
+        if (rider) {
+          riderInfo = {
+            id: rider.id,
+            firstName: '',
+            lastName: '',
+            phone: '',
+            vehicleType: rider.vehicleType,
+            vehiclePlate: rider.vehiclePlate,
+            rating: rider.rating,
+            isOnline: rider.isOnline
+          };
+
+          // Get rider user details
+          const riderUser = await storage.getUser(order.riderId);
+          if (riderUser) {
+            riderInfo.firstName = riderUser.firstName || '';
+            riderInfo.lastName = riderUser.lastName || '';
+            riderInfo.phone = riderUser.phone || '';
+          }
+
+          // Get current location
+          const location = await storage.getRiderCurrentLocation(rider.id);
+          if (location) {
+            const loc = location.location as any;
+            currentLocation = {
+              lat: parseFloat(loc.lat || loc.latitude || '0'),
+              lng: parseFloat(loc.lng || loc.longitude || '0'),
+              heading: loc.heading,
+              speed: loc.speed,
+              accuracy: loc.accuracy,
+              timestamp: location.timestamp,
+              activityType: location.activityType
+            };
+          }
+
+          // Get location history for the last 30 minutes
+          locationHistory = await storage.getRiderLocationHistory(rider.id, 0.5); // 30 minutes
+        }
+      }
+
+      // Get restaurant details
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+      const restaurantAddress = restaurant?.address as any;
+      const restaurantInfo = restaurant ? {
+        id: restaurant.id,
+        name: restaurant.name,
+        address: restaurant.address,
+        phone: restaurant.phone,
+        location: restaurantAddress?.location || null
+      } : null;
+
+      // Calculate ETA based on order status
+      let estimatedArrival = null;
+      let estimatedMinutes = null;
+
+      if (order.estimatedDeliveryTime) {
+        estimatedArrival = order.estimatedDeliveryTime;
+        const now = new Date();
+        const eta = new Date(order.estimatedDeliveryTime);
+        estimatedMinutes = Math.max(0, Math.round((eta.getTime() - now.getTime()) / 60000));
+      }
+
+      // Build tracking events timeline
+      const trackingEvents = statusHistory.map(statusEntry => ({
+        status: statusEntry.toStatus,
+        timestamp: statusEntry.timestamp,
+        changedBy: statusEntry.changedBy,
+        notes: statusEntry.notes,
+        message: getStatusMessage(statusEntry.toStatus)
+      }));
+
+      // Determine current tracking stage
+      const trackingStages = [
+        { status: 'pending', label: 'Order Placed', icon: 'receipt' },
+        { status: 'confirmed', label: 'Confirmed', icon: 'check-circle' },
+        { status: 'preparing', label: 'Preparing', icon: 'utensils' },
+        { status: 'ready', label: 'Ready for Pickup', icon: 'package' },
+        { status: 'picked_up', label: 'Picked Up', icon: 'bike' },
+        { status: 'in_transit', label: 'On the Way', icon: 'navigation' },
+        { status: 'delivered', label: 'Delivered', icon: 'check-double' }
+      ];
+
+      const currentStageIndex = trackingStages.findIndex(s => s.status === order.status);
+
+      // WebSocket subscription info
+      const subscriptionInfo = {
+        channels: [
+          `order:${orderId}`,
+          `order_status:${orderId}`,
+          `rider_location:${orderId}`,
+          `eta_updates:${orderId}`,
+          `tracking_events:${orderId}`
+        ],
+        reconnectHint: {
+          heartbeatInterval: 30000,
+          retryDelays: [1000, 2000, 5000, 10000, 30000]
+        }
+      };
+
+      res.json({
+        order: {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          orderType: order.orderType,
+          paymentStatus: order.paymentStatus,
+          totalAmount: order.totalAmount,
+          deliveryAddress: order.deliveryAddress,
+          specialInstructions: order.specialInstructions,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt
+        },
+        tracking: {
+          currentStatus: order.status,
+          stages: trackingStages,
+          currentStageIndex,
+          events: trackingEvents,
+          isCompleted: ['delivered', 'cancelled'].includes(order.status)
+        },
+        rider: riderInfo,
+        riderLocation: currentLocation,
+        locationHistory: locationHistory.map(loc => {
+          const l = loc.location as any;
+          return {
+            lat: parseFloat(l.lat || l.latitude || '0'),
+            lng: parseFloat(l.lng || l.longitude || '0'),
+            timestamp: loc.timestamp,
+            activityType: loc.activityType
+          };
+        }),
+        restaurant: restaurantInfo,
+        eta: {
+          estimatedArrival,
+          estimatedMinutes,
+          lastUpdated: new Date().toISOString()
+        },
+        websocket: subscriptionInfo
+      });
+    } catch (error) {
+      console.error("Error fetching order tracking:", error);
+      res.status(500).json({ message: "Failed to fetch tracking information" });
+    }
+  });
+
+  // Helper function to get human-readable status messages
+  function getStatusMessage(status: string): string {
+    const messages: { [key: string]: string } = {
+      'pending': 'Your order has been placed and is awaiting confirmation.',
+      'confirmed': 'Your order has been confirmed by the restaurant.',
+      'preparing': 'The restaurant is now preparing your order.',
+      'ready': 'Your order is ready and waiting for pickup.',
+      'picked_up': 'Your rider has picked up your order.',
+      'in_transit': 'Your order is on the way to you.',
+      'delivered': 'Your order has been delivered. Enjoy!',
+      'cancelled': 'Your order has been cancelled.'
+    };
+    return messages[status] || `Order status: ${status}`;
+  }
+
   app.post("/api/orders", async (req, res) => {
     try {
       const orderData = insertOrderSchema.parse(req.body);
@@ -750,12 +1034,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!status) {
         return res.status(400).json({ message: "Status is required" });
       }
-      
+
+      // Get previous status for comparison
+      const previousOrder = await storage.getOrder(req.params.id);
+      const previousStatus = previousOrder?.status;
+
       const order = await storage.updateOrderStatus(req.params.id, status, notes);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
-      
+
       // Send real-time notification for order status update
       const statusMessages: { [key: string]: string } = {
         'confirmed': 'Ang iyong order ay nakumpirma na!',
@@ -766,14 +1054,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'delivered': 'Nadeliver na ang iyong order. Salamat!',
         'cancelled': 'Na-cancel ang iyong order'
       };
-      
+
       const message = statusMessages[status] || `Order status updated to ${status}`;
-      
-      // Use global notification function if available
+
+      // Use global notification function if available (legacy)
       if ((global as any).notifyOrderUpdate) {
         await (global as any).notifyOrderUpdate(order.id, status, message);
       }
-      
+
+      // Broadcast via enhanced WebSocket manager
+      wsManager.broadcastOrderStatusUpdate({
+        orderId: order.id,
+        status,
+        previousStatus,
+        message,
+        estimatedDelivery: order.estimatedDeliveryTime?.toString(),
+        timestamp: new Date().toISOString()
+      });
+
+      // If vendor-related status, send vendor alert
+      if (['cancelled', 'confirmed'].includes(status)) {
+        const restaurant = await storage.getRestaurant(order.restaurantId);
+        if (restaurant) {
+          wsManager.broadcastVendorAlert({
+            type: status === 'cancelled' ? 'order_cancelled' : 'new_order',
+            orderId: order.id,
+            orderNumber: order.orderNumber || order.id,
+            vendorId: restaurant.id,
+            data: {
+              status,
+              previousStatus,
+              totalAmount: order.totalAmount,
+              message
+            },
+            urgency: status === 'cancelled' ? 'high' : 'medium',
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
       res.json(order);
     } catch (error) {
       console.error("Error updating order status:", error);
@@ -2584,16 +2903,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update rider location for real-time tracking
-  app.post("/api/rider/location", async (req, res) => {
+  app.post("/api/rider/location", authenticateToken, async (req: any, res) => {
     try {
-      const { lat, lng, riderId } = req.body;
-      // In production, broadcast location to customers via WebSocket
-      res.json({ 
-        success: true, 
-        message: "Location updated",
-        location: { lat, lng }
+      const { lat, lng, heading, speed, accuracy, orderId, activityType } = req.body;
+
+      // Validate coordinates
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        return res.status(400).json({
+          message: "Valid lat and lng coordinates required"
+        });
+      }
+
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({
+          message: "Invalid coordinate values"
+        });
+      }
+
+      // Get rider profile for the authenticated user
+      let riderId = req.body.riderId;
+
+      if (!riderId) {
+        const rider = await storage.getRiderByUserId(req.user.id);
+        if (!rider) {
+          return res.status(404).json({ message: "Rider profile not found" });
+        }
+        riderId = rider.id;
+      } else {
+        // Verify the riderId matches the authenticated user (unless admin)
+        if (req.user.role !== 'admin') {
+          const rider = await storage.getRiderByUserId(req.user.id);
+          if (!rider || rider.id !== riderId) {
+            return res.status(403).json({ message: "Cannot update location for another rider" });
+          }
+        }
+      }
+
+      // Save location to database
+      const locationData = insertRiderLocationHistorySchema.parse({
+        riderId,
+        location: {
+          lat,
+          lng,
+          accuracy: accuracy || null,
+          speed: speed || null,
+          heading: heading || null
+        },
+        orderId: orderId || null,
+        activityType: activityType || 'idle'
+      });
+
+      const savedLocation = await storage.createRiderLocationHistory(locationData);
+
+      // Build location update for broadcasting
+      const locationUpdate: LocationUpdate = {
+        riderId,
+        lat,
+        lng,
+        heading,
+        speed,
+        accuracy,
+        orderId,
+        activityType: activityType || 'idle',
+        timestamp: new Date().toISOString()
+      };
+
+      // Broadcast location via WebSocket manager
+      await wsManager.broadcastRiderLocation(locationUpdate);
+
+      // Also use the existing broadcast function for backward compatibility
+      broadcastToSubscribers('rider_location', {
+        riderId,
+        location: {
+          lat,
+          lng,
+          accuracy,
+          speed,
+          heading
+        },
+        orderId,
+        activityType,
+        timestamp: new Date().toISOString()
+      });
+
+      // If there's an active order, update its tracking
+      if (orderId) {
+        broadcastRiderLocationUpdate(orderId, { lat, lng, heading, speed });
+      }
+
+      res.json({
+        success: true,
+        message: "Location updated and broadcast",
+        location: { lat, lng, heading, speed, accuracy },
+        locationId: savedLocation.id,
+        timestamp: savedLocation.timestamp
       });
     } catch (error) {
+      console.error("Failed to update rider location:", error);
       res.status(500).json({ message: "Failed to update location" });
     }
   });
@@ -3244,8 +3650,1573 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== LOYALTY POINTS SYSTEM ENDPOINTS ====================
+
+  // Loyalty Tier Configuration Constants
+  const LOYALTY_TIER_CONFIG = {
+    bronze: { name: 'bronze', displayName: 'Bronze', minPoints: 0, maxPoints: 999, multiplier: 1.0, sortOrder: 0 },
+    silver: { name: 'silver', displayName: 'Silver', minPoints: 1000, maxPoints: 4999, multiplier: 1.25, sortOrder: 1 },
+    gold: { name: 'gold', displayName: 'Gold', minPoints: 5000, maxPoints: 9999, multiplier: 1.5, sortOrder: 2 },
+    platinum: { name: 'platinum', displayName: 'Platinum', minPoints: 10000, maxPoints: null, multiplier: 2.0, sortOrder: 3 }
+  };
+
+  const LOYALTY_CONFIG = {
+    baseEarnRate: 1, // Points per peso
+    earnRateThreshold: 10, // Minimum peso amount to earn points (1 point per 10 pesos)
+    redemptionRate: 100, // Points to redeem per 10 peso discount
+    redemptionValue: 10, // Peso value per 100 points
+    minRedemption: 100, // Minimum points to redeem
+    pointsExpiryDays: 365, // Points expire after 1 year
+    signupBonus: 50, // Points given on signup
+    birthdayBonus: 100 // Points given on birthday
+  };
+
+  // Helper: Calculate tier from lifetime points
+  const calculateTier = (lifetimePoints: number): string => {
+    if (lifetimePoints >= LOYALTY_TIER_CONFIG.platinum.minPoints) return 'platinum';
+    if (lifetimePoints >= LOYALTY_TIER_CONFIG.gold.minPoints) return 'gold';
+    if (lifetimePoints >= LOYALTY_TIER_CONFIG.silver.minPoints) return 'silver';
+    return 'bronze';
+  };
+
+  // Helper: Get tier multiplier
+  const getTierMultiplier = (tier: string): number => {
+    return LOYALTY_TIER_CONFIG[tier as keyof typeof LOYALTY_TIER_CONFIG]?.multiplier || 1.0;
+  };
+
+  // Helper: Calculate next tier progress
+  const calculateNextTierProgress = (lifetimePoints: number, currentTier: string): { nextTier: string | null; progress: number; pointsNeeded: number } => {
+    const tierConfig = LOYALTY_TIER_CONFIG[currentTier as keyof typeof LOYALTY_TIER_CONFIG];
+    const tiers = ['bronze', 'silver', 'gold', 'platinum'];
+    const currentIndex = tiers.indexOf(currentTier);
+
+    if (currentIndex === tiers.length - 1) {
+      return { nextTier: null, progress: 100, pointsNeeded: 0 };
+    }
+
+    const nextTierName = tiers[currentIndex + 1];
+    const nextTierConfig = LOYALTY_TIER_CONFIG[nextTierName as keyof typeof LOYALTY_TIER_CONFIG];
+    const pointsNeeded = nextTierConfig.minPoints - lifetimePoints;
+    const progress = Math.min(100, Math.floor(((lifetimePoints - tierConfig.minPoints) / (nextTierConfig.minPoints - tierConfig.minPoints)) * 100));
+
+    return { nextTier: nextTierName, progress, pointsNeeded: Math.max(0, pointsNeeded) };
+  };
+
+  // Helper: Get or create loyalty account for user
+  const getOrCreateLoyaltyAccount = async (userId: string) => {
+    const { loyaltyPoints: loyaltyPointsTable } = await import("@shared/schema");
+
+    // Check for existing account
+    const [existingAccount] = await db.select()
+      .from(loyaltyPointsTable)
+      .where(eq(loyaltyPointsTable.userId, userId));
+
+    if (existingAccount) {
+      return existingAccount;
+    }
+
+    // Create new account with signup bonus
+    const [newAccount] = await db.insert(loyaltyPointsTable)
+      .values({
+        userId,
+        points: LOYALTY_CONFIG.signupBonus,
+        lifetimePoints: LOYALTY_CONFIG.signupBonus,
+        tier: 'bronze',
+        signupBonusAwarded: true,
+        lastEarnedAt: new Date()
+      })
+      .returning();
+
+    // Record signup bonus transaction
+    const { pointsTransactions } = await import("@shared/schema");
+    await db.insert(pointsTransactions)
+      .values({
+        accountId: newAccount.id,
+        userId,
+        type: 'signup',
+        points: LOYALTY_CONFIG.signupBonus,
+        balanceBefore: 0,
+        balanceAfter: LOYALTY_CONFIG.signupBonus,
+        description: 'Welcome bonus for joining BTS Delivery!',
+        metadata: { bonusType: 'signup' }
+      });
+
+    return newAccount;
+  };
+
+  // GET /api/loyalty/account - Get user's loyalty account with full details
+  app.get("/api/loyalty/account", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+      const tierProgress = calculateNextTierProgress(account.lifetimePoints, account.tier);
+      const tierConfig = LOYALTY_TIER_CONFIG[account.tier as keyof typeof LOYALTY_TIER_CONFIG];
+
+      res.json({
+        id: account.id,
+        userId: account.userId,
+        points: account.points,
+        lifetimePoints: account.lifetimePoints,
+        pendingPoints: account.pendingPoints || 0,
+        expiredPoints: account.expiredPoints || 0,
+        redeemedPoints: account.redeemedPoints || 0,
+        tier: account.tier,
+        tierDisplayName: tierConfig.displayName,
+        tierMultiplier: tierConfig.multiplier,
+        nextTier: tierProgress.nextTier,
+        nextTierProgress: tierProgress.progress,
+        pointsToNextTier: tierProgress.pointsNeeded,
+        lastEarnedAt: account.lastEarnedAt,
+        lastRedeemedAt: account.lastRedeemedAt,
+        createdAt: account.createdAt,
+        // Redemption info
+        redemptionRate: `${LOYALTY_CONFIG.redemptionRate} points = ₱${LOYALTY_CONFIG.redemptionValue}`,
+        minRedemption: LOYALTY_CONFIG.minRedemption,
+        canRedeem: account.points >= LOYALTY_CONFIG.minRedemption,
+        maxRedemptionValue: Math.floor(account.points / LOYALTY_CONFIG.redemptionRate) * LOYALTY_CONFIG.redemptionValue
+      });
+    } catch (error) {
+      console.error("Error fetching loyalty account:", error);
+      res.status(500).json({ message: "Failed to fetch loyalty account" });
+    }
+  });
+
+  // GET /api/loyalty/points - Get current points balance (simple endpoint)
+  app.get("/api/loyalty/points", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+
+      res.json({
+        points: account.points,
+        tier: account.tier,
+        lifetimePoints: account.lifetimePoints
+      });
+    } catch (error) {
+      console.error("Error fetching loyalty points:", error);
+      res.status(500).json({ message: "Failed to fetch loyalty points" });
+    }
+  });
+
+  // POST /api/loyalty/earn - Earn points from an order (internal use, called after order completion)
+  app.post("/api/loyalty/earn", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderId, orderAmount, description } = req.body;
+
+      if (!orderAmount || orderAmount <= 0) {
+        return res.status(400).json({ message: "Valid order amount is required" });
+      }
+
+      const { loyaltyPoints: loyaltyPointsTable, pointsTransactions } = await import("@shared/schema");
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+
+      // Calculate points to earn (base rate with tier multiplier)
+      const basePoints = Math.floor(orderAmount / LOYALTY_CONFIG.earnRateThreshold);
+      const multiplier = getTierMultiplier(account.tier);
+      const earnedPoints = Math.floor(basePoints * multiplier);
+
+      if (earnedPoints <= 0) {
+        return res.json({
+          message: "Order amount too low to earn points",
+          pointsEarned: 0,
+          newBalance: account.points
+        });
+      }
+
+      // Calculate expiry date (365 days from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + LOYALTY_CONFIG.pointsExpiryDays);
+
+      // Update account balance
+      const newBalance = account.points + earnedPoints;
+      const newLifetimePoints = account.lifetimePoints + earnedPoints;
+      const newTier = calculateTier(newLifetimePoints);
+      const tierChanged = newTier !== account.tier;
+
+      await db.update(loyaltyPointsTable)
+        .set({
+          points: newBalance,
+          lifetimePoints: newLifetimePoints,
+          tier: newTier,
+          tierUpdatedAt: tierChanged ? new Date() : account.tierUpdatedAt,
+          lastEarnedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(loyaltyPointsTable.id, account.id));
+
+      // Record transaction
+      await db.insert(pointsTransactions)
+        .values({
+          accountId: account.id,
+          userId: req.user.id,
+          orderId,
+          type: 'earn',
+          points: earnedPoints,
+          balanceBefore: account.points,
+          balanceAfter: newBalance,
+          description: description || `Earned from order - ${multiplier}x multiplier`,
+          metadata: {
+            orderAmount,
+            basePoints,
+            multiplier,
+            tier: account.tier
+          },
+          expiresAt
+        });
+
+      res.json({
+        message: "Points earned successfully",
+        pointsEarned: earnedPoints,
+        multiplierUsed: multiplier,
+        newBalance,
+        newLifetimePoints,
+        tier: newTier,
+        tierUpgraded: tierChanged,
+        expiresAt
+      });
+    } catch (error) {
+      console.error("Error earning loyalty points:", error);
+      res.status(500).json({ message: "Failed to earn loyalty points" });
+    }
+  });
+
+  // POST /api/loyalty/redeem - Redeem points at checkout
+  app.post("/api/loyalty/redeem", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { pointsToRedeem, orderId, orderTotal } = req.body;
+
+      if (!pointsToRedeem || pointsToRedeem < LOYALTY_CONFIG.minRedemption) {
+        return res.status(400).json({
+          message: `Minimum redemption is ${LOYALTY_CONFIG.minRedemption} points`,
+          minRedemption: LOYALTY_CONFIG.minRedemption
+        });
+      }
+
+      // Points must be in multiples of redemption rate
+      if (pointsToRedeem % LOYALTY_CONFIG.redemptionRate !== 0) {
+        return res.status(400).json({
+          message: `Points must be redeemed in multiples of ${LOYALTY_CONFIG.redemptionRate}`,
+          redemptionRate: LOYALTY_CONFIG.redemptionRate
+        });
+      }
+
+      const { loyaltyPoints: loyaltyPointsTable, pointsTransactions } = await import("@shared/schema");
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+
+      if (account.points < pointsToRedeem) {
+        return res.status(400).json({
+          message: "Insufficient points balance",
+          available: account.points,
+          requested: pointsToRedeem
+        });
+      }
+
+      // Calculate discount value
+      const discountValue = (pointsToRedeem / LOYALTY_CONFIG.redemptionRate) * LOYALTY_CONFIG.redemptionValue;
+
+      // Validate discount doesn't exceed order total
+      if (orderTotal && discountValue > orderTotal) {
+        const maxPoints = Math.floor(orderTotal / LOYALTY_CONFIG.redemptionValue) * LOYALTY_CONFIG.redemptionRate;
+        return res.status(400).json({
+          message: "Redemption value cannot exceed order total",
+          maxPointsForOrder: maxPoints,
+          maxDiscountValue: orderTotal
+        });
+      }
+
+      // Update account balance
+      const newBalance = account.points - pointsToRedeem;
+      const newRedeemedPoints = (account.redeemedPoints || 0) + pointsToRedeem;
+
+      await db.update(loyaltyPointsTable)
+        .set({
+          points: newBalance,
+          redeemedPoints: newRedeemedPoints,
+          lastRedeemedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(loyaltyPointsTable.id, account.id));
+
+      // Record transaction
+      await db.insert(pointsTransactions)
+        .values({
+          accountId: account.id,
+          userId: req.user.id,
+          orderId,
+          type: 'redeem',
+          points: -pointsToRedeem, // Negative for redemption
+          balanceBefore: account.points,
+          balanceAfter: newBalance,
+          description: `Redeemed for ₱${discountValue.toFixed(2)} discount`,
+          metadata: {
+            discountValue,
+            orderId,
+            orderTotal
+          }
+        });
+
+      res.json({
+        message: "Points redeemed successfully",
+        pointsRedeemed: pointsToRedeem,
+        discountValue,
+        newBalance,
+        redemptionId: `RDM-${Date.now()}`
+      });
+    } catch (error) {
+      console.error("Error redeeming loyalty points:", error);
+      res.status(500).json({ message: "Failed to redeem loyalty points" });
+    }
+  });
+
+  // GET /api/loyalty/history - Get transaction history
+  app.get("/api/loyalty/history", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { type, page = '1', limit = '20' } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = Math.min(parseInt(limit as string), 100);
+      const offset = (pageNum - 1) * limitNum;
+
+      const { pointsTransactions } = await import("@shared/schema");
+
+      let query = db.select()
+        .from(pointsTransactions)
+        .where(eq(pointsTransactions.userId, req.user.id))
+        .orderBy(desc(pointsTransactions.createdAt))
+        .limit(limitNum)
+        .offset(offset);
+
+      // Filter by type if provided
+      if (type && type !== 'all') {
+        query = db.select()
+          .from(pointsTransactions)
+          .where(and(
+            eq(pointsTransactions.userId, req.user.id),
+            eq(pointsTransactions.type, type as string)
+          ))
+          .orderBy(desc(pointsTransactions.createdAt))
+          .limit(limitNum)
+          .offset(offset);
+      }
+
+      const transactions = await query;
+
+      // Get total count for pagination
+      const [countResult] = await db.select({ count: sql<number>`count(*)` })
+        .from(pointsTransactions)
+        .where(eq(pointsTransactions.userId, req.user.id));
+
+      res.json({
+        transactions: transactions.map(t => ({
+          id: t.id,
+          type: t.type,
+          points: t.points,
+          description: t.description,
+          orderId: t.orderId,
+          expiresAt: t.expiresAt,
+          isExpired: t.isExpired,
+          createdAt: t.createdAt,
+          metadata: t.metadata
+        })),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: countResult?.count || 0,
+          totalPages: Math.ceil((countResult?.count || 0) / limitNum)
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching loyalty history:", error);
+      res.status(500).json({ message: "Failed to fetch loyalty history" });
+    }
+  });
+
+  // POST /api/loyalty/bonus - Award bonus points (admin or internal)
+  app.post("/api/loyalty/bonus", authenticateToken, async (req: any, res) => {
+    try {
+      const { userId, bonusType, points, description, metadata } = req.body;
+
+      // Allow admin or internal system calls
+      const isAdmin = req.user?.role === 'admin';
+      const targetUserId = userId || req.user?.id;
+
+      if (!targetUserId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      if (!isAdmin && userId && userId !== req.user?.id) {
+        return res.status(403).json({ message: "Cannot award bonus to other users" });
+      }
+
+      if (!points || points <= 0) {
+        return res.status(400).json({ message: "Valid points amount is required" });
+      }
+
+      const validBonusTypes = ['signup', 'birthday', 'promo', 'bonus', 'adjustment'];
+      if (!validBonusTypes.includes(bonusType)) {
+        return res.status(400).json({ message: "Invalid bonus type", validTypes: validBonusTypes });
+      }
+
+      const { loyaltyPoints: loyaltyPointsTable, pointsTransactions } = await import("@shared/schema");
+      const account = await getOrCreateLoyaltyAccount(targetUserId);
+
+      // For birthday bonus, check if already awarded this year
+      if (bonusType === 'birthday') {
+        const currentYear = new Date().getFullYear();
+        if (account.birthdayBonusYear === currentYear) {
+          return res.status(400).json({ message: "Birthday bonus already awarded this year" });
+        }
+      }
+
+      // Update account balance
+      const newBalance = account.points + points;
+      const newLifetimePoints = account.lifetimePoints + points;
+      const newTier = calculateTier(newLifetimePoints);
+
+      const updates: any = {
+        points: newBalance,
+        lifetimePoints: newLifetimePoints,
+        tier: newTier,
+        lastEarnedAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      if (bonusType === 'birthday') {
+        updates.birthdayBonusYear = new Date().getFullYear();
+      }
+
+      await db.update(loyaltyPointsTable)
+        .set(updates)
+        .where(eq(loyaltyPointsTable.id, account.id));
+
+      // Record transaction
+      await db.insert(pointsTransactions)
+        .values({
+          accountId: account.id,
+          userId: targetUserId,
+          type: bonusType,
+          points,
+          balanceBefore: account.points,
+          balanceAfter: newBalance,
+          description: description || `${bonusType.charAt(0).toUpperCase() + bonusType.slice(1)} bonus`,
+          metadata: {
+            bonusType,
+            awardedBy: isAdmin ? req.user.id : 'system',
+            ...metadata
+          }
+        });
+
+      res.json({
+        message: "Bonus points awarded successfully",
+        pointsAwarded: points,
+        bonusType,
+        newBalance,
+        tier: newTier
+      });
+    } catch (error) {
+      console.error("Error awarding bonus points:", error);
+      res.status(500).json({ message: "Failed to award bonus points" });
+    }
+  });
+
+  // GET /api/loyalty/tiers - Get tier information
+  app.get("/api/loyalty/tiers", async (req, res) => {
+    try {
+      const tiers = Object.values(LOYALTY_TIER_CONFIG).map(tier => ({
+        name: tier.name,
+        displayName: tier.displayName,
+        minPoints: tier.minPoints,
+        maxPoints: tier.maxPoints,
+        multiplier: tier.multiplier,
+        benefits: getTierBenefits(tier.name),
+        icon: getTierIcon(tier.name),
+        color: getTierColor(tier.name)
+      }));
+
+      res.json({
+        tiers,
+        earnRate: `1 point per ₱${LOYALTY_CONFIG.earnRateThreshold} spent`,
+        redemptionRate: `${LOYALTY_CONFIG.redemptionRate} points = ₱${LOYALTY_CONFIG.redemptionValue}`,
+        minRedemption: LOYALTY_CONFIG.minRedemption,
+        pointsExpiryDays: LOYALTY_CONFIG.pointsExpiryDays
+      });
+    } catch (error) {
+      console.error("Error fetching loyalty tiers:", error);
+      res.status(500).json({ message: "Failed to fetch loyalty tiers" });
+    }
+  });
+
+  // Helper function to get tier benefits
+  function getTierBenefits(tier: string): string[] {
+    switch(tier) {
+      case 'bronze':
+        return [
+          'Earn 1 point per ₱10 spent',
+          'Access to basic rewards',
+          'Birthday bonus: 50 points'
+        ];
+      case 'silver':
+        return [
+          'Earn 1.25x points (1.25 per ₱10)',
+          '10% birthday discount',
+          'Early access to promotions',
+          'Birthday bonus: 75 points'
+        ];
+      case 'gold':
+        return [
+          'Earn 1.5x points (1.5 per ₱10)',
+          '15% birthday discount',
+          'Free delivery once a month',
+          'Priority customer support',
+          'Birthday bonus: 100 points'
+        ];
+      case 'platinum':
+        return [
+          'Earn 2x points (2 per ₱10)',
+          '20% birthday discount',
+          'Free delivery on all orders',
+          'Priority customer support',
+          'Exclusive member-only rewards',
+          'Birthday bonus: 150 points'
+        ];
+      default:
+        return [];
+    }
+  }
+
+  // Helper function to get tier icon
+  function getTierIcon(tier: string): string {
+    switch(tier) {
+      case 'bronze': return 'Award';
+      case 'silver': return 'Star';
+      case 'gold': return 'Trophy';
+      case 'platinum': return 'Crown';
+      default: return 'Award';
+    }
+  }
+
+  // Helper function to get tier color
+  function getTierColor(tier: string): string {
+    switch(tier) {
+      case 'bronze': return '#CD7F32';
+      case 'silver': return '#C0C0C0';
+      case 'gold': return '#FFD700';
+      case 'platinum': return '#7B68EE';
+      default: return '#CD7F32';
+    }
+  }
+
+  // POST /api/loyalty/expire-points - Process expired points (scheduled job endpoint)
+  app.post("/api/loyalty/expire-points", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { pointsTransactions, loyaltyPoints: loyaltyPointsTable } = await import("@shared/schema");
+      const now = new Date();
+
+      // Find all non-expired earn transactions that have passed their expiry date
+      const expiredTransactions = await db.select()
+        .from(pointsTransactions)
+        .where(and(
+          eq(pointsTransactions.type, 'earn'),
+          eq(pointsTransactions.isExpired, false),
+          sql`${pointsTransactions.expiresAt} IS NOT NULL`,
+          sql`${pointsTransactions.expiresAt} < ${now}`
+        ));
+
+      let totalExpired = 0;
+      const affectedUsers: string[] = [];
+
+      for (const transaction of expiredTransactions) {
+        // Mark as expired
+        await db.update(pointsTransactions)
+          .set({
+            isExpired: true,
+            expiredAt: now
+          })
+          .where(eq(pointsTransactions.id, transaction.id));
+
+        // Get account and reduce balance
+        const [account] = await db.select()
+          .from(loyaltyPointsTable)
+          .where(eq(loyaltyPointsTable.userId, transaction.userId));
+
+        if (account) {
+          const pointsToExpire = Math.min(account.points, transaction.points);
+          if (pointsToExpire > 0) {
+            await db.update(loyaltyPointsTable)
+              .set({
+                points: account.points - pointsToExpire,
+                expiredPoints: (account.expiredPoints || 0) + pointsToExpire,
+                updatedAt: now
+              })
+              .where(eq(loyaltyPointsTable.id, account.id));
+
+            // Create expiry transaction record
+            await db.insert(pointsTransactions)
+              .values({
+                accountId: account.id,
+                userId: transaction.userId,
+                type: 'expire',
+                points: -pointsToExpire,
+                balanceBefore: account.points,
+                balanceAfter: account.points - pointsToExpire,
+                description: 'Points expired after 365 days',
+                referenceId: transaction.id,
+                metadata: { originalTransactionId: transaction.id }
+              });
+
+            totalExpired += pointsToExpire;
+            if (!affectedUsers.includes(transaction.userId)) {
+              affectedUsers.push(transaction.userId);
+            }
+          }
+        }
+      }
+
+      res.json({
+        message: "Points expiry processed successfully",
+        totalExpired,
+        transactionsProcessed: expiredTransactions.length,
+        usersAffected: affectedUsers.length
+      });
+    } catch (error) {
+      console.error("Error processing points expiry:", error);
+      res.status(500).json({ message: "Failed to process points expiry" });
+    }
+  });
+
+  // GET /api/loyalty/expiring-soon - Get points expiring soon (for notifications)
+  app.get("/api/loyalty/expiring-soon", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { daysAhead = '30' } = req.query;
+      const daysNum = parseInt(daysAhead as string);
+
+      const { pointsTransactions } = await import("@shared/schema");
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + daysNum);
+
+      const expiringTransactions = await db.select()
+        .from(pointsTransactions)
+        .where(and(
+          eq(pointsTransactions.userId, req.user.id),
+          eq(pointsTransactions.type, 'earn'),
+          eq(pointsTransactions.isExpired, false),
+          sql`${pointsTransactions.expiresAt} IS NOT NULL`,
+          sql`${pointsTransactions.expiresAt} <= ${futureDate}`,
+          sql`${pointsTransactions.expiresAt} > NOW()`
+        ))
+        .orderBy(pointsTransactions.expiresAt);
+
+      const totalExpiring = expiringTransactions.reduce((sum, t) => sum + t.points, 0);
+
+      res.json({
+        totalPointsExpiring: totalExpiring,
+        daysAhead: daysNum,
+        transactions: expiringTransactions.map(t => ({
+          id: t.id,
+          points: t.points,
+          expiresAt: t.expiresAt,
+          description: t.description
+        }))
+      });
+    } catch (error) {
+      console.error("Error fetching expiring points:", error);
+      res.status(500).json({ message: "Failed to fetch expiring points" });
+    }
+  });
+
+  // GET /api/loyalty/calculate-earn - Calculate points that would be earned for an order amount
+  app.get("/api/loyalty/calculate-earn", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderAmount } = req.query;
+
+      if (!orderAmount) {
+        return res.status(400).json({ message: "Order amount is required" });
+      }
+
+      const amount = parseFloat(orderAmount as string);
+      if (isNaN(amount) || amount < 0) {
+        return res.status(400).json({ message: "Invalid order amount" });
+      }
+
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+      const basePoints = Math.floor(amount / LOYALTY_CONFIG.earnRateThreshold);
+      const multiplier = getTierMultiplier(account.tier);
+      const earnedPoints = Math.floor(basePoints * multiplier);
+
+      res.json({
+        orderAmount: amount,
+        basePoints,
+        multiplier,
+        pointsToEarn: earnedPoints,
+        tier: account.tier,
+        tierDisplayName: LOYALTY_TIER_CONFIG[account.tier as keyof typeof LOYALTY_TIER_CONFIG].displayName
+      });
+    } catch (error) {
+      console.error("Error calculating earn points:", error);
+      res.status(500).json({ message: "Failed to calculate points" });
+    }
+  });
+
+  // GET /api/loyalty/calculate-redemption - Calculate redemption value
+  app.get("/api/loyalty/calculate-redemption", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { points, orderTotal } = req.query;
+
+      const account = await getOrCreateLoyaltyAccount(req.user.id);
+
+      // If points specified, calculate discount for that amount
+      let pointsToRedeem = points ? parseInt(points as string) : account.points;
+
+      // Round down to nearest redemption rate
+      pointsToRedeem = Math.floor(pointsToRedeem / LOYALTY_CONFIG.redemptionRate) * LOYALTY_CONFIG.redemptionRate;
+
+      // Ensure minimum redemption
+      if (pointsToRedeem < LOYALTY_CONFIG.minRedemption) {
+        pointsToRedeem = 0;
+      }
+
+      // Calculate discount value
+      let discountValue = (pointsToRedeem / LOYALTY_CONFIG.redemptionRate) * LOYALTY_CONFIG.redemptionValue;
+
+      // Cap at order total if provided
+      if (orderTotal) {
+        const total = parseFloat(orderTotal as string);
+        if (discountValue > total) {
+          discountValue = total;
+          pointsToRedeem = Math.floor((discountValue / LOYALTY_CONFIG.redemptionValue) * LOYALTY_CONFIG.redemptionRate);
+        }
+      }
+
+      res.json({
+        availablePoints: account.points,
+        pointsToRedeem,
+        discountValue,
+        canRedeem: account.points >= LOYALTY_CONFIG.minRedemption,
+        minRedemption: LOYALTY_CONFIG.minRedemption,
+        redemptionRate: LOYALTY_CONFIG.redemptionRate,
+        redemptionValue: LOYALTY_CONFIG.redemptionValue
+      });
+    } catch (error) {
+      console.error("Error calculating redemption:", error);
+      res.status(500).json({ message: "Failed to calculate redemption" });
+    }
+  });
+
+  // ==================== ADVANCED PROMO CODE SYSTEM ====================
+
+  // Admin: Create platform promo code
+  app.post("/api/admin/promos", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const {
+        code,
+        name,
+        description,
+        discountType,
+        discountValue,
+        tieredDiscounts,
+        minOrderAmount,
+        maxDiscount,
+        usageLimit,
+        perUserLimit,
+        startDate,
+        endDate,
+        validDaysOfWeek,
+        validTimeStart,
+        validTimeEnd,
+        applicableTo,
+        restaurantIds,
+        excludedRestaurantIds,
+        applicableServiceTypes,
+        fundingType,
+        vendorContribution,
+        isStackable,
+        firstOrderOnly
+      } = req.body;
+
+      // Validate required fields
+      if (!code || !name || !discountType || !startDate || !endDate) {
+        return res.status(400).json({ message: "Missing required fields: code, name, discountType, startDate, endDate" });
+      }
+
+      // Check if code already exists
+      const existingPromo = await storage.getPromoCodeByCode(code);
+      if (existingPromo) {
+        return res.status(400).json({ message: "Promo code already exists" });
+      }
+
+      // Validate discount value for non-tiered types
+      if (discountType !== 'tiered' && !discountValue && discountType !== 'free_delivery') {
+        return res.status(400).json({ message: "Discount value is required for non-tiered discounts" });
+      }
+
+      // Validate tiered discounts
+      if (discountType === 'tiered' && (!tieredDiscounts || !Array.isArray(tieredDiscounts) || tieredDiscounts.length === 0)) {
+        return res.status(400).json({ message: "Tiered discounts configuration is required for tiered discount type" });
+      }
+
+      const promoData = {
+        code: code.toUpperCase(),
+        name,
+        description,
+        discountType,
+        discountValue: discountValue ? String(discountValue) : null,
+        tieredDiscounts,
+        minOrderAmount: minOrderAmount ? String(minOrderAmount) : "0",
+        maxDiscount: maxDiscount ? String(maxDiscount) : null,
+        usageLimit: usageLimit || null,
+        perUserLimit: perUserLimit || 1,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        validDaysOfWeek,
+        validTimeStart,
+        validTimeEnd,
+        applicableTo: applicableTo || 'all',
+        restaurantIds,
+        excludedRestaurantIds,
+        applicableServiceTypes,
+        fundingType: fundingType || 'platform',
+        vendorContribution: vendorContribution ? String(vendorContribution) : null,
+        isStackable: isStackable || false,
+        firstOrderOnly: firstOrderOnly || false,
+        createdBy: req.user.id,
+        isActive: true
+      };
+
+      const promo = await storage.createPromoCode(promoData);
+
+      res.status(201).json({
+        message: "Promo code created successfully",
+        promo
+      });
+    } catch (error) {
+      console.error("Error creating promo code:", error);
+      res.status(500).json({ message: "Failed to create promo code" });
+    }
+  });
+
+  // Admin: Get all promo codes with filters
+  app.get("/api/admin/promos", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { isActive, fundingType, applicableTo, status } = req.query;
+
+      let filters: any = {};
+      if (isActive !== undefined) {
+        filters.isActive = isActive === 'true';
+      }
+      if (fundingType) {
+        filters.fundingType = fundingType as string;
+      }
+      if (applicableTo) {
+        filters.applicableTo = applicableTo as string;
+      }
+
+      let promos = await storage.getPromoCodes(filters);
+
+      // Filter by status (active, expired, upcoming, deactivated)
+      const now = new Date();
+      if (status) {
+        promos = promos.filter(promo => {
+          switch (status) {
+            case 'active':
+              return promo.isActive && new Date(promo.startDate) <= now && new Date(promo.endDate) >= now;
+            case 'expired':
+              return new Date(promo.endDate) < now;
+            case 'upcoming':
+              return promo.isActive && new Date(promo.startDate) > now;
+            case 'deactivated':
+              return !promo.isActive;
+            default:
+              return true;
+          }
+        });
+      }
+
+      // Get usage stats for each promo
+      const promosWithStats = await Promise.all(promos.map(async (promo) => {
+        const stats = await storage.getPromoUsageStats(promo.id);
+        return {
+          ...promo,
+          stats
+        };
+      }));
+
+      res.json(promosWithStats);
+    } catch (error) {
+      console.error("Error fetching promo codes:", error);
+      res.status(500).json({ message: "Failed to fetch promo codes" });
+    }
+  });
+
+  // Admin: Get single promo code with stats
+  app.get("/api/admin/promos/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const promo = await storage.getPromoCode(req.params.id);
+      if (!promo) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      const stats = await storage.getPromoUsageStats(promo.id);
+
+      res.json({
+        ...promo,
+        stats
+      });
+    } catch (error) {
+      console.error("Error fetching promo code:", error);
+      res.status(500).json({ message: "Failed to fetch promo code" });
+    }
+  });
+
+  // Admin: Update promo code
+  app.patch("/api/admin/promos/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const promo = await storage.getPromoCode(req.params.id);
+      if (!promo) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      // If code is being changed, check uniqueness
+      if (req.body.code && req.body.code.toUpperCase() !== promo.code) {
+        const existingPromo = await storage.getPromoCodeByCode(req.body.code);
+        if (existingPromo) {
+          return res.status(400).json({ message: "Promo code already exists" });
+        }
+      }
+
+      const updates: any = {};
+      const allowedFields = [
+        'code', 'name', 'description', 'discountType', 'discountValue', 'tieredDiscounts',
+        'minOrderAmount', 'maxDiscount', 'usageLimit', 'perUserLimit', 'startDate', 'endDate',
+        'validDaysOfWeek', 'validTimeStart', 'validTimeEnd', 'applicableTo', 'restaurantIds',
+        'excludedRestaurantIds', 'applicableServiceTypes', 'fundingType', 'vendorContribution',
+        'isActive', 'isStackable', 'firstOrderOnly'
+      ];
+
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          if (field === 'startDate' || field === 'endDate') {
+            updates[field] = new Date(req.body[field]);
+          } else if (field === 'discountValue' || field === 'minOrderAmount' || field === 'maxDiscount' || field === 'vendorContribution') {
+            updates[field] = req.body[field] ? String(req.body[field]) : null;
+          } else {
+            updates[field] = req.body[field];
+          }
+        }
+      }
+
+      const updatedPromo = await storage.updatePromoCode(req.params.id, updates);
+
+      res.json({
+        message: "Promo code updated successfully",
+        promo: updatedPromo
+      });
+    } catch (error) {
+      console.error("Error updating promo code:", error);
+      res.status(500).json({ message: "Failed to update promo code" });
+    }
+  });
+
+  // Admin: Delete promo code
+  app.delete("/api/admin/promos/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const promo = await storage.getPromoCode(req.params.id);
+      if (!promo) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      await storage.deletePromoCode(req.params.id);
+
+      res.json({ message: "Promo code deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting promo code:", error);
+      res.status(500).json({ message: "Failed to delete promo code" });
+    }
+  });
+
+  // Vendor: Create vendor-funded promo code
+  app.post("/api/vendor/promos/create", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(403).json({ message: "You must have a restaurant to create promos" });
+      }
+
+      const restaurant = restaurants[0];
+      const {
+        code,
+        name,
+        description,
+        discountType,
+        discountValue,
+        minOrderAmount,
+        maxDiscount,
+        usageLimit,
+        perUserLimit,
+        startDate,
+        endDate,
+        validDaysOfWeek,
+        validTimeStart,
+        validTimeEnd,
+        firstOrderOnly
+      } = req.body;
+
+      // Validate required fields
+      if (!code || !name || !discountType || !startDate || !endDate) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Check if code already exists
+      const existingPromo = await storage.getPromoCodeByCode(code);
+      if (existingPromo) {
+        return res.status(400).json({ message: "Promo code already exists" });
+      }
+
+      // For vendor promos, they can only create percentage, fixed, or free_delivery types
+      if (!['percentage', 'fixed', 'free_delivery'].includes(discountType)) {
+        return res.status(400).json({ message: "Invalid discount type for vendor promo" });
+      }
+
+      const promoData = {
+        code: code.toUpperCase(),
+        name,
+        description,
+        discountType,
+        discountValue: discountValue ? String(discountValue) : null,
+        minOrderAmount: minOrderAmount ? String(minOrderAmount) : "0",
+        maxDiscount: maxDiscount ? String(maxDiscount) : null,
+        usageLimit: usageLimit || null,
+        perUserLimit: perUserLimit || 1,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        validDaysOfWeek,
+        validTimeStart,
+        validTimeEnd,
+        applicableTo: 'specific_restaurants' as const,
+        restaurantIds: [restaurant.id],
+        fundingType: 'vendor' as const,
+        vendorContribution: "100", // Vendor pays 100%
+        vendorId: req.user.id,
+        restaurantId: restaurant.id,
+        isStackable: false,
+        firstOrderOnly: firstOrderOnly || false,
+        createdBy: req.user.id,
+        isActive: true
+      };
+
+      const promo = await storage.createPromoCode(promoData);
+
+      res.status(201).json({
+        message: "Vendor promo code created successfully",
+        promo
+      });
+    } catch (error) {
+      console.error("Error creating vendor promo code:", error);
+      res.status(500).json({ message: "Failed to create vendor promo code" });
+    }
+  });
+
+  // Vendor: Get vendor's promo codes
+  app.get("/api/vendor/promos/list", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.json([]);
+      }
+
+      const restaurant = restaurants[0];
+
+      // Get all promos and filter by vendor
+      const allPromos = await storage.getPromoCodes();
+      const vendorPromos = allPromos.filter(promo =>
+        promo.vendorId === req.user.id ||
+        (promo.restaurantIds && (promo.restaurantIds as string[]).includes(restaurant.id))
+      );
+
+      // Get stats for each promo
+      const promosWithStats = await Promise.all(vendorPromos.map(async (promo) => {
+        const stats = await storage.getPromoUsageStats(promo.id);
+        return {
+          ...promo,
+          stats
+        };
+      }));
+
+      res.json(promosWithStats);
+    } catch (error) {
+      console.error("Error fetching vendor promo codes:", error);
+      res.status(500).json({ message: "Failed to fetch vendor promo codes" });
+    }
+  });
+
+  // Validate promo code at checkout
+  app.post("/api/promos/validate", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { code, subtotal, restaurantId, orderType, deliveryFee } = req.body;
+
+      if (!code) {
+        return res.status(400).json({
+          valid: false,
+          error: "Promo code is required"
+        });
+      }
+
+      // Get the promo code
+      const promo = await storage.getPromoCodeByCode(code);
+      if (!promo) {
+        return res.json({
+          valid: false,
+          code: code.toUpperCase(),
+          discountType: 'fixed',
+          discountValue: 0,
+          discountAmount: 0,
+          error: "Invalid promo code"
+        });
+      }
+
+      const now = new Date();
+      const orderSubtotal = parseFloat(subtotal) || 0;
+
+      // Check if promo is active
+      if (!promo.isActive) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          error: "This promo code is no longer active"
+        });
+      }
+
+      // Check date range
+      if (now < new Date(promo.startDate)) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          error: "This promo code is not yet active"
+        });
+      }
+
+      if (now > new Date(promo.endDate)) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          error: "This promo code has expired"
+        });
+      }
+
+      // Check day of week restriction
+      if (promo.validDaysOfWeek && Array.isArray(promo.validDaysOfWeek)) {
+        const currentDay = now.getDay();
+        if (!(promo.validDaysOfWeek as number[]).includes(currentDay)) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: "This promo code is not valid today"
+          });
+        }
+      }
+
+      // Check time of day restriction
+      if (promo.validTimeStart && promo.validTimeEnd) {
+        const currentTime = now.toTimeString().slice(0, 5);
+        if (currentTime < promo.validTimeStart || currentTime > promo.validTimeEnd) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: `This promo code is only valid between ${promo.validTimeStart} and ${promo.validTimeEnd}`
+          });
+        }
+      }
+
+      // Check total usage limit
+      if (promo.usageLimit && (promo.timesUsed || 0) >= promo.usageLimit) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          error: "This promo code has reached its usage limit"
+        });
+      }
+
+      // Check per-user usage limit
+      const userUsageCount = await storage.getUserPromoUsageCount(req.user.id, promo.id);
+      if (promo.perUserLimit && userUsageCount >= promo.perUserLimit) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          error: "You have already used this promo code the maximum number of times"
+        });
+      }
+
+      // Check minimum order amount
+      const minOrder = parseFloat(promo.minOrderAmount || "0");
+      if (orderSubtotal < minOrder) {
+        return res.json({
+          valid: false,
+          code: promo.code,
+          discountType: promo.discountType,
+          discountValue: Number(promo.discountValue),
+          discountAmount: 0,
+          minOrderAmount: minOrder,
+          error: `Minimum order of ${minOrder.toFixed(2)} required`
+        });
+      }
+
+      // Check restaurant applicability
+      if (restaurantId && promo.applicableTo === 'specific_restaurants') {
+        const applicableRestaurants = promo.restaurantIds as string[] || [];
+        if (!applicableRestaurants.includes(restaurantId)) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: "This promo code is not valid for this restaurant"
+          });
+        }
+      }
+
+      // Check excluded restaurants
+      if (restaurantId && promo.excludedRestaurantIds) {
+        const excludedRestaurants = promo.excludedRestaurantIds as string[] || [];
+        if (excludedRestaurants.includes(restaurantId)) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: "This promo code is not valid for this restaurant"
+          });
+        }
+      }
+
+      // Check service type applicability
+      if (orderType && promo.applicableServiceTypes) {
+        const applicableTypes = promo.applicableServiceTypes as string[] || [];
+        if (applicableTypes.length > 0 && !applicableTypes.includes(orderType)) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: `This promo code is not valid for ${orderType} orders`
+          });
+        }
+      }
+
+      // Check if new user promo
+      if (promo.applicableTo === 'new_users' || promo.firstOrderOnly) {
+        // Get user's completed orders count
+        const userOrders = await storage.getOrdersByCustomer(req.user.id);
+        const completedOrders = userOrders.filter(o => o.status === 'completed' || o.status === 'delivered');
+        if (completedOrders.length > 0) {
+          return res.json({
+            valid: false,
+            code: promo.code,
+            discountType: promo.discountType,
+            discountValue: Number(promo.discountValue),
+            discountAmount: 0,
+            error: "This promo code is only for first-time customers"
+          });
+        }
+      }
+
+      // Calculate discount amount
+      let discountAmount = 0;
+      const discountValue = parseFloat(promo.discountValue || "0");
+      const maxDiscount = parseFloat(promo.maxDiscount || "0");
+      const orderDeliveryFee = parseFloat(deliveryFee) || 0;
+
+      switch (promo.discountType) {
+        case 'percentage':
+          discountAmount = (orderSubtotal * discountValue) / 100;
+          // Apply max discount cap if set
+          if (maxDiscount > 0 && discountAmount > maxDiscount) {
+            discountAmount = maxDiscount;
+          }
+          break;
+
+        case 'fixed':
+          discountAmount = discountValue;
+          // Cap at subtotal
+          if (discountAmount > orderSubtotal) {
+            discountAmount = orderSubtotal;
+          }
+          break;
+
+        case 'free_delivery':
+          discountAmount = orderDeliveryFee;
+          break;
+
+        case 'first_order':
+          // First order promos typically have a fixed discount for new users
+          discountAmount = discountValue;
+          if (discountAmount > orderSubtotal) {
+            discountAmount = orderSubtotal;
+          }
+          break;
+
+        case 'tiered':
+          // Find the applicable tier based on order value
+          const tiers = promo.tieredDiscounts as Array<{ minOrder: number; discount: number }> || [];
+          // Sort tiers by minOrder descending to find the highest applicable tier
+          const sortedTiers = [...tiers].sort((a, b) => b.minOrder - a.minOrder);
+          const applicableTier = sortedTiers.find(tier => orderSubtotal >= tier.minOrder);
+          if (applicableTier) {
+            discountAmount = applicableTier.discount;
+          }
+          break;
+
+        default:
+          discountAmount = 0;
+      }
+
+      // Round to 2 decimal places
+      discountAmount = Math.round(discountAmount * 100) / 100;
+
+      res.json({
+        valid: true,
+        code: promo.code,
+        discountType: promo.discountType,
+        discountValue: Number(promo.discountValue),
+        discountAmount,
+        description: promo.description,
+        minOrderAmount: Number(promo.minOrderAmount),
+        maxDiscount: promo.maxDiscount ? Number(promo.maxDiscount) : undefined,
+        expiresAt: promo.endDate.toISOString(),
+        message: `Promo applied! You save ${discountAmount.toFixed(2)}`
+      });
+    } catch (error) {
+      console.error("Error validating promo code:", error);
+      res.status(500).json({
+        valid: false,
+        error: "Failed to validate promo code"
+      });
+    }
+  });
+
+  // Customer: Get available promos for user
+  app.get("/api/customer/promos/available", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { restaurantId, orderType } = req.query;
+      const now = new Date();
+
+      // Get all active promos
+      const allPromos = await storage.getPromoCodes({ isActive: true });
+
+      // Get user's completed orders count for new user check
+      const userOrders = await storage.getOrdersByCustomer(req.user.id);
+      const completedOrders = userOrders.filter(o => o.status === 'completed' || o.status === 'delivered');
+      const isNewUser = completedOrders.length === 0;
+
+      // Filter eligible promos
+      const eligiblePromos = await Promise.all(allPromos.map(async (promo) => {
+        // Check date validity
+        if (now < new Date(promo.startDate) || now > new Date(promo.endDate)) {
+          return null;
+        }
+
+        // Check total usage limit
+        if (promo.usageLimit && (promo.timesUsed || 0) >= promo.usageLimit) {
+          return null;
+        }
+
+        // Check per-user usage limit
+        const userUsageCount = await storage.getUserPromoUsageCount(req.user.id, promo.id);
+        if (promo.perUserLimit && userUsageCount >= promo.perUserLimit) {
+          return null;
+        }
+
+        // Check new user restriction
+        if ((promo.applicableTo === 'new_users' || promo.firstOrderOnly) && !isNewUser) {
+          return null;
+        }
+
+        // Check restaurant applicability
+        if (restaurantId) {
+          if (promo.applicableTo === 'specific_restaurants') {
+            const applicableRestaurants = promo.restaurantIds as string[] || [];
+            if (!applicableRestaurants.includes(restaurantId as string)) {
+              return null;
+            }
+          }
+          if (promo.excludedRestaurantIds) {
+            const excludedRestaurants = promo.excludedRestaurantIds as string[] || [];
+            if (excludedRestaurants.includes(restaurantId as string)) {
+              return null;
+            }
+          }
+        }
+
+        // Check service type
+        if (orderType && promo.applicableServiceTypes) {
+          const applicableTypes = promo.applicableServiceTypes as string[] || [];
+          if (applicableTypes.length > 0 && !applicableTypes.includes(orderType as string)) {
+            return null;
+          }
+        }
+
+        return {
+          id: promo.id,
+          code: promo.code,
+          name: promo.name,
+          description: promo.description,
+          discountType: promo.discountType,
+          discountValue: promo.discountValue ? Number(promo.discountValue) : null,
+          minOrderAmount: promo.minOrderAmount ? Number(promo.minOrderAmount) : 0,
+          maxDiscount: promo.maxDiscount ? Number(promo.maxDiscount) : null,
+          expiresAt: promo.endDate,
+          fundingType: promo.fundingType,
+          tieredDiscounts: promo.tieredDiscounts,
+          usesRemaining: promo.perUserLimit ? promo.perUserLimit - userUsageCount : null
+        };
+      }));
+
+      // Filter nulls and sort by discount value (higher first)
+      const filteredPromos = eligiblePromos
+        .filter(p => p !== null)
+        .sort((a, b) => {
+          const aValue = a!.discountValue || 0;
+          const bValue = b!.discountValue || 0;
+          return bValue - aValue;
+        });
+
+      res.json(filteredPromos);
+    } catch (error) {
+      console.error("Error fetching available promos:", error);
+      res.status(500).json({ message: "Failed to fetch available promos" });
+    }
+  });
+
+  // Internal: Apply promo to order (called during order creation)
+  app.post("/api/promos/:id/apply", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderId, originalAmount, discountAmount, finalAmount } = req.body;
+      const promoId = req.params.id;
+
+      const promo = await storage.getPromoCode(promoId);
+      if (!promo) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      // Calculate funding breakdown
+      let platformContribution = discountAmount;
+      let vendorContribution = 0;
+
+      if (promo.fundingType === 'vendor') {
+        platformContribution = 0;
+        vendorContribution = discountAmount;
+      } else if (promo.fundingType === 'split' && promo.vendorContribution) {
+        const vendorPct = parseFloat(promo.vendorContribution) / 100;
+        vendorContribution = discountAmount * vendorPct;
+        platformContribution = discountAmount - vendorContribution;
+      }
+
+      // Record the usage
+      const usage = await storage.createPromoUsage({
+        promoId,
+        userId: req.user.id,
+        orderId,
+        discountAmount: String(discountAmount),
+        originalOrderAmount: String(originalAmount),
+        finalOrderAmount: String(finalAmount),
+        platformContribution: String(platformContribution),
+        vendorContribution: String(vendorContribution),
+        status: 'applied'
+      });
+
+      // Increment usage count on promo
+      await storage.incrementPromoUsageCount(promoId);
+
+      res.json({
+        message: "Promo applied successfully",
+        usage,
+        breakdown: {
+          discountAmount,
+          platformContribution,
+          vendorContribution
+        }
+      });
+    } catch (error) {
+      console.error("Error applying promo:", error);
+      res.status(500).json({ message: "Failed to apply promo" });
+    }
+  });
+
   // ==================== VENDOR API ENDPOINTS ====================
-  
+
   // Vendor Categories endpoints
   app.get("/api/vendor/categories", authenticateToken, async (req, res) => {
     try {
@@ -3825,6 +5796,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(summary);
     } catch (error) {
       console.error("Error fetching earnings summary:", error);
+      res.status(500).json({ message: "Failed to fetch earnings summary" });
+    }
+  });
+
+  // ==================== VENDOR SETTLEMENTS & PAYOUTS ====================
+
+  // GET /api/vendor/settlements - Get vendor's settlement history
+  app.get("/api/vendor/settlements", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { status, startDate, endDate, page, limit } = req.query;
+
+      const result = await storage.getVendorSettlements(req.user.id, {
+        status: status as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        page: page ? parseInt(page as string) : 1,
+        limit: limit ? parseInt(limit as string) : 20
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching vendor settlements:", error);
+      res.status(500).json({ message: "Failed to fetch settlements" });
+    }
+  });
+
+  // GET /api/vendor/settlements/:id - Get single settlement details
+  app.get("/api/vendor/settlements/:id", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const settlement = await storage.getVendorSettlement(req.params.id);
+
+      if (!settlement) {
+        return res.status(404).json({ message: "Settlement not found" });
+      }
+
+      // Verify the settlement belongs to this vendor
+      if (settlement.vendorId !== req.user.id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(settlement);
+    } catch (error) {
+      console.error("Error fetching settlement:", error);
+      res.status(500).json({ message: "Failed to fetch settlement" });
+    }
+  });
+
+  // GET /api/vendor/payouts - Get vendor's payout history
+  app.get("/api/vendor/payouts", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { status, startDate, endDate, page, limit } = req.query;
+
+      const result = await storage.getVendorPayouts(req.user.id, {
+        status: status as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        page: page ? parseInt(page as string) : 1,
+        limit: limit ? parseInt(limit as string) : 20
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching vendor payouts:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
+    }
+  });
+
+  // GET /api/vendor/payouts/:id - Get single payout details
+  app.get("/api/vendor/payouts/:id", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const payout = await storage.getVendorPayout(req.params.id);
+
+      if (!payout) {
+        return res.status(404).json({ message: "Payout not found" });
+      }
+
+      // Verify the payout belongs to this vendor
+      if (payout.vendorId !== req.user.id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(payout);
+    } catch (error) {
+      console.error("Error fetching payout:", error);
+      res.status(500).json({ message: "Failed to fetch payout" });
+    }
+  });
+
+  // GET /api/vendor/earnings/full-summary - Comprehensive earnings summary
+  app.get("/api/vendor/earnings/full-summary", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { period } = req.query;
+
+      const summary = await storage.getVendorEarningsSummary(
+        req.user.id,
+        period as 'day' | 'week' | 'month' | 'year'
+      );
+
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching vendor earnings summary:", error);
       res.status(500).json({ message: "Failed to fetch earnings summary" });
     }
   });
@@ -4683,6 +6775,304 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= ENHANCED DISPATCH SYSTEM ENDPOINTS =============
+
+  // Create dispatch batch - assign multiple orders to a single rider
+  app.post("/api/admin/dispatch/batch", authenticateToken, requireAdmin, auditLog('create', 'dispatch_batch'), async (req, res) => {
+    try {
+      const { orderIds, riderId, notes } = req.body;
+
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ message: "Order IDs array is required" });
+      }
+
+      if (!riderId) {
+        return res.status(400).json({ message: "Rider ID is required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const batch = await dispatchService.createDispatchBatch({
+        orderIds,
+        riderId,
+        assignedBy: req.user!.id,
+        notes,
+      });
+
+      res.status(201).json(batch);
+    } catch (error: any) {
+      console.error("Error creating dispatch batch:", error);
+      res.status(400).json({ message: error.message || "Failed to create dispatch batch" });
+    }
+  });
+
+  // Get dispatch batches
+  app.get("/api/admin/dispatch/batches", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, riderId, limit = '50', offset = '0' } = req.query;
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const batches = await dispatchService.getDispatchBatches({
+        status: status as string,
+        riderId: riderId as string,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      });
+
+      res.json(batches);
+    } catch (error) {
+      console.error("Error fetching dispatch batches:", error);
+      res.status(500).json({ message: "Failed to fetch dispatch batches" });
+    }
+  });
+
+  // Get batch details with orders
+  app.get("/api/admin/dispatch/batches/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const batch = await dispatchService.getBatchDetails(id);
+
+      if (!batch) {
+        return res.status(404).json({ message: "Batch not found" });
+      }
+
+      res.json(batch);
+    } catch (error) {
+      console.error("Error fetching batch details:", error);
+      res.status(500).json({ message: "Failed to fetch batch details" });
+    }
+  });
+
+  // Manual dispatch override - assign specific rider to order
+  app.post("/api/admin/dispatch/override", authenticateToken, requireAdmin, auditLog('override', 'dispatch'), async (req, res) => {
+    try {
+      const { orderId, riderId, reason, description } = req.body;
+
+      if (!orderId || !riderId || !reason) {
+        return res.status(400).json({ message: "Order ID, Rider ID, and reason are required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const overrideLog = await dispatchService.manualOverride({
+        orderId,
+        newRiderId: riderId,
+        overriddenBy: req.user!.id,
+        reason,
+        description,
+      });
+
+      res.json(overrideLog);
+    } catch (error: any) {
+      console.error("Error performing dispatch override:", error);
+      res.status(400).json({ message: error.message || "Failed to override dispatch" });
+    }
+  });
+
+  // Get dispatch escalations
+  app.get("/api/admin/dispatch/escalations", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, level, limit = '50', offset = '0' } = req.query;
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const escalations = await dispatchService.getEscalations({
+        status: status as string,
+        level: level ? parseInt(level as string) : undefined,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      });
+
+      res.json(escalations);
+    } catch (error) {
+      console.error("Error fetching escalations:", error);
+      res.status(500).json({ message: "Failed to fetch escalations" });
+    }
+  });
+
+  // Create manual escalation
+  app.post("/api/admin/dispatch/escalations", authenticateToken, requireAdmin, auditLog('create', 'escalation'), async (req, res) => {
+    try {
+      const { orderId, level, reason, description } = req.body;
+
+      if (!orderId || !level || !reason) {
+        return res.status(400).json({ message: "Order ID, level, and reason are required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const escalation = await dispatchService.createEscalation({
+        orderId,
+        level,
+        reason,
+        description,
+      });
+
+      res.status(201).json(escalation);
+    } catch (error: any) {
+      console.error("Error creating escalation:", error);
+      res.status(400).json({ message: error.message || "Failed to create escalation" });
+    }
+  });
+
+  // Resolve escalation
+  app.post("/api/admin/dispatch/escalations/:id/resolve", authenticateToken, requireAdmin, auditLog('resolve', 'escalation'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { resolutionAction, resolutionNotes } = req.body;
+
+      if (!resolutionAction) {
+        return res.status(400).json({ message: "Resolution action is required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const escalation = await dispatchService.resolveEscalation(
+        id,
+        req.user!.id,
+        resolutionAction,
+        resolutionNotes
+      );
+
+      res.json(escalation);
+    } catch (error: any) {
+      console.error("Error resolving escalation:", error);
+      res.status(400).json({ message: error.message || "Failed to resolve escalation" });
+    }
+  });
+
+  // Get rider capacity overview
+  app.get("/api/admin/dispatch/riders/capacity", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const ridersWithCapacity = await dispatchService.getRidersCapacityOverview();
+
+      res.json(ridersWithCapacity);
+    } catch (error) {
+      console.error("Error fetching rider capacity:", error);
+      res.status(500).json({ message: "Failed to fetch rider capacity" });
+    }
+  });
+
+  // Create enhanced emergency dispatch
+  app.post("/api/admin/dispatch/emergency-dispatch", authenticateToken, requireAdmin, auditLog('create', 'emergency_dispatch'), async (req, res) => {
+    try {
+      const { orderId, reason, description, priority = 2 } = req.body;
+
+      if (!orderId || !reason) {
+        return res.status(400).json({ message: "Order ID and reason are required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const emergency = await dispatchService.createEmergencyDispatch({
+        orderId,
+        reason,
+        description,
+        priority,
+        handledBy: req.user!.id,
+      });
+
+      res.status(201).json(emergency);
+    } catch (error: any) {
+      console.error("Error creating emergency dispatch:", error);
+      res.status(400).json({ message: error.message || "Failed to create emergency dispatch" });
+    }
+  });
+
+  // Get emergency dispatches
+  app.get("/api/admin/dispatch/emergency-dispatches", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, priority, limit = '50', offset = '0' } = req.query;
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const emergencies = await dispatchService.getEmergencyDispatches({
+        status: status as string,
+        priority: priority ? parseInt(priority as string) : undefined,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      });
+
+      res.json(emergencies);
+    } catch (error) {
+      console.error("Error fetching emergency dispatches:", error);
+      res.status(500).json({ message: "Failed to fetch emergency dispatches" });
+    }
+  });
+
+  // Reassign emergency dispatch to backup rider
+  app.post("/api/admin/dispatch/emergency-dispatches/:id/reassign", authenticateToken, requireAdmin, auditLog('reassign', 'emergency_dispatch'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { riderId } = req.body;
+
+      if (!riderId) {
+        return res.status(400).json({ message: "Rider ID is required" });
+      }
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const emergency = await dispatchService.reassignEmergencyDispatch(
+        id,
+        riderId,
+        req.user!.id
+      );
+
+      res.json(emergency);
+    } catch (error: any) {
+      console.error("Error reassigning emergency dispatch:", error);
+      res.status(400).json({ message: error.message || "Failed to reassign emergency dispatch" });
+    }
+  });
+
+  // Resolve emergency dispatch
+  app.post("/api/admin/dispatch/emergency-dispatches/:id/resolve", authenticateToken, requireAdmin, auditLog('resolve', 'emergency_dispatch'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { resolutionNotes } = req.body;
+
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const emergency = await dispatchService.resolveEmergencyDispatch(id, resolutionNotes || '');
+
+      res.json(emergency);
+    } catch (error: any) {
+      console.error("Error resolving emergency dispatch:", error);
+      res.status(400).json({ message: error.message || "Failed to resolve emergency dispatch" });
+    }
+  });
+
+  // Real-time SLA monitoring
+  app.get("/api/admin/dispatch/sla-monitor", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { dispatchService } = await import('./services/dispatch-service');
+
+      const slaData = await dispatchService.getSlaMonitoringData();
+
+      res.json({
+        orders: slaData,
+        summary: {
+          total: slaData.length,
+          green: slaData.filter(o => o.slaStatus === 'green').length,
+          yellow: slaData.filter(o => o.slaStatus === 'yellow').length,
+          red: slaData.filter(o => o.slaStatus === 'red').length,
+        },
+        lastUpdated: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error fetching SLA monitor data:", error);
+      res.status(500).json({ message: "Failed to fetch SLA monitor data" });
+    }
+  });
+
+  // ============= END ENHANCED DISPATCH SYSTEM =============
+
   // Admin Dashboard Endpoints
   app.get("/api/admin/stats", authenticateToken, requireAdmin, auditLog('view', 'admin_stats'), async (req, res) => {
     try {
@@ -5207,9 +7597,312 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================
+  // GEOFENCE & ADDRESS SERVICES
+  // ============================================================
+
+  // Geofence check - auto-update order status when rider enters zones
+  app.post("/api/rider/geofence-check", async (req, res) => {
+    try {
+      const { riderId, latitude, longitude, orderId, accuracy } = req.body;
+
+      if (!riderId || !latitude || !longitude || !orderId) {
+        return res.status(400).json({
+          message: "Missing required fields: riderId, latitude, longitude, orderId"
+        });
+      }
+
+      // Dynamically import to avoid circular dependencies
+      const { geofenceService } = await import("./services/geofence-service");
+
+      const result = await geofenceService.checkGeofence(
+        riderId,
+        orderId,
+        { latitude, longitude, accuracy }
+      );
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error("Error checking geofence:", error);
+      res.status(500).json({ message: "Failed to check geofence" });
+    }
+  });
+
+  // Get geofence status for an order
+  app.get("/api/rider/geofence-status/:orderId/:riderId", async (req, res) => {
+    try {
+      const { orderId, riderId } = req.params;
+
+      // Get rider's current location
+      const riderLocation = await gpsTrackingService.getRiderLatestLocation(riderId);
+
+      if (!riderLocation) {
+        return res.status(404).json({ message: "Rider location not found" });
+      }
+
+      const { geofenceService } = await import("./services/geofence-service");
+
+      const locationData = riderLocation.location as any;
+      const result = await geofenceService.checkGeofence(
+        riderId,
+        orderId,
+        {
+          latitude: parseFloat(locationData.lat),
+          longitude: parseFloat(locationData.lng),
+          accuracy: locationData.accuracy
+        }
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error getting geofence status:", error);
+      res.status(500).json({ message: "Failed to get geofence status" });
+    }
+  });
+
+  // Address validation endpoint
+  app.post("/api/addresses/validate", async (req, res) => {
+    try {
+      const { street, barangay, city, province, zipCode, landmark } = req.body;
+
+      const { addressService } = await import("./services/address-service");
+
+      const result = await addressService.validateAddress({
+        street,
+        barangay,
+        city,
+        province,
+        zipCode,
+        landmark
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error validating address:", error);
+      res.status(500).json({ message: "Failed to validate address" });
+    }
+  });
+
+  // Get list of valid Batangas cities
+  app.get("/api/addresses/cities", async (req, res) => {
+    try {
+      const { addressService } = await import("./services/address-service");
+      const cities = addressService.getBatangasCities();
+      const zipCodes = addressService.getZipCodes();
+
+      res.json({ cities, zipCodes });
+    } catch (error) {
+      console.error("Error getting cities:", error);
+      res.status(500).json({ message: "Failed to get cities" });
+    }
+  });
+
+  // Google Places autocomplete proxy (protects API key)
+  app.get("/api/places/autocomplete", async (req, res) => {
+    try {
+      const { input, sessionToken } = req.query;
+
+      if (!input || typeof input !== 'string') {
+        return res.status(400).json({ message: "Input query is required" });
+      }
+
+      const { addressService } = await import("./services/address-service");
+
+      const suggestions = await addressService.getPlacesSuggestions(
+        input,
+        sessionToken as string | undefined
+      );
+
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("Error fetching place suggestions:", error);
+      res.status(500).json({ message: "Failed to fetch suggestions" });
+    }
+  });
+
+  // Google Places details proxy (protects API key)
+  app.get("/api/places/details", async (req, res) => {
+    try {
+      const { placeId, sessionToken } = req.query;
+
+      if (!placeId || typeof placeId !== 'string') {
+        return res.status(400).json({ message: "Place ID is required" });
+      }
+
+      const { addressService } = await import("./services/address-service");
+
+      const details = await addressService.getPlaceDetails(
+        placeId,
+        sessionToken as string | undefined
+      );
+
+      if (!details) {
+        return res.status(404).json({ message: "Place not found" });
+      }
+
+      res.json(details);
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+      res.status(500).json({ message: "Failed to fetch place details" });
+    }
+  });
+
+  // Delivery zone check - check if location is serviceable
+  app.post("/api/delivery-zones/check", async (req, res) => {
+    try {
+      const { latitude, longitude, city } = req.body;
+
+      if (!latitude || !longitude) {
+        return res.status(400).json({ message: "Location coordinates required" });
+      }
+
+      const { geofenceService, GEOFENCE_RADIUS } = await import("./services/geofence-service");
+
+      // Check if within Batangas service area (25km from Batangas City center)
+      const isServiceable = await geofenceService.isWithinServiceArea(
+        latitude,
+        longitude,
+        13.7565, // Batangas City center lat
+        121.0583, // Batangas City center lng
+        25 // 25km radius
+      );
+
+      // Calculate distance from service center
+      const distanceToCenter = geofenceService.calculateDistance(
+        latitude,
+        longitude,
+        13.7565,
+        121.0583
+      );
+
+      // Determine delivery fee zone
+      let zone: string;
+      let deliveryFee: number;
+
+      const distanceKm = distanceToCenter / 1000;
+      if (distanceKm <= 5) {
+        zone = 'zone1';
+        deliveryFee = 49;
+      } else if (distanceKm <= 10) {
+        zone = 'zone2';
+        deliveryFee = 69;
+      } else if (distanceKm <= 15) {
+        zone = 'zone3';
+        deliveryFee = 89;
+      } else if (distanceKm <= 25) {
+        zone = 'zone4';
+        deliveryFee = 119;
+      } else {
+        zone = 'outside';
+        deliveryFee = 0;
+      }
+
+      res.json({
+        serviceable: isServiceable,
+        zone,
+        deliveryFee,
+        distanceKm: Math.round(distanceKm * 10) / 10,
+        message: isServiceable
+          ? `Delivery available! Estimated fee: ₱${deliveryFee}`
+          : 'Sorry, this location is outside our delivery area'
+      });
+    } catch (error) {
+      console.error("Error checking delivery zone:", error);
+      res.status(500).json({ message: "Failed to check delivery zone" });
+    }
+  });
+
+  // Get delivery zones configuration
+  app.get("/api/delivery-zones", async (req, res) => {
+    try {
+      // Service area configuration centered on Batangas City
+      const zones = [
+        {
+          id: 'zone1',
+          name: 'Zone 1 - Central',
+          radiusKm: 5,
+          deliveryFee: 49,
+          estimatedTime: '15-25 mins',
+          color: '#22c55e', // green
+          description: 'Batangas City center and nearby barangays'
+        },
+        {
+          id: 'zone2',
+          name: 'Zone 2 - Inner',
+          radiusKm: 10,
+          deliveryFee: 69,
+          estimatedTime: '25-40 mins',
+          color: '#3b82f6', // blue
+          description: 'Bauan, San Pascual, and nearby areas'
+        },
+        {
+          id: 'zone3',
+          name: 'Zone 3 - Outer',
+          radiusKm: 15,
+          deliveryFee: 89,
+          estimatedTime: '40-55 mins',
+          color: '#f59e0b', // amber
+          description: 'Lemery, Taal, Rosario, and surrounding areas'
+        },
+        {
+          id: 'zone4',
+          name: 'Zone 4 - Extended',
+          radiusKm: 25,
+          deliveryFee: 119,
+          estimatedTime: '55-75 mins',
+          color: '#ef4444', // red
+          description: 'Lipa, Tanauan, Nasugbu, and outer areas'
+        }
+      ];
+
+      res.json({
+        center: { lat: 13.7565, lng: 121.0583 },
+        zones,
+        maxRadiusKm: 25
+      });
+    } catch (error) {
+      console.error("Error getting delivery zones:", error);
+      res.status(500).json({ message: "Failed to get delivery zones" });
+    }
+  });
+
+  // Get nearby orders for rider
+  app.get("/api/rider/:riderId/nearby-orders", async (req, res) => {
+    try {
+      const { riderId } = req.params;
+      const { latitude, longitude, radiusKm = '5' } = req.query;
+
+      if (!latitude || !longitude) {
+        return res.status(400).json({ message: "Location coordinates required" });
+      }
+
+      const { geofenceService } = await import("./services/geofence-service");
+
+      const nearbyOrders = await geofenceService.getNearbyOrders(
+        riderId,
+        parseFloat(latitude as string),
+        parseFloat(longitude as string),
+        parseFloat(radiusKm as string)
+      );
+
+      res.json({ orders: nearbyOrders });
+    } catch (error) {
+      console.error("Error getting nearby orders:", error);
+      res.status(500).json({ message: "Failed to get nearby orders" });
+    }
+  });
+
   const httpServer = createServer(app);
-  
-  // WebSocket server for real-time notifications
+
+  // Initialize enhanced WebSocket manager on a separate path for new clients
+  // This provides channel-based subscriptions and better connection management
+  wsManager.initialize(httpServer, '/ws/v2');
+  console.log('[Routes] Enhanced WebSocket manager initialized on /ws/v2');
+
+  // Legacy WebSocket server for backward compatibility on /ws
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
   const clients = new Map<string, ExtendedWebSocket>();
 
@@ -6377,9 +9070,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/analytics/performance", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { timeRange = '24h' } = req.query;
-      
+
       const performance = await storage.getPerformanceMetrics(timeRange as string);
-      
+
       res.json({
         performance,
         generatedAt: new Date().toISOString()
@@ -6387,6 +9080,385 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching performance metrics:", error);
       res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
+  // ============= COMPREHENSIVE FINANCIAL ANALYTICS =============
+
+  // Revenue Dashboard - Main dashboard data
+  app.get("/api/admin/analytics/revenue", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const dashboardData = await financialAnalyticsService.getRevenueDashboard(start, end);
+
+      res.json({
+        success: true,
+        data: dashboardData,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching revenue dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch revenue dashboard" });
+    }
+  });
+
+  // Revenue Chart Data - For visualizations
+  app.get("/api/admin/analytics/revenue/chart", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, granularity = 'daily', comparePrevious = 'false' } = req.query;
+
+      const now = new Date();
+      const start = startDate ? new Date(startDate as string) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate as string) : now;
+
+      const chartData = await financialAnalyticsService.getRevenueChartData(
+        start,
+        end,
+        granularity as 'daily' | 'weekly' | 'monthly',
+        comparePrevious === 'true'
+      );
+
+      res.json({
+        success: true,
+        data: chartData,
+        period: { startDate: start, endDate: end, granularity },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching revenue chart data:", error);
+      res.status(500).json({ message: "Failed to fetch revenue chart data" });
+    }
+  });
+
+  // Order Analytics - Order counts, AOV trends, peak hours
+  app.get("/api/admin/analytics/orders", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const orderAnalytics = await financialAnalyticsService.getOrderAnalytics(start, end);
+
+      res.json({
+        success: true,
+        data: orderAnalytics,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching order analytics:", error);
+      res.status(500).json({ message: "Failed to fetch order analytics" });
+    }
+  });
+
+  // Vendor Performance Analytics
+  app.get("/api/admin/analytics/vendors", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d', limit = '10' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const vendorPerformance = await financialAnalyticsService.getVendorPerformance(
+        start,
+        end,
+        parseInt(limit as string)
+      );
+
+      res.json({
+        success: true,
+        data: vendorPerformance,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching vendor analytics:", error);
+      res.status(500).json({ message: "Failed to fetch vendor analytics" });
+    }
+  });
+
+  // Rider Performance Analytics
+  app.get("/api/admin/analytics/riders", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d', limit = '10' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const riderPerformance = await financialAnalyticsService.getRiderPerformance(
+        start,
+        end,
+        parseInt(limit as string)
+      );
+
+      res.json({
+        success: true,
+        data: riderPerformance,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching rider analytics:", error);
+      res.status(500).json({ message: "Failed to fetch rider analytics" });
+    }
+  });
+
+  // Profit Analysis
+  app.get("/api/admin/analytics/profit", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const profitAnalysis = await financialAnalyticsService.getProfitAnalysis(start, end);
+
+      res.json({
+        success: true,
+        data: profitAnalysis,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching profit analysis:", error);
+      res.status(500).json({ message: "Failed to fetch profit analysis" });
+    }
+  });
+
+  // Revenue Breakdown - By service type, region, payment method
+  app.get("/api/admin/analytics/revenue/breakdown", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const breakdown = await financialAnalyticsService.getRevenueBreakdown(start, end);
+
+      res.json({
+        success: true,
+        data: breakdown,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching revenue breakdown:", error);
+      res.status(500).json({ message: "Failed to fetch revenue breakdown" });
+    }
+  });
+
+  // Trend Analysis
+  app.get("/api/admin/analytics/trends", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const trendAnalysis = await financialAnalyticsService.getTrendAnalysis(start, end);
+
+      res.json({
+        success: true,
+        data: trendAnalysis,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching trend analysis:", error);
+      res.status(500).json({ message: "Failed to fetch trend analysis" });
+    }
+  });
+
+  // Financial KPIs
+  app.get("/api/admin/analytics/kpis", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const kpis = await financialAnalyticsService.getFinancialKPIs(start, end);
+
+      res.json({
+        success: true,
+        data: kpis,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching financial KPIs:", error);
+      res.status(500).json({ message: "Failed to fetch financial KPIs" });
+    }
+  });
+
+  // Comprehensive Report
+  app.get("/api/admin/analytics/report", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const report = await financialAnalyticsService.generateComprehensiveReport(start, end);
+
+      res.json({
+        success: true,
+        data: report,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error generating comprehensive report:", error);
+      res.status(500).json({ message: "Failed to generate comprehensive report" });
+    }
+  });
+
+  // Export Financial Report
+  app.get("/api/admin/analytics/export", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, format = 'csv', period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const exportResult = await financialAnalyticsService.exportReport({
+        startDate: start,
+        endDate: end,
+        format: format as 'csv' | 'pdf' | 'excel'
+      });
+
+      res.setHeader('Content-Type', exportResult.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+      res.send(exportResult.data);
+    } catch (error) {
+      console.error("Error exporting financial report:", error);
+      res.status(500).json({ message: "Failed to export financial report" });
+    }
+  });
+
+  // Tax Compliance Report
+  app.get("/api/admin/analytics/tax-compliance", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, period = '30d' } = req.query;
+
+      const now = new Date();
+      let start: Date;
+      let end: Date = now;
+
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        const days = parseInt(period as string) || 30;
+        start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+
+      const taxCompliance = await financialAnalyticsService.getTaxCompliance(start, end);
+
+      res.json({
+        success: true,
+        data: taxCompliance,
+        period: { startDate: start, endDate: end },
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching tax compliance:", error);
+      res.status(500).json({ message: "Failed to fetch tax compliance" });
     }
   });
 
@@ -6733,6 +9805,279 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating financial report:", error);
       res.status(500).json({ message: "Failed to generate financial report" });
+    }
+  });
+
+  // ============= VENDOR SETTLEMENTS MANAGEMENT =============
+
+  // GET /api/admin/financial/settlements - Get all settlements for admin
+  app.get("/api/admin/financial/settlements", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, vendorId, startDate, endDate, page, limit } = req.query;
+
+      const result = await storage.getAllSettlements({
+        status: status as string,
+        vendorId: vendorId as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        page: page ? parseInt(page as string) : 1,
+        limit: limit ? parseInt(limit as string) : 50
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching all settlements:", error);
+      res.status(500).json({ message: "Failed to fetch settlements" });
+    }
+  });
+
+  // GET /api/admin/financial/settlements/:id - Get single settlement details for admin
+  app.get("/api/admin/financial/settlements/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const settlement = await storage.getVendorSettlement(req.params.id);
+
+      if (!settlement) {
+        return res.status(404).json({ message: "Settlement not found" });
+      }
+
+      res.json(settlement);
+    } catch (error) {
+      console.error("Error fetching settlement:", error);
+      res.status(500).json({ message: "Failed to fetch settlement" });
+    }
+  });
+
+  // PATCH /api/admin/financial/settlements/:id - Update settlement (approve/dispute)
+  app.patch("/api/admin/financial/settlements/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+
+      const validStatuses = ['pending', 'approved', 'processing', 'paid', 'disputed'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+
+      const updates: any = {};
+      if (status) {
+        updates.status = status;
+        if (status === 'approved') {
+          updates.approvedBy = req.user!.id;
+          updates.approvedAt = new Date();
+        }
+      }
+      if (notes) updates.notes = notes;
+
+      const settlement = await storage.updateVendorSettlement(id, updates);
+
+      if (!settlement) {
+        return res.status(404).json({ message: "Settlement not found" });
+      }
+
+      // Log admin action
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: `settlement_${status || 'update'}`,
+        resource: 'vendor_settlements',
+        resourceId: id,
+        details: { status, notes },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json(settlement);
+    } catch (error) {
+      console.error("Error updating settlement:", error);
+      res.status(500).json({ message: "Failed to update settlement" });
+    }
+  });
+
+  // POST /api/admin/financial/settlements/generate - Generate settlements for all vendors
+  app.post("/api/admin/financial/settlements/generate", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { date } = req.body;
+      const settlementDate = date ? new Date(date) : new Date();
+      settlementDate.setDate(settlementDate.getDate() - 1); // Default to yesterday
+
+      // Get all active restaurants
+      const restaurants = await storage.getRestaurants();
+      const results: { successful: any[]; failed: { restaurantId: string; error: string }[] } = {
+        successful: [],
+        failed: []
+      };
+
+      for (const restaurant of restaurants) {
+        try {
+          const settlement = await storage.calculateDailySettlement(
+            restaurant.ownerId,
+            restaurant.id,
+            settlementDate
+          );
+          results.successful.push({
+            settlementId: settlement.id,
+            restaurantId: restaurant.id,
+            restaurantName: restaurant.name,
+            grossAmount: settlement.grossAmount,
+            netAmount: settlement.netAmount
+          });
+        } catch (error) {
+          results.failed.push({
+            restaurantId: restaurant.id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      // Log admin action
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'generate_settlements',
+        resource: 'vendor_settlements',
+        resourceId: 'batch',
+        details: {
+          date: settlementDate.toISOString(),
+          successfulCount: results.successful.length,
+          failedCount: results.failed.length
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({
+        message: `Generated ${results.successful.length} settlements, ${results.failed.length} failed`,
+        date: settlementDate.toISOString().split('T')[0],
+        ...results
+      });
+    } catch (error) {
+      console.error("Error generating settlements:", error);
+      res.status(500).json({ message: "Failed to generate settlements" });
+    }
+  });
+
+  // POST /api/admin/financial/vendor-payouts/process - Process batch vendor payouts
+  app.post("/api/admin/financial/vendor-payouts/process", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { payoutIds } = req.body;
+
+      if (!payoutIds || !Array.isArray(payoutIds) || payoutIds.length === 0) {
+        return res.status(400).json({ message: "payoutIds array is required" });
+      }
+
+      const results = await storage.processPayoutBatch(payoutIds, req.user!.id);
+
+      // Log admin action
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'process_vendor_payouts',
+        resource: 'vendor_payouts',
+        resourceId: 'batch',
+        details: {
+          totalRequested: payoutIds.length,
+          successfulCount: results.successful.length,
+          failedCount: results.failed.length
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({
+        message: `Processed ${results.successful.length} payouts, ${results.failed.length} failed`,
+        ...results
+      });
+    } catch (error) {
+      console.error("Error processing vendor payouts:", error);
+      res.status(500).json({ message: "Failed to process payouts" });
+    }
+  });
+
+  // POST /api/admin/financial/vendor-payouts/create - Create payout for approved settlement
+  app.post("/api/admin/financial/vendor-payouts/create", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { settlementId, payoutMethod, accountDetails, scheduledFor } = req.body;
+
+      if (!settlementId || !payoutMethod) {
+        return res.status(400).json({ message: "settlementId and payoutMethod are required" });
+      }
+
+      // Get the settlement
+      const settlement = await storage.getVendorSettlement(settlementId);
+      if (!settlement) {
+        return res.status(404).json({ message: "Settlement not found" });
+      }
+
+      if (settlement.status !== 'approved') {
+        return res.status(400).json({ message: "Settlement must be approved before creating payout" });
+      }
+
+      // Create the payout
+      const payout = await storage.createVendorPayout({
+        vendorId: settlement.vendorId,
+        settlementId: settlement.id,
+        amount: settlement.netAmount,
+        payoutMethod,
+        accountDetails,
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
+        status: 'pending'
+      });
+
+      // Update settlement to processing
+      await storage.updateVendorSettlement(settlementId, {
+        status: 'processing',
+        payoutId: payout.id
+      });
+
+      // Log admin action
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'create_vendor_payout',
+        resource: 'vendor_payouts',
+        resourceId: payout.id,
+        details: {
+          settlementId,
+          amount: settlement.netAmount,
+          payoutMethod
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.status(201).json(payout);
+    } catch (error) {
+      console.error("Error creating vendor payout:", error);
+      res.status(500).json({ message: "Failed to create payout" });
+    }
+  });
+
+  // GET /api/admin/financial/vendor-payouts - Get all vendor payouts for admin
+  app.get("/api/admin/financial/vendor-payouts", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { status, vendorId, startDate, endDate, page, limit } = req.query;
+
+      // For admin, get all vendor payouts (using a broad query)
+      // We'll implement a similar method or use existing storage
+      const result = await db.execute(sql`
+        SELECT
+          vp.*,
+          u.first_name || ' ' || u.last_name as vendor_name,
+          u.email as vendor_email,
+          r.name as restaurant_name
+        FROM vendor_payouts vp
+        LEFT JOIN users u ON vp.vendor_id = u.id
+        LEFT JOIN restaurants r ON r.owner_id = vp.vendor_id
+        ${vendorId ? sql`WHERE vp.vendor_id = ${vendorId}` : sql``}
+        ${status && !vendorId ? sql`WHERE vp.status = ${status}` : status && vendorId ? sql`AND vp.status = ${status}` : sql``}
+        ORDER BY vp.created_at DESC
+        LIMIT ${parseInt(limit as string) || 50}
+        OFFSET ${((parseInt(page as string) || 1) - 1) * (parseInt(limit as string) || 50)}
+      `);
+
+      res.json({
+        payouts: result.rows || [],
+        total: result.rows?.length || 0
+      });
+    } catch (error) {
+      console.error("Error fetching all vendor payouts:", error);
+      res.status(500).json({ message: "Failed to fetch vendor payouts" });
     }
   });
 
@@ -7100,6 +10445,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Export notification functions for use in order status updates
   (global as any).notifyOrderUpdate = notifyOrderUpdate;
   (global as any).broadcastNotification = broadcastNotification;
-  
+
+  // Export enhanced WebSocket manager for global access
+  (global as any).wsManager = wsManager;
+
+  // Export WebSocket connection stats endpoint
+  app.get("/api/ws/stats", authenticateToken, requireAdmin, (req, res) => {
+    try {
+      const stats = wsManager.getStats();
+      res.json({
+        ...stats,
+        onlineRiders: wsManager.getOnlineRiders(),
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching WebSocket stats:", error);
+      res.status(500).json({ message: "Failed to fetch WebSocket stats" });
+    }
+  });
+
+  // ============================================================
+  // REGISTER ORDER REFUND WORKFLOW ENDPOINTS
+  // ============================================================
+  registerRefundEndpoints(app, authenticateToken, requireAdmin, auditLog, broadcastToSubscribers);
+
+  // ============================================================
+  // REGISTER VENDOR ONBOARDING & KYC ROUTES
+  // ============================================================
+  registerVendorKycRoutes(app, authenticateToken, requireAdmin, auditLog);
+
+  // ============================================================
+  // REGISTER RIDER VERIFICATION ROUTES
+  // ============================================================
+  // Rider verification endpoints:
+  // - POST /api/rider/documents/upload - Rider uploads verification documents
+  // - GET /api/rider/verification/status - Check verification status
+  // - GET /api/rider/documents - Get all documents for the authenticated rider
+  // Admin verification endpoints:
+  // - POST /api/admin/riders/:id/verify-document - Admin verifies a specific document
+  // - GET /api/admin/riders/:id/documents - Get all documents for a specific rider
+  // - GET /api/admin/riders/:id/verification - Get verification status for a specific rider
+  // - POST /api/admin/riders/:id/complete-verification - Admin completes full verification
+  // - POST /api/admin/riders/:id/update-background-check - Admin updates background check status
+  // - GET /api/admin/riders/pending-verification - Get all riders pending verification
+  app.use('/api/rider', riderVerificationRoutes);
+  app.use('/api', riderVerificationRoutes);
+
+  // ============================================================
+  // REGISTER CUSTOMER WALLET ROUTES
+  // ============================================================
+  // Customer wallet endpoints:
+  // - GET /api/customer/wallet - Get wallet info
+  // - POST /api/customer/wallet/create - Create wallet
+  // - POST /api/customer/wallet/topup - Top up wallet
+  // - POST /api/customer/wallet/topup/callback - Payment callback
+  // - GET /api/customer/wallet/transactions - Transaction history
+  // - POST /api/customer/wallet/pay - Pay with wallet
+  // - POST /api/customer/wallet/refund - Refund to wallet
+  // - PUT /api/customer/wallet/settings - Update wallet settings
+  // - GET /api/customer/wallet/summary - Monthly summary
+  // Admin wallet endpoints:
+  // - POST /api/admin/wallet/:userId/adjust - Admin adjustment
+  // - GET /api/admin/wallet/:userId - View user wallet
+  app.use('/api', authenticateToken, walletRoutes);
+
+  // ============= TAX COMPLIANCE ROUTES =============
+  // Tax calculation and exemption endpoints:
+  // - POST /api/tax/calculate - Calculate taxes for an order
+  // - GET /api/tax/rates - Get active tax rates
+  // Customer exemption endpoints:
+  // - GET /api/customer/tax-exemption - Get user's exemption status
+  // - POST /api/customer/tax-exemption - Register tax exemption
+  // Vendor tax report endpoints:
+  // - GET /api/vendor/tax-reports - Get vendor tax reports
+  // - GET /api/vendor/tax-reports/:id - Get single report
+  // - GET /api/vendor/tax-reports/:id/export - Export report to CSV
+  // Admin tax management endpoints:
+  // - GET /api/admin/tax-exemptions/pending - List pending verifications
+  // - GET /api/admin/tax-exemptions - List all exemptions
+  // - POST /api/admin/tax-exemptions/:id/verify - Verify/reject exemption
+  // - POST /api/admin/tax-reports/generate - Generate tax reports
+  // - GET /api/admin/tax-reports - Get all tax reports
+  // - GET /api/admin/tax-reports/:id/export - Export any report
+  // - POST /api/admin/tax-rates - Create tax rate
+  // - PATCH /api/admin/tax-rates/:id - Update tax rate
+  app.use('/api', authenticateToken, taxRoutes);
+
+  // Export cashback processor for use when orders complete
+  (global as any).processCashback = processCashback;
+
+  // ============================================================
+  // REGISTER FRAUD DETECTION ROUTES
+  // ============================================================
+  // Public fraud check endpoint:
+  // - POST /api/fraud/check - Check order/payment for fraud
+  // Admin fraud management endpoints:
+  // - GET /api/admin/fraud/alerts - List fraud alerts
+  // - GET /api/admin/fraud/alerts/:id - Get alert details
+  // - POST /api/admin/fraud/alerts/:id/review - Review alert
+  // - GET /api/admin/fraud/rules - List fraud rules
+  // - GET /api/admin/fraud/rules/:id - Get rule details
+  // - POST /api/admin/fraud/rules - Create rule
+  // - PUT /api/admin/fraud/rules/:id - Update rule
+  // - PATCH /api/admin/fraud/rules/:id/toggle - Toggle rule
+  // - DELETE /api/admin/fraud/rules/:id - Delete rule
+  // - GET /api/admin/fraud/user/:id/risk - Get user risk profile
+  // - POST /api/admin/fraud/user/:id/block - Block user
+  // - POST /api/admin/fraud/user/:id/unblock - Unblock user
+  // - GET /api/admin/fraud/stats - Get fraud statistics
+  // - GET /api/admin/fraud/logs - Get fraud check logs
+  // - GET /api/admin/fraud/high-risk-users - List high risk users
+  // - GET /api/admin/fraud/blocked-users - List blocked users
+  app.use('/api', authenticateToken, fraudRoutes);
+
+  // Export fraud detection service for global access
+  (global as any).fraudDetectionService = require('./services/fraud-detection').fraudDetectionService;
+
+  // ============================================================
+  // REGISTER NEXUSPAY PAYMENT ROUTES
+  // ============================================================
+  // NexusPay payment endpoints (Philippine payment methods):
+  // Status & Configuration:
+  // - GET /api/nexuspay/status - Check NexusPay configuration status
+  // - GET /api/nexuspay/methods - Get available payment methods
+  // Cash-In (receive payments):
+  // - POST /api/nexuspay/cashin - Create cash-in payment request
+  // - GET /api/nexuspay/cashin-status/:id - Check cash-in status
+  // Cash-Out (payouts to e-wallets):
+  // - POST /api/nexuspay/cashout - Create payout to GCash/Maya
+  // - GET /api/nexuspay/payout-status/:id - Check payout status
+  // Webhook:
+  // - POST /api/nexuspay/webhook - NexusPay webhook handler
+  // Admin endpoints:
+  // - GET /api/admin/nexuspay/balance - Check merchant wallet balance
+  // - POST /api/admin/nexuspay/batch-payout - Process batch payouts
+  // - GET /api/admin/nexuspay/pending-payments - Get pending payments
+  // - POST /api/admin/nexuspay/check-payment/:id - Manually verify payment
+  registerNexusPayRoutes(app);
+
   return httpServer;
 }

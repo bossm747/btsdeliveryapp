@@ -4,20 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { 
-  BarChart3, 
-  ShoppingBag, 
-  Package, 
-  Star, 
-  User, 
-  DollarSign, 
+import {
+  BarChart3,
+  ShoppingBag,
+  Package,
+  Star,
+  User,
+  DollarSign,
   Store,
   Bell,
   Settings,
   LogOut,
   ChevronDown,
   Menu,
-  Sparkles
+  Sparkles,
+  Clock,
+  PieChart,
+  Percent,
+  FileText
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,10 +36,14 @@ const sidebarItems = [
   { href: "/vendor-dashboard", icon: BarChart3, label: "Overview", testId: "nav-overview" },
   { href: "/vendor-dashboard/orders", icon: ShoppingBag, label: "Orders", testId: "nav-orders" },
   { href: "/vendor-dashboard/menu", icon: Package, label: "Menu", testId: "nav-menu" },
+  { href: "/vendor-dashboard/analytics", icon: PieChart, label: "Analytics", testId: "nav-analytics" },
   { href: "/vendor-dashboard/promotions", icon: Star, label: "Promotions", testId: "nav-promotions" },
   { href: "/vendor-dashboard/staff", icon: User, label: "Staff", testId: "nav-staff" },
   { href: "/vendor-dashboard/inventory", icon: Package, label: "Inventory", testId: "nav-inventory" },
   { href: "/vendor-dashboard/earnings", icon: DollarSign, label: "Earnings", testId: "nav-earnings" },
+  { href: "/vendor-dashboard/commission", icon: Percent, label: "Commission", testId: "nav-commission" },
+  { href: "/vendor-dashboard/business-settings", icon: Clock, label: "Business Hours", testId: "nav-business-settings" },
+  { href: "/vendor-dashboard/tax-reports", icon: FileText, label: "Tax Reports", testId: "nav-tax-reports" },
   { href: "/vendor-dashboard/profile", icon: Store, label: "Restaurant", testId: "nav-profile" },
 ];
 

@@ -14,7 +14,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote } from "lucide-react";
+import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet } from "lucide-react";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { DeliveryZoneBadge } from "@/components/delivery-zone-map";
+import { LoyaltyEarnPreview } from "@/components/loyalty-widget";
+import { WalletBalance, useWallet } from "@/components/wallet-balance";
+import { TaxBreakdown, TaxSummaryLine } from "@/components/tax-breakdown";
+import { Slider } from "@/components/ui/slider";
 import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
@@ -106,7 +112,21 @@ export default function Cart() {
   const [tipAmount, setTipAmount] = useState(0);
   const [isInsured, setIsInsured] = useState(false);
   const [distance, setDistance] = useState(5); // Default 5km
-  const [currentCity, setCurrentCity] = useState('Manila'); // Default city
+  const [currentCity, setCurrentCity] = useState('Batangas City'); // Default city
+
+  // Wallet payment state
+  const [useWalletPayment, setUseWalletPayment] = useState(false);
+  const [walletPaymentAmount, setWalletPaymentAmount] = useState(0);
+  const { wallet, hasWallet, balance: walletBalance, isLoading: walletLoading } = useWallet();
+
+  // Address autocomplete state
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [deliveryZone, setDeliveryZone] = useState<{ zone: string; deliveryFee: number } | null>(null);
+  const [useAddressAutocomplete, setUseAddressAutocomplete] = useState(true);
+
+  // Pricing derived from delivery zone or defaults
+  const deliveryFee = deliveryZone?.deliveryFee ?? 49; // Default delivery fee
+  const serviceFee = pricingCalculation?.serviceFee ?? 10; // Default service fee
 
   // API hooks for comprehensive payment system
   const { data: availablePaymentMethods, isLoading: isLoadingPaymentMethods } = useQuery({
@@ -126,12 +146,12 @@ export default function Cart() {
     enabled: !!currentCity
   });
 
-  const { data: userLoyaltyPoints } = useQuery({
-    queryKey: ["/api/loyalty/points", user?.id],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/api/loyalty/points/${user?.id}`);
-      return response.json();
-    },
+  const { data: userLoyaltyPoints } = useQuery<{
+    points: number;
+    tier: string;
+    lifetimePoints: number;
+  }>({
+    queryKey: ["/api/loyalty/points"],
     enabled: !!user?.id
   });
 
@@ -189,6 +209,34 @@ export default function Cart() {
       });
     }
   }, [getTotalPrice(), currentCity, distance, isInsured, tipAmount, loyaltyPointsToUse, appliedPromoCode]);
+
+  // Check delivery zone based on coordinates
+  const checkDeliveryZone = async (lat: number, lng: number) => {
+    try {
+      const response = await apiRequest('POST', '/api/delivery-zones/check', {
+        latitude: lat,
+        longitude: lng
+      });
+      const result = await response.json();
+
+      if (result.serviceable) {
+        setDeliveryZone({
+          zone: result.zone,
+          deliveryFee: result.deliveryFee
+        });
+        setDistance(result.distanceKm);
+      } else {
+        setDeliveryZone(null);
+        toast({
+          title: "Outside Delivery Area",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking delivery zone:', error);
+    }
+  };
 
   // Enhanced order creation mutation with comprehensive payment system
   const createOrderMutation = useMutation({
@@ -310,10 +358,14 @@ export default function Cart() {
       deliveryFee,
       serviceFee,
       totalAmount: total,
-      paymentMethod: data.paymentMethod,
+      paymentMethod: data.paymentProvider,
+      paymentProvider: data.paymentProvider,
+      paymentMethodType: data.paymentMethodType,
       deliveryAddress: data.deliveryAddress,
       specialInstructions: data.specialInstructions,
       paymentStatus: "pending",
+      loyaltyPointsUsed: loyaltyPointsToUse,
+      loyaltyDiscount: (loyaltyPointsToUse / 100) * 10,
     };
 
     createOrderMutation.mutate(orderData);
@@ -449,85 +501,165 @@ export default function Cart() {
             {/* Delivery Address Form */}
             <Card data-testid="delivery-address-section">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <MapPin className="h-5 w-5" />
-                  <span>Delivery Address</span>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-5 w-5" />
+                    <span>Delivery Address</span>
+                  </div>
+                  {deliveryZone && (
+                    <DeliveryZoneBadge zone={deliveryZone.zone} deliveryFee={deliveryZone.deliveryFee} />
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Form {...form}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="deliveryAddress.street"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Street Address</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your street address" {...field} data-testid="street-input" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="deliveryAddress.barangay"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Barangay</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter barangay" {...field} data-testid="barangay-input" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="deliveryAddress.city"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>City</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter city" {...field} data-testid="city-input" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="deliveryAddress.province"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Province</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled data-testid="province-input" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="deliveryAddress.zipCode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Zip Code</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter zip code" {...field} data-testid="zipcode-input" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                {/* Address Entry Toggle */}
+                <div className="flex items-center justify-between mb-4 pb-4 border-b">
+                  <div className="text-sm text-muted-foreground">
+                    {useAddressAutocomplete ? 'Search for your address' : 'Enter address manually'}
                   </div>
-                </Form>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setUseAddressAutocomplete(!useAddressAutocomplete)}
+                  >
+                    {useAddressAutocomplete ? (
+                      <>Enter Manually</>
+                    ) : (
+                      <><Search className="h-4 w-4 mr-1" /> Search Address</>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Address Autocomplete Mode */}
+                {useAddressAutocomplete && (
+                  <div className="space-y-4">
+                    <AddressAutocomplete
+                      placeholder="Search for your delivery address..."
+                      showValidation={true}
+                      manualEntryAllowed={true}
+                      onAddressSelect={(address) => {
+                        setSelectedAddress(address);
+                        // Update form values
+                        if ('street' in address) {
+                          form.setValue('deliveryAddress.street', address.street || '');
+                          form.setValue('deliveryAddress.barangay', address.barangay || '');
+                          form.setValue('deliveryAddress.city', address.city || '');
+                          form.setValue('deliveryAddress.province', address.province || 'Batangas');
+                          form.setValue('deliveryAddress.zipCode', address.zipCode || '');
+
+                          // Update current city for pricing
+                          if (address.city) {
+                            setCurrentCity(address.city);
+                          }
+                        }
+
+                        // Check delivery zone if coordinates available
+                        if ('coordinates' in address && address.coordinates) {
+                          checkDeliveryZone(address.coordinates.lat, address.coordinates.lng);
+                        }
+                      }}
+                    />
+
+                    {/* Selected Address Preview */}
+                    {selectedAddress && (
+                      <div className="p-3 rounded-lg bg-muted">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 mt-0.5 text-primary" />
+                          <div>
+                            <p className="text-sm font-medium">
+                              {'fullAddress' in selectedAddress
+                                ? selectedAddress.fullAddress
+                                : selectedAddress.formattedAddress}
+                            </p>
+                            {'coordinates' in selectedAddress && selectedAddress.coordinates && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Coordinates: {selectedAddress.coordinates.lat.toFixed(4)}, {selectedAddress.coordinates.lng.toFixed(4)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual Entry Mode */}
+                {!useAddressAutocomplete && (
+                  <Form {...form}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="deliveryAddress.street"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel>Street Address</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter your street address" {...field} data-testid="street-input" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="deliveryAddress.barangay"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Barangay</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter barangay" {...field} data-testid="barangay-input" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="deliveryAddress.city"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter city" {...field} data-testid="city-input" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="deliveryAddress.province"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Province</FormLabel>
+                            <FormControl>
+                              <Input {...field} disabled data-testid="province-input" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="deliveryAddress.zipCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Zip Code</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter zip code" {...field} data-testid="zipcode-input" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </Form>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -535,75 +667,199 @@ export default function Cart() {
           {/* Order Summary & Payment */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-6">
-              {/* Order Summary */}
+              {/* Loyalty Points Section */}
+              {user && (
+                <Card data-testid="loyalty-points-section" className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Gift className="h-5 w-5 text-orange-600" />
+                      Loyalty Points
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Available Points */}
+                    {userLoyaltyPoints && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Available Points:</span>
+                        <Badge variant="outline" className="bg-white border-orange-200">
+                          <Coins className="h-3 w-3 mr-1 text-orange-600" />
+                          {userLoyaltyPoints.points?.toLocaleString() || 0}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {/* Points Redemption Slider */}
+                    {userLoyaltyPoints && userLoyaltyPoints.points >= 100 && (
+                      <div className="space-y-3 p-3 bg-white rounded-lg border border-orange-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Redeem Points</span>
+                          <div className="text-right">
+                            <span className="text-sm font-bold text-orange-600">
+                              {loyaltyPointsToUse} pts
+                            </span>
+                            <span className="text-xs text-gray-500 block">
+                              = ₱{((loyaltyPointsToUse / 100) * 10).toFixed(2)} off
+                            </span>
+                          </div>
+                        </div>
+                        <Slider
+                          value={[loyaltyPointsToUse]}
+                          onValueChange={(value) => setLoyaltyPointsToUse(Math.floor(value[0] / 100) * 100)}
+                          max={Math.min(userLoyaltyPoints.points, Math.floor(subtotal / 10) * 100)}
+                          min={0}
+                          step={100}
+                          className="py-2"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>0 pts</span>
+                          <span>{Math.min(userLoyaltyPoints.points, Math.floor(subtotal / 10) * 100).toLocaleString()} pts max</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Points to Earn Preview */}
+                    {subtotal > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-green-600" />
+                          <span className="text-sm text-green-700">You'll earn:</span>
+                        </div>
+                        <span className="font-semibold text-green-700">
+                          ~{Math.floor(subtotal / 10)} pts
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Low points message */}
+                    {userLoyaltyPoints && userLoyaltyPoints.points < 100 && (
+                      <p className="text-xs text-gray-500 text-center">
+                        Earn {100 - (userLoyaltyPoints.points || 0)} more points to start redeeming!
+                      </p>
+                    )}
+
+                    <Link href="/loyalty">
+                      <Button variant="ghost" size="sm" className="w-full text-orange-600 hover:bg-orange-100">
+                        View Rewards Program
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Order Summary with Tax Breakdown */}
               <Card data-testid="order-summary">
                 <CardHeader>
-                  <CardTitle>Order Summary</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Order Summary</span>
+                    <TaxSummaryLine subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} />
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span data-testid="summary-subtotal">₱{subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Delivery Fee:</span>
-                    <span data-testid="summary-delivery-fee">₱{deliveryFee.toFixed(2)}</span>
-                  </div>
-                  {serviceFee > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span>Service Fee:</span>
-                      <span data-testid="summary-service-fee">₱{serviceFee.toFixed(2)}</span>
-                    </div>
+                  {/* Tax-aware breakdown with Senior/PWD discounts */}
+                  <TaxBreakdown
+                    subtotal={subtotal}
+                    deliveryFee={deliveryFee}
+                    serviceFee={serviceFee}
+                  />
+
+                  {/* Loyalty Points Discount (applied on top of tax calculations) */}
+                  {loyaltyPointsToUse > 0 && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span className="flex items-center gap-1">
+                          <Gift className="h-3 w-3" />
+                          Points Discount:
+                        </span>
+                        <span data-testid="summary-loyalty-discount">-₱{((loyaltyPointsToUse / 100) * 10).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg border-t pt-2">
+                        <span>Final Total:</span>
+                        <span data-testid="summary-total">₱{Math.max(0, total - (loyaltyPointsToUse / 100) * 10).toFixed(2)}</span>
+                      </div>
+                      <p className="text-xs text-green-600 text-center">
+                        You're saving ₱{((loyaltyPointsToUse / 100) * 10).toFixed(2)} with loyalty points!
+                      </p>
+                    </>
                   )}
-                  <Separator />
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total:</span>
-                    <span data-testid="summary-total">₱{total.toFixed(2)}</span>
-                  </div>
                 </CardContent>
               </Card>
 
-              {/* Payment Method */}
-              <Card data-testid="payment-method-section">
+              {/* Wallet Payment Option */}
+              <WalletBalance
+                variant="checkout"
+                orderTotal={Math.max(0, total - (loyaltyPointsToUse / 100) * 10)}
+                onUseWalletChange={(useWallet, amount, remaining) => {
+                  setUseWalletPayment(useWallet);
+                  setWalletPaymentAmount(amount);
+                }}
+              />
+
+              {/* Show remaining amount to pay after wallet */}
+              {useWalletPayment && walletPaymentAmount > 0 && (
+                <Alert className="bg-green-50 border-green-200">
+                  <Wallet className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700">
+                    <div className="flex justify-between items-center">
+                      <span>Wallet will pay: <strong>₱{walletPaymentAmount.toFixed(2)}</strong></span>
+                      {Math.max(0, total - (loyaltyPointsToUse / 100) * 10) - walletPaymentAmount > 0 && (
+                        <span>Remaining: <strong>₱{(Math.max(0, total - (loyaltyPointsToUse / 100) * 10) - walletPaymentAmount).toFixed(2)}</strong></span>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Payment Method - only show if there's remaining amount after wallet */}
+              {(!useWalletPayment || (Math.max(0, total - (loyaltyPointsToUse / 100) * 10) - walletPaymentAmount > 0)) && (
+                <Card data-testid="payment-method-section">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <CreditCard className="h-5 w-5" />
+                      <span>{useWalletPayment ? "Pay Remaining With" : "Payment Method"}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...form}>
+                      <FormField
+                        control={form.control}
+                        name="paymentProvider"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <SelectTrigger data-testid="payment-method-select">
+                                  <SelectValue placeholder="Select payment method" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cod">Cash on Delivery</SelectItem>
+                                  <SelectItem value="nexuspay">Online Payment (GCash, Maya, Card)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </Form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Special Instructions */}
+              <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <CreditCard className="h-5 w-5" />
-                    <span>Payment Method</span>
-                  </CardTitle>
+                  <CardTitle className="text-sm">Special Instructions (Optional)</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Form {...form}>
                     <FormField
                       control={form.control}
-                      name="paymentMethod"
+                      name="specialInstructions"
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <SelectTrigger data-testid="payment-method-select">
-                                <SelectValue placeholder="Select payment method" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="cash">Cash on Delivery</SelectItem>
-                                <SelectItem value="gcash">GCash</SelectItem>
-                                <SelectItem value="maya">Maya</SelectItem>
-                                <SelectItem value="card">Credit/Debit Card</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="specialInstructions"
-                      render={({ field }) => (
-                        <FormItem className="mt-4">
-                          <FormLabel>Special Instructions (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea 
+                            <Textarea
                               placeholder="Any special instructions for your order..."
                               {...field}
                               data-testid="special-instructions-input"
@@ -618,13 +874,17 @@ export default function Cart() {
               </Card>
 
               {/* Place Order Button */}
-              <Button 
+              <Button
                 className="w-full bg-primary text-white hover:bg-primary/90 py-6 text-lg font-semibold"
                 onClick={form.handleSubmit(onSubmit)}
                 disabled={createOrderMutation.isPending}
                 data-testid="place-order-button"
               >
-                {createOrderMutation.isPending ? "Placing Order..." : `Place Order - ₱${total.toFixed(2)}`}
+                {createOrderMutation.isPending ? "Placing Order..." : (
+                  useWalletPayment && walletPaymentAmount >= Math.max(0, total - (loyaltyPointsToUse / 100) * 10)
+                    ? `Pay with Wallet - ₱${Math.max(0, total - (loyaltyPointsToUse / 100) * 10).toFixed(2)}`
+                    : `Place Order - ₱${Math.max(0, total - (loyaltyPointsToUse / 100) * 10).toFixed(2)}`
+                )}
               </Button>
             </div>
           </div>

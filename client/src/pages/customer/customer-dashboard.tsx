@@ -41,6 +41,15 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer/favorites"]
   });
 
+  // Fetch loyalty points
+  const { data: loyaltyData } = useQuery<{
+    points: number;
+    tier: string;
+    lifetimePoints: number;
+  }>({
+    queryKey: ["/api/loyalty/points"]
+  });
+
   // Handle logout
   const handleLogout = () => {
     logout();
@@ -102,10 +111,12 @@ export default function CustomerDashboard() {
                     <Wallet className="w-4 h-4 mr-3" />
                     Wallet & Payments
                   </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("rewards"); setShowMenu(false); }}>
-                    <Gift className="w-4 h-4 mr-3" />
-                    Rewards & Points
-                  </Button>
+                  <Link href="/loyalty">
+                    <Button variant="ghost" className="w-full justify-start" onClick={() => setShowMenu(false)}>
+                      <Gift className="w-4 h-4 mr-3" />
+                      Rewards & Points
+                    </Button>
+                  </Link>
                   <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("favorites"); setShowMenu(false); }}>
                     <Heart className="w-4 h-4 mr-3" />
                     Favorites
@@ -138,10 +149,10 @@ export default function CustomerDashboard() {
           <div className="text-lg font-bold">{customerData?.totalOrders || "0"}</div>
           <div className="text-xs opacity-90">Orders</div>
         </div>
-        <div className="text-center">
-          <div className="text-lg font-bold">{customerData?.loyaltyPoints || "0"}</div>
+        <Link href="/loyalty" className="text-center cursor-pointer hover:opacity-80">
+          <div className="text-lg font-bold">{loyaltyData?.points?.toLocaleString() || "0"}</div>
           <div className="text-xs opacity-90">Points</div>
-        </div>
+        </Link>
         <div className="text-center">
           <div className="text-lg font-bold">₱{customerData?.totalSaved || "0"}</div>
           <div className="text-xs opacity-90">Saved</div>

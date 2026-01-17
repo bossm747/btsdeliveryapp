@@ -22,11 +22,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function RiderDashboard() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [isOnline, setIsOnline] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -183,19 +185,23 @@ export default function RiderDashboard() {
 
               <div className="mt-6 space-y-4">
                 <div className="space-y-3">
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("profile"); setShowMenu(false); }}>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setShowMenu(false); }}>
                     <User className="w-4 h-4 mr-3" />
                     Profile
                   </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("earnings"); setShowMenu(false); }}>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigate("/rider-dashboard/pending-orders"); setShowMenu(false); }}>
+                    <Package className="w-4 h-4 mr-3" />
+                    Available Orders
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigate("/rider-dashboard/earnings"); setShowMenu(false); }}>
                     <Wallet className="w-4 h-4 mr-3" />
                     Earnings
                   </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("performance"); setShowMenu(false); }}>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigate("/rider-dashboard/performance"); setShowMenu(false); }}>
                     <Award className="w-4 h-4 mr-3" />
                     Performance
                   </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("settings"); setShowMenu(false); }}>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setShowMenu(false); }}>
                     <Settings className="w-4 h-4 mr-3" />
                     Settings
                   </Button>
@@ -401,6 +407,51 @@ export default function RiderDashboard() {
     }
   };
 
+  // Quick Access Navigation Cards
+  const QuickAccessCards = () => (
+    <div className="px-4 py-3">
+      <h3 className="font-semibold text-[#004225] mb-3 flex items-center">
+        <Zap className="w-4 h-4 mr-2 text-[#FF6B35]" />
+        Quick Access
+      </h3>
+      <div className="grid grid-cols-3 gap-3">
+        <Card
+          className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate("/rider-dashboard/pending-orders")}
+        >
+          <CardContent className="p-3 text-center">
+            <div className="bg-orange-500 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+              <Package className="w-5 h-5 text-white" />
+            </div>
+            <p className="text-xs font-medium text-orange-800">Find Orders</p>
+          </CardContent>
+        </Card>
+        <Card
+          className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate("/rider-dashboard/earnings")}
+        >
+          <CardContent className="p-3 text-center">
+            <div className="bg-green-500 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+              <Wallet className="w-5 h-5 text-white" />
+            </div>
+            <p className="text-xs font-medium text-green-800">Earnings</p>
+          </CardContent>
+        </Card>
+        <Card
+          className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate("/rider-dashboard/performance")}
+        >
+          <CardContent className="p-3 text-center">
+            <div className="bg-purple-500 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+              <Award className="w-5 h-5 text-white" />
+            </div>
+            <p className="text-xs font-medium text-purple-800">Performance</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
   // Main Content Renderer
   const renderContent = () => {
     switch (activeTab) {
@@ -408,6 +459,7 @@ export default function RiderDashboard() {
         return (
           <div className="pb-20">
             <QuickStats />
+            <QuickAccessCards />
             <PendingAssignments />
             <ActiveDeliveries />
           </div>

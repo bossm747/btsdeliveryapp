@@ -1,13 +1,14 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { 
+import {
   securityMiddlewareConfig,
   errorHandler,
   notFoundHandler,
   requestLogger,
   logger
 } from "./middleware";
+import { startSlaMonitor, stopSlaMonitor } from "./jobs/sla-monitor-job";
 
 const app = express();
 
@@ -99,5 +100,9 @@ app.use((req, res, next) => {
   }, () => {
     logger.info(`Server started successfully on port ${port}`);
     log(`serving on port ${port}`);
+
+    // Start background jobs
+    startSlaMonitor();
+    logger.info('SLA monitor job started');
   });
 })();
