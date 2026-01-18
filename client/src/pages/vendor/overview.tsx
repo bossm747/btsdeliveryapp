@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  ShoppingBag, 
-  DollarSign, 
-  Star, 
-  Clock, 
-  TrendingUp, 
+import { VendorOverviewSkeleton } from "@/components/vendor/vendor-skeletons";
+import {
+  ShoppingBag,
+  DollarSign,
+  Star,
+  Clock,
+  TrendingUp,
   Activity,
   BarChart3,
   Bell
@@ -33,17 +33,7 @@ export default function VendorOverview() {
   });
 
   if (restaurantLoading || ordersLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-32 w-full rounded-2xl" />
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-96 w-full rounded-xl" />
-      </div>
-    );
+    return <VendorOverviewSkeleton />;
   }
 
   // Calculate stats

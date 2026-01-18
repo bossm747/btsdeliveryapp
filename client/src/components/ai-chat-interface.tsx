@@ -10,7 +10,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Send,
-  Bot,
   User,
   Loader2,
   MapPin,
@@ -27,10 +26,15 @@ import {
   Paperclip,
   X,
   FileText,
-  Camera
+  Camera,
+  Search,
+  Database,
+  Wand2,
+  Brain
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import DOMPurify from "dompurify";
+import btsLogo from "@assets/btslogo.png";
 
 // Types
 interface UploadedFile {
@@ -51,7 +55,8 @@ interface UploadedFile {
   };
 }
 
-interface Message {
+// Export Message type for external use
+export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -80,6 +85,87 @@ interface AIChatInterfaceProps {
   className?: string;
   title?: string;
   placeholder?: string;
+  showHeader?: boolean;
+  // External state management
+  messages?: Message[];
+  onMessagesChange?: (messages: Message[]) => void;
+}
+
+// AI Action Status Animation Component
+function AIActionStatus({ isUploading }: { isUploading?: boolean }) {
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const steps = isUploading
+    ? [
+        { icon: Loader2, text: "Tinatanggap ang files...", color: "text-blue-500" },
+        { icon: Search, text: "Ina-analyze ang larawan...", color: "text-purple-500" },
+        { icon: Brain, text: "Pinoproseso ng AI...", color: "text-pink-500" },
+        { icon: Wand2, text: "Ginagawa ang resulta...", color: "text-orange-500" },
+      ]
+    : [
+        { icon: Brain, text: "Nag-iisip...", color: "text-blue-500" },
+        { icon: Search, text: "Hinahanap ang impormasyon...", color: "text-purple-500" },
+        { icon: Database, text: "Kinukuha ang data...", color: "text-green-500" },
+        { icon: Wand2, text: "Ginagawa ang sagot...", color: "text-orange-500" },
+      ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentStep((prev) => (prev + 1) % steps.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  const CurrentIcon = steps[currentStep].icon;
+
+  return (
+    <div className="bg-muted rounded-lg p-3 min-w-[200px]">
+      <div className="space-y-2">
+        {/* Current action with animation */}
+        <div className="flex items-center gap-2">
+          <div className={`${steps[currentStep].color} animate-pulse`}>
+            <CurrentIcon className="h-4 w-4 animate-spin" />
+          </div>
+          <span className="text-sm font-medium animate-pulse">
+            {steps[currentStep].text}
+          </span>
+        </div>
+
+        {/* Progress dots */}
+        <div className="flex items-center gap-1 justify-center">
+          {steps.map((_, idx) => (
+            <div
+              key={idx}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                idx === currentStep
+                  ? "w-4 bg-primary"
+                  : idx < currentStep
+                  ? "w-1.5 bg-primary/50"
+                  : "w-1.5 bg-muted-foreground/30"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Step counter */}
+        <div className="text-[10px] text-center text-muted-foreground">
+          Step {currentStep + 1} of {steps.length}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// BTS Logo Avatar Component
+function BTSAvatar({ className = "h-8 w-8" }: { className?: string }) {
+  return (
+    <Avatar className={`${className} flex-shrink-0`}>
+      <AvatarImage src={btsLogo} alt="BTS AI" className="object-cover" />
+      <AvatarFallback className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold">
+        BTS
+      </AvatarFallback>
+    </Avatar>
+  );
 }
 
 // Rich content renderers
@@ -473,6 +559,17 @@ function SuggestedActions({
   );
 }
 
+// Default welcome message
+const defaultMessages: Message[] = [
+  {
+    id: "welcome",
+    role: "assistant",
+    content: "Magandang araw po! Ako po ang BTS AI Assistant. Ano po ang maitutulong ko sa inyo?",
+    timestamp: new Date(),
+    agent: "general",
+  },
+];
+
 // Main chat interface component
 export default function AIChatInterface({
   userRole = "customer",
@@ -482,29 +579,52 @@ export default function AIChatInterface({
   className = "",
   title = "BTS AI Assistant",
   placeholder = "Anong maitutulong ko sa inyo po?",
+  showHeader = true,
+  messages: externalMessages,
+  onMessagesChange,
 }: AIChatInterfaceProps) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Magandang araw po! Ako po si BTS AI Assistant. Paano ko po kayo matutulungan ngayon?",
-      timestamp: new Date(),
-      agent: "general",
-    },
-  ]);
+
+  // Use external state if provided, otherwise use internal state
+  const [internalMessages, setInternalMessages] = useState<Message[]>(defaultMessages);
+  const messages = externalMessages ?? internalMessages;
+
+  // Update messages - either external or internal
+  const updateMessages = (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
+    if (typeof newMessages === "function") {
+      const updated = newMessages(messages);
+      if (onMessagesChange) {
+        onMessagesChange(updated);
+      } else {
+        setInternalMessages(updated);
+      }
+    } else {
+      if (onMessagesChange) {
+        onMessagesChange(newMessages);
+      } else {
+        setInternalMessages(newMessages);
+      }
+    }
+  };
+
   const [input, setInput] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadAction, setUploadAction] = useState<"analyze" | "create-menu" | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  // Auto-scroll to bottom with smooth behavior
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
+  };
+
+  // Scroll on new messages
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
   // Chat mutation (text only)
@@ -537,7 +657,8 @@ export default function AIChatInterface({
         suggestedActions: data.suggestedActions,
         metadata: data.metadata,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      updateMessages((prev) => [...prev, assistantMessage]);
+      scrollToBottom();
     },
     onError: () => {
       const errorMessage: Message = {
@@ -547,7 +668,7 @@ export default function AIChatInterface({
         timestamp: new Date(),
         agent: "error",
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      updateMessages((prev) => [...prev, errorMessage]);
     },
   });
 
@@ -613,9 +734,10 @@ export default function AIChatInterface({
         suggestedActions: data.suggestedActions,
         metadata: data.metadata,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      updateMessages((prev) => [...prev, assistantMessage]);
       setSelectedFiles([]);
       setUploadAction(null);
+      scrollToBottom();
     },
     onError: () => {
       const errorMessage: Message = {
@@ -625,11 +747,18 @@ export default function AIChatInterface({
         timestamp: new Date(),
         agent: "error",
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      updateMessages((prev) => [...prev, errorMessage]);
       setSelectedFiles([]);
       setUploadAction(null);
     },
   });
+
+  // Scroll when loading state changes (to show typing indicator)
+  useEffect(() => {
+    if (chatMutation.isPending || uploadMutation.isPending) {
+      scrollToBottom();
+    }
+  }, [chatMutation.isPending, uploadMutation.isPending]);
 
   // Handle file selection
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
@@ -662,8 +791,9 @@ export default function AIChatInterface({
       content: query || (selectedFiles.length > 0 ? `[Nag-upload ng ${selectedFiles.length} file(s)]` : ""),
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    updateMessages((prev) => [...prev, userMessage]);
     setInput("");
+    scrollToBottom();
 
     // Determine which mutation to use
     if (selectedFiles.length > 0) {
@@ -679,22 +809,24 @@ export default function AIChatInterface({
   };
 
   return (
-    <Card className={`flex flex-col h-[600px] ${className}`}>
-      <CardHeader className="flex-shrink-0 pb-3 border-b">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <div className="p-1.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
-          {title}
-          {chatMutation.isPending && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />
-          )}
-        </CardTitle>
-      </CardHeader>
+    <Card className={`flex flex-col h-full ${className}`}>
+      {showHeader && (
+        <CardHeader className="flex-shrink-0 pb-3 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="p-1.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            {title}
+            {chatMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />
+            )}
+          </CardTitle>
+        </CardHeader>
+      )}
 
       <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
         {/* Messages */}
-        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+        <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
           <div className="space-y-4">
             {messages.map((message) => (
               <div
@@ -704,11 +836,7 @@ export default function AIChatInterface({
                 }`}
               >
                 {message.role === "assistant" && (
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarFallback className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                      <Bot className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
+                  <BTSAvatar />
                 )}
 
                 <div
@@ -762,21 +890,13 @@ export default function AIChatInterface({
 
             {(chatMutation.isPending || uploadMutation.isPending) && (
               <div className="flex gap-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                    <Bot className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm text-muted-foreground">
-                      {uploadMutation.isPending ? "Nag-a-analyze ng files po..." : "Nag-iisip po..."}
-                    </span>
-                  </div>
-                </div>
+                <BTSAvatar />
+                <AIActionStatus isUploading={uploadMutation.isPending} />
               </div>
             )}
+
+            {/* Auto-scroll anchor */}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 

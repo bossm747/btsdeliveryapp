@@ -536,8 +536,163 @@
       stroke-dashoffset: -20;
     }
   }
-  
+
   .route-animation {
     animation: dash 1s linear infinite;
+  }
+
+  /* Carousel Progress Indicator */
+  .carousel-progress {
+    animation: carouselProgress 5s linear;
+  }
+
+  @keyframes carouselProgress {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+
+  /* Countdown Timer Pulse Effect */
+  .countdown-pulse {
+    animation: countdownPulse 1s ease-in-out infinite;
+  }
+
+  @keyframes countdownPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+  }
+
+  /* Badge Shine/Glow Effects */
+  .deal-badge-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .deal-badge-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    transform: rotate(45deg);
+    animation: badgeShine 3s ease-in-out infinite;
+  }
+
+  @keyframes badgeShine {
+    0% { transform: translateX(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) rotate(45deg); }
+  }
+
+  .featured-badge-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .featured-badge-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    transform: rotate(45deg);
+    animation: badgeShine 4s ease-in-out infinite;
+  }
+
+  .new-badge-shine {
+    position: relative;
+    overflow: hidden;
+    animation: newBadgePulse 2s ease-in-out infinite;
+  }
+
+  @keyframes newBadgePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  }
+
+  /* Category Pill Active Transition */
+  .category-pill-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Flash Deal Card Hover */
+  .flash-deal-card {
+    transition: all 0.3s ease;
+  }
+
+  .flash-deal-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Scrollbar Hide Utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Skeleton Shimmer Animation */
+  @keyframes skeletonShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      #f0f0f0 25%,
+      #e0e0e0 50%,
+      #f0f0f0 75%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s infinite;
+  }
+
+  /* Promo Banner Gradient Animation */
+  .promo-gradient-animate {
+    background-size: 200% 200%;
+    animation: gradientMove 8s ease infinite;
+  }
+
+  @keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Service Card Hover Effects */
+  .service-card-enhanced {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .service-card-enhanced:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Trending Badge Animation */
+  .trending-badge {
+    animation: trendingPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes trendingPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
   }
 }

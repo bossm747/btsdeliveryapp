@@ -225,6 +225,80 @@ The AI uses authentic Batangas expressions:
 
 ---
 
+## Frontend Module Enhancement Pattern (2026-01-18)
+
+Each role-based module (customer, vendor, rider, admin) follows a consistent enhancement pattern with dedicated components for better UX:
+
+### Module Structure
+```
+client/src/components/{role}/
+├── index.ts                    # Centralized exports
+├── {role}-page-wrapper.tsx     # ErrorBoundary + pull-to-refresh wrapper
+├── {role}-empty-states.tsx     # Pre-built empty state components
+├── {role}-skeletons.tsx        # Loading skeleton components
+
+client/src/hooks/
+├── use-{role}-toast.tsx        # Role-specific toast notifications
+├── use-pull-to-refresh.ts      # Pull-to-refresh hook (shared)
+├── index.ts                    # Hook exports
+```
+
+### Available Modules
+
+**Customer Module** (`client/src/components/customer/`):
+- `CustomerPageWrapper` - Page wrapper with pull-to-refresh
+- `CustomerEmptyState` - Generic empty state component
+- `useCustomerToast` - Toast notifications (order placed, cancelled, etc.)
+- UI components: `PromoBannerCarousel`, `CategoryPills`, `FlashDealsSection`, `TrendingSection`, `FeaturedCarousel`
+
+**Vendor Module** (`client/src/components/vendor/`):
+- `VendorPageWrapper` - Error boundary + pull-to-refresh
+- Empty states: `NoOrdersEmptyState`, `NoMenuItemsEmptyState`, `NoPromotionsEmptyState`, etc.
+- `VendorOverviewSkeleton`, `VendorOrdersSkeleton`, `VendorMenuSkeleton`
+- `useVendorToast` - 30+ toast methods (orderReceived, menuItemAdded, promotionCreated, etc.)
+
+**Rider Module** (`client/src/components/rider/`):
+- `RiderPageWrapper` - Error boundary + pull-to-refresh
+- Empty states: `NoActiveDeliveriesEmptyState`, `NoAvailableOrdersEmptyState`, `NoEarningsEmptyState`, etc.
+- `RiderDashboardSkeleton`, `RiderDeliverySkeleton`, `RiderEarningsSkeleton`
+- `useRiderToast` - 35+ toast methods with Taglish/Batangas dialect (deliveryAccepted, pickupCompleted, etc.)
+
+**Admin Module** (`client/src/components/admin/`):
+- `AdminPageWrapper` - Error boundary + pull-to-refresh + accessibility
+- 30+ empty states: `NoOrdersEmptyState`, `NoUsersEmptyState`, `NoFraudAlertsEmptyState`, `UnderDevelopmentEmptyState`, etc.
+- 15+ skeletons: `AdminDashboardSkeleton`, `AdminTableSkeleton`, `AdminFinancialSkeleton`, `AdminFraudSkeleton`, etc.
+- `useAdminToast` - 50+ toast methods (restaurantApproved, riderVerified, orderAssigned, fraudAlertConfirmed, etc.)
+
+### Usage Pattern
+```tsx
+import { RolePageWrapper, NoOrdersEmptyState, OrdersSkeleton } from "@/components/{role}";
+import { useRoleToast } from "@/hooks";
+
+function MyPage() {
+  const roleToast = useRoleToast();
+
+  // Show contextual toast
+  roleToast.orderReceived("ORD-123");
+
+  return (
+    <RolePageWrapper refreshQueryKeys={["/api/orders"]}>
+      {isLoading ? <OrdersSkeleton /> : orders.length === 0 ? <NoOrdersEmptyState /> : <OrderList />}
+    </RolePageWrapper>
+  );
+}
+```
+
+### Key Features
+- **ErrorBoundary**: Automatic crash recovery with user-friendly error display
+- **Pull-to-Refresh**: Mobile-friendly data refresh with visual feedback
+- **Query Invalidation**: Automatic React Query cache refresh on pull
+- **Accessibility**: Skip links, ARIA labels, screen reader announcements
+- **Skeleton Loaders**: Matching loading states for each page layout
+- **Empty States**: Contextual illustrations with optional CTA buttons
+- **Toast Hooks**: Pre-defined, consistent notification messages per role
+
+---
+
 ## VPS Deployment
 
 ### Production Setup

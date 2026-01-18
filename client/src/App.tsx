@@ -15,7 +15,7 @@ const MultiStepSignup = lazy(() => import("@/pages/shared/multistep-signup"));
 const NotFound = lazy(() => import("@/pages/shared/not-found"));
 
 // Customer pages
-const Home = lazy(() => import("@/pages/shared/home"));
+// Home page removed - /home redirects to /customer-dashboard
 const Restaurants = lazy(() => import("@/pages/shared/restaurants"));
 const RestaurantDetail = lazy(() => import("@/pages/shared/restaurant-detail"));
 const Cart = lazy(() => import("@/pages/customer/cart"));
@@ -76,6 +76,7 @@ import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { LanguageProvider } from "@/contexts/language-context";
+import AIChatWidget from "@/components/ai-chat-widget";
 
 // Loading fallback for lazy components
 function PageLoader() {
@@ -134,13 +135,9 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Customer routes - protected for customers only */}
+      {/* Customer routes - /home redirects to customer-dashboard */}
       <Route path="/home">
-        <ProtectedRoute allowedRoles={["customer"]}>
-          <CustomerLayout>
-            <Home />
-          </CustomerLayout>
-        </ProtectedRoute>
+        <Redirect to="/customer-dashboard" />
       </Route>
 
       <Route path="/restaurants">
@@ -556,6 +553,7 @@ function App() {
           <AuthProvider>
             <TooltipProvider>
               <Router />
+              <AIChatWidget />
               <Toaster />
             </TooltipProvider>
           </AuthProvider>

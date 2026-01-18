@@ -33,10 +33,13 @@ import {
   Layers,
   Eye
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useRiderToast } from "@/hooks/use-rider-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import BatchRoutePreview from "@/components/rider/batch-route-preview";
+import { RiderPageWrapper } from "@/components/rider/rider-page-wrapper";
+import { RiderOrderCardSkeleton, RiderBatchOfferSkeleton } from "@/components/rider/rider-skeletons";
+import { NoAvailableOrdersEmptyState, RiderErrorState } from "@/components/rider/rider-empty-states";
 
 // Types
 interface AvailableOrder {
@@ -430,7 +433,7 @@ const OrderCardSkeleton = () => (
 );
 
 export default function PendingOrders() {
-  const { toast } = useToast();
+  const riderToast = useRiderToast();
   const [, navigate] = useLocation();
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
   const [acceptingBatchId, setAcceptingBatchId] = useState<string | null>(null);
@@ -469,18 +472,11 @@ export default function PendingOrders() {
     onSuccess: (_, orderId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/rider/available-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries/active"] });
-      toast({
-        title: "Order Accepted!",
-        description: "Navigate to the restaurant to pick up the order.",
-      });
+      riderToast.deliveryAccepted();
       setAcceptingOrderId(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Failed to accept order",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
+      riderToast.error(error.message || "Failed to accept order. Please try again.");
       setAcceptingOrderId(null);
     }
   });
@@ -492,17 +488,10 @@ export default function PendingOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rider/available-orders"] });
-      toast({
-        title: "Order Skipped",
-        description: "The order has been removed from your queue.",
-      });
+      riderToast.deliveryRejected();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Failed to skip order",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
+      riderToast.error(error.message || "Failed to skip order. Please try again.");
     }
   });
 
@@ -516,10 +505,7 @@ export default function PendingOrders() {
 
   const handleRefresh = () => {
     refetch();
-    toast({
-      title: "Refreshing orders...",
-      description: "Checking for new available orders.",
-    });
+    riderToast.info("Checking for new available orders...");
   };
 
   // Batch handlers
@@ -531,48 +517,40 @@ export default function PendingOrders() {
   const handleAcceptBatch = useCallback(async (batchId: string) => {
     setAcceptingBatchId(batchId);
     try {
+      const batch = batchOffers.find(b => b.batchId === batchId);
       await apiRequest("POST", `/api/rider/batch/${batchId}/accept`, {
-        orderIds: batchOffers.find(b => b.batchId === batchId)?.orders.map(o => o.id) || [],
+        orderIds: batch?.orders.map(o => o.id) || [],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/rider/available-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries/active"] });
-      toast({
-        title: "Batch Accepted!",
-        description: "Navigate to the first pickup location.",
-      });
+      riderToast.batchAccepted(batch?.orderCount);
       setShowBatchPreview(false);
     } catch (error: any) {
-      toast({
-        title: "Failed to accept batch",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
+      riderToast.error(error.message || "Failed to accept batch. Please try again.");
     } finally {
       setAcceptingBatchId(null);
     }
-  }, [batchOffers, toast]);
+  }, [batchOffers, riderToast]);
 
   const handleDeclineBatch = useCallback(async (batchId: string) => {
     try {
       await apiRequest("POST", `/api/rider/batch/${batchId}/decline`);
-      toast({
-        title: "Batch Declined",
-        description: "The batch offer has been removed.",
-      });
+      riderToast.batchDeclined();
       setShowBatchPreview(false);
     } catch (error: any) {
-      toast({
-        title: "Failed to decline batch",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
+      riderToast.error(error.message || "Failed to decline batch. Please try again.");
     }
-  }, [toast]);
+  }, [riderToast]);
 
   return (
-    <div className="min-h-screen bg-gray-50" data-testid="pending-orders-page">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+    <RiderPageWrapper
+      pageTitle="Available Orders"
+      pageDescription="View and accept available delivery orders"
+      refreshQueryKeys={["/api/rider/available-orders"]}
+    >
+      <div className="min-h-screen bg-gray-50" data-testid="pending-orders-page">
+        {/* Header */}
+        <div className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-3">
             <Button
@@ -638,45 +616,23 @@ export default function PendingOrders() {
         {/* Loading State */}
         {isLoading && (
           <div className="space-y-4">
-            <OrderCardSkeleton />
-            <OrderCardSkeleton />
-            <OrderCardSkeleton />
+            <RiderBatchOfferSkeleton count={1} />
+            <RiderOrderCardSkeleton count={3} />
           </div>
         )}
 
         {/* Error State */}
         {error && !isLoading && (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="p-6 text-center">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-              <h3 className="font-semibold text-red-700 mb-2">Failed to Load Orders</h3>
-              <p className="text-sm text-red-600 mb-4">
-                {(error as Error).message || "Please check your connection and try again."}
-              </p>
-              <Button onClick={() => refetch()} variant="outline" className="border-red-300 text-red-700">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Try Again
-              </Button>
-            </CardContent>
-          </Card>
+          <RiderErrorState
+            title="Failed to Load Orders"
+            description={(error as Error).message || "Please check your connection and try again."}
+            onRetry={() => refetch()}
+          />
         )}
 
         {/* Empty State */}
         {!isLoading && !error && availableOrders.length === 0 && (
-          <Card className="border-gray-200">
-            <CardContent className="p-8 text-center">
-              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-semibold text-gray-700 mb-2">No Available Orders</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                New orders will appear here when customers place them.
-                Stay online to receive notifications.
-              </p>
-              <Button onClick={() => refetch()} variant="outline">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Check for Orders
-              </Button>
-            </CardContent>
-          </Card>
+          <NoAvailableOrdersEmptyState onRefresh={() => refetch()} />
         )}
 
         {/* Batch Offers Section */}
@@ -744,5 +700,6 @@ export default function PendingOrders() {
         />
       )}
     </div>
+    </RiderPageWrapper>
   );
 }

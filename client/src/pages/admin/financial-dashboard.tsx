@@ -5,6 +5,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import AdminHeader from "@/components/admin/admin-header";
 import AdminSidebar from "@/components/admin/admin-sidebar";
+import { AdminPageWrapper, AdminFinancialSkeleton } from "@/components/admin";
+import { useAdminToast } from "@/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -102,6 +104,7 @@ interface DateRange {
 }
 
 export default function FinancialDashboard() {
+  const adminToast = useAdminToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>({
     from: subDays(new Date(), 30),
@@ -222,8 +225,10 @@ export default function FinancialDashboard() {
         format
       });
       window.open(`/api/admin/analytics/export?${params}`, "_blank");
+      adminToast.reportExported(format);
     } catch (error) {
       console.error("Export failed:", error);
+      adminToast.error("Failed to export report");
     }
   };
 
@@ -320,7 +325,18 @@ export default function FinancialDashboard() {
         />
 
         {/* Page Content */}
-        <main className="p-4 md:p-6">
+        <AdminPageWrapper
+          pageTitle="Financial Analytics"
+          pageDescription="Financial analytics and revenue dashboard for BTS Delivery"
+          refreshQueryKeys={[
+            "/api/admin/analytics/revenue",
+            "/api/admin/analytics/orders",
+            "/api/admin/analytics/vendors",
+            "/api/admin/analytics/riders",
+            "/api/admin/analytics/profit",
+          ]}
+        >
+          <main className="p-4 md:p-6">
           {/* Top Controls */}
           <div className="flex flex-col md:flex-row gap-4 mb-6 items-start md:items-center justify-between">
             <div className="flex flex-wrap gap-2">
@@ -1147,7 +1163,8 @@ export default function FinancialDashboard() {
               </Card>
             </TabsContent>
           </Tabs>
-        </main>
+          </main>
+        </AdminPageWrapper>
       </div>
     </div>
   );

@@ -21,14 +21,14 @@ export default function MobileBottomNav() {
   const { getTotalItems } = useCartStore();
   const cartItemCount = getTotalItems();
 
-  // Don't show navigation on role-specific dashboards as they have their own
-  const isDashboardRoute = location.includes("/customer-dashboard") || 
-                          location.includes("/rider-dashboard") || 
-                          location.includes("/vendor-dashboard") || 
-                          location.includes("/admin-dashboard");
-  
-  if (isDashboardRoute) {
-    return null; // Role-specific dashboards handle their own navigation
+  // Don't show navigation on vendor/rider/admin dashboards as they have their own
+  // Customer dashboard IS the home page, so show nav there
+  const isNonCustomerDashboard = location.includes("/rider-dashboard") ||
+                                  location.includes("/vendor-dashboard") ||
+                                  location.includes("/admin-dashboard");
+
+  if (isNonCustomerDashboard) {
+    return null; // Non-customer dashboards handle their own navigation
   }
 
   // Only show for customer routes
@@ -39,8 +39,8 @@ export default function MobileBottomNav() {
     {
       icon: Home,
       label: "Home",
-      path: "/home",
-      active: location === "/home"
+      path: "/customer-dashboard",
+      active: location === "/customer-dashboard"
     },
     {
       icon: Search,
@@ -64,8 +64,8 @@ export default function MobileBottomNav() {
     {
       icon: User,
       label: "Profile",
-      path: "/customer-dashboard",
-      active: location === "/customer-dashboard"
+      path: "/profile-settings",
+      active: location === "/profile-settings"
     }
   ];
 

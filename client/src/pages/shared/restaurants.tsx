@@ -6,10 +6,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RestaurantCardSkeleton } from "@/components/skeletons";
 import { Separator } from "@/components/ui/separator";
-import { MapPin, Star, Clock, Sparkles, TrendingUp, Heart } from "lucide-react";
+import { MapPin, Star, Clock, Sparkles, TrendingUp, Heart, Utensils, Pizza, Coffee, Beef, Fish, Salad, IceCream, ChevronLeft, ChevronRight } from "lucide-react";
 import RestaurantCard from "@/components/restaurant-card";
 import RestaurantFilters from "@/components/restaurant-filters";
+import FeaturedCarousel from "@/components/customer/featured-carousel";
 import type { Restaurant } from "@shared/schema";
+
+// Quick category pills for filtering
+const quickCategories = [
+  { id: "all", label: "All", icon: <Utensils className="w-4 h-4" /> },
+  { id: "Filipino", label: "Filipino", icon: <Beef className="w-4 h-4" /> },
+  { id: "Pizza", label: "Pizza", icon: <Pizza className="w-4 h-4" /> },
+  { id: "Coffee", label: "Coffee", icon: <Coffee className="w-4 h-4" /> },
+  { id: "Seafood", label: "Seafood", icon: <Fish className="w-4 h-4" /> },
+  { id: "Healthy", label: "Healthy", icon: <Salad className="w-4 h-4" /> },
+  { id: "Desserts", label: "Desserts", icon: <IceCream className="w-4 h-4" /> },
+];
 
 export default function Restaurants() {
   const [location] = useLocation();
@@ -149,15 +161,46 @@ export default function Restaurants() {
   const featuredRestaurants = sortedRestaurants.filter(r => r.isFeatured);
   const regularRestaurants = sortedRestaurants.filter(r => !r.isFeatured);
 
+  // Quick category handler
+  const handleQuickCategory = (categoryId: string) => {
+    if (categoryId === "all") {
+      setCategory("all");
+    } else {
+      setCategory(categoryId);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background py-8 pb-8 md:pb-8" data-testid="restaurants-page">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-4" data-testid="restaurants-title">
-            {locationParam ? `Restaurants in ${locationParam}` : "All Restaurants"}
+    <div className="min-h-screen bg-background pb-8 md:pb-8" data-testid="restaurants-page">
+      {/* Sticky Category Pills */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+            {quickCategories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleQuickCategory(cat.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all duration-200 font-medium text-sm ${
+                  category === cat.id || (cat.id === "all" && category === "all")
+                    ? "bg-gradient-to-r from-[#FF6B35] to-[#FFD23F] text-white shadow-md"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {cat.icon}
+                <span>{cat.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2" data-testid="restaurants-title">
+            {locationParam ? `Restaurants in ${locationParam}` : category !== "all" ? `${category} Restaurants` : "All Restaurants"}
           </h1>
-          <p className="text-xl text-muted-foreground">
-            Discover amazing food from local establishments
+          <p className="text-lg text-muted-foreground">
+            Discover amazing food from local establishments in Batangas
           </p>
         </div>
 
@@ -184,6 +227,16 @@ export default function Restaurants() {
           onLocationChange={setUserLocation}
           onClearFilters={handleClearFilters}
         />
+
+        {/* Featured Carousel - Only show when no filters are applied */}
+        {!searchTerm && category === "all" && deliveryTime === "all" && rating === "all" && !isLoading && (
+          <div className="-mx-4 sm:-mx-6 lg:-mx-8 mb-6">
+            <FeaturedCarousel
+              title="Featured This Week"
+              subtitle="Top-rated restaurants in Batangas"
+            />
+          </div>
+        )}
 
         {error && (
           <div className="text-center py-12" data-testid="error-message">

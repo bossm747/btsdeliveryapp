@@ -19,19 +19,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
+import {
   Users, Store, Package, DollarSign, TrendingUp, AlertCircle,
   Search, CheckCircle, BarChart3
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useAdminToast } from "@/hooks";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import AdminAnalytics from "@/components/admin/admin-analytics";
 import DispatchConsole from "@/components/admin/dispatch-console";
 import AdminHeader from "@/components/admin/admin-header";
 import AdminSidebar from "@/components/admin/admin-sidebar";
+import {
+  AdminPageWrapper,
+  AdminDashboardSkeleton,
+  AdminOrdersSkeleton,
+  AdminRestaurantsSkeleton,
+  AdminRidersSkeleton,
+  AdminUsersSkeleton,
+  NoOrdersEmptyState,
+  NoRestaurantsEmptyState,
+  NoRidersEmptyState,
+  NoUsersEmptyState,
+  UnderDevelopmentEmptyState,
+} from "@/components/admin";
 
 export default function AdminDashboard() {
-  const { toast } = useToast();
+  const adminToast = useAdminToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [activeTab, setActiveTab] = useState("dispatch");
@@ -62,37 +75,23 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/riders"],
   });
 
-  const handleApproveRestaurant = async (restaurantId: string) => {
+  const handleApproveRestaurant = async (restaurantId: string, restaurantName?: string) => {
     try {
       await apiRequest("PATCH", `/api/admin/restaurants/${restaurantId}/approve`);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/restaurants"] });
-      toast({
-        title: "Restaurant approved",
-        description: "The restaurant is now active on the platform",
-      });
+      adminToast.restaurantApproved(restaurantName);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to approve restaurant",
-        variant: "destructive",
-      });
+      adminToast.error("Failed to approve restaurant");
     }
   };
 
-  const handleVerifyRider = async (riderId: string) => {
+  const handleVerifyRider = async (riderId: string, riderName?: string) => {
     try {
       await apiRequest("PATCH", `/api/admin/riders/${riderId}/verify`);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders"] });
-      toast({
-        title: "Rider verified",
-        description: "The rider can now accept deliveries",
-      });
+      adminToast.riderVerified(riderName);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to verify rider",
-        variant: "destructive",
-      });
+      adminToast.error("Failed to verify rider");
     }
   };
 
@@ -149,21 +148,7 @@ export default function AdminDashboard() {
       case "reports":
         return renderReports();
       default:
-        return (
-          <Card className="border-dashed">
-            <CardContent className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {getTabTitle()}
-                </h3>
-                <p className="text-gray-500">
-                  This section is under development.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        );
+        return <UnderDevelopmentEmptyState feature={getTabTitle()} />;
     }
   };
 
@@ -361,10 +346,10 @@ export default function AdminDashboard() {
                   <TableCell>{restaurant.rating || "N/A"}</TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
-                        onClick={() => handleApproveRestaurant(restaurant.id)}
+                        onClick={() => handleApproveRestaurant(restaurant.id, restaurant.name)}
                       >
                         Approve
                       </Button>
@@ -460,10 +445,10 @@ export default function AdminDashboard() {
                   <TableCell>{rider.completedDeliveries || 0}</TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
-                        onClick={() => handleVerifyRider(rider.id)}
+                        onClick={() => handleVerifyRider(rider.id, rider.name)}
                       >
                         Verify
                       </Button>
@@ -659,101 +644,113 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="lg:ml-64">
         {/* Header */}
-        <AdminHeader 
+        <AdminHeader
           title={getTabTitle()}
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
           isSidebarOpen={sidebarOpen}
         />
 
         {/* Page Content */}
-        <main className="p-6">
-          {/* Quick Stats - Only show on dashboard/analytics */}
-          {(activeTab === "dispatch" || activeTab === "analytics") && (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-              <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-blue-100 text-sm font-medium">Total Users</p>
-                      <p className="text-3xl font-bold" data-testid="stat-users">
-                        {(stats as any)?.totalUsers || 0}
-                      </p>
-                      <p className="text-blue-100 text-sm">+12% from last month</p>
+        <AdminPageWrapper
+          pageTitle={getTabTitle()}
+          pageDescription="Admin dashboard for managing the BTS Delivery platform"
+          refreshQueryKeys={[
+            "/api/admin/stats",
+            "/api/admin/users",
+            "/api/admin/restaurants",
+            "/api/admin/orders",
+            "/api/admin/riders",
+          ]}
+        >
+          <main className="p-6">
+            {/* Quick Stats - Only show on dashboard/analytics */}
+            {(activeTab === "dispatch" || activeTab === "analytics") && (
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+                <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100 text-sm font-medium">Total Users</p>
+                        <p className="text-3xl font-bold" data-testid="stat-users">
+                          {(stats as any)?.totalUsers || 0}
+                        </p>
+                        <p className="text-blue-100 text-sm">+12% from last month</p>
+                      </div>
+                      <Users className="h-8 w-8 text-blue-200" />
                     </div>
-                    <Users className="h-8 w-8 text-blue-200" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-green-100 text-sm font-medium">Active Restaurants</p>
-                      <p className="text-3xl font-bold" data-testid="stat-restaurants">
-                        {(stats as any)?.activeRestaurants || 0}
-                      </p>
-                      <p className="text-green-100 text-sm">+5 new this week</p>
+                <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100 text-sm font-medium">Active Restaurants</p>
+                        <p className="text-3xl font-bold" data-testid="stat-restaurants">
+                          {(stats as any)?.activeRestaurants || 0}
+                        </p>
+                        <p className="text-green-100 text-sm">+5 new this week</p>
+                      </div>
+                      <Store className="h-8 w-8 text-green-200" />
                     </div>
-                    <Store className="h-8 w-8 text-green-200" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-purple-100 text-sm font-medium">Total Orders</p>
-                      <p className="text-3xl font-bold" data-testid="stat-orders">
-                        {(stats as any)?.totalOrders || 0}
-                      </p>
-                      <p className="text-purple-100 text-sm">+18% from last week</p>
+                <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100 text-sm font-medium">Total Orders</p>
+                        <p className="text-3xl font-bold" data-testid="stat-orders">
+                          {(stats as any)?.totalOrders || 0}
+                        </p>
+                        <p className="text-purple-100 text-sm">+18% from last week</p>
+                      </div>
+                      <Package className="h-8 w-8 text-purple-200" />
                     </div>
-                    <Package className="h-8 w-8 text-purple-200" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-orange-100 text-sm font-medium">Active Riders</p>
-                      <p className="text-3xl font-bold" data-testid="stat-riders">
-                        {(stats as any)?.activeRiders || 0}
-                      </p>
-                      <p className="text-orange-100 text-sm">
-                        {(stats as any)?.onlineRiders || 0} online now
-                      </p>
+                <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-orange-100 text-sm font-medium">Active Riders</p>
+                        <p className="text-3xl font-bold" data-testid="stat-riders">
+                          {(stats as any)?.activeRiders || 0}
+                        </p>
+                        <p className="text-orange-100 text-sm">
+                          {(stats as any)?.onlineRiders || 0} online now
+                        </p>
+                      </div>
+                      <Users className="h-8 w-8 text-orange-200" />
                     </div>
-                    <Users className="h-8 w-8 text-orange-200" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-gradient-to-r from-teal-500 to-teal-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-teal-100 text-sm font-medium">Revenue Today</p>
-                      <p className="text-3xl font-bold" data-testid="stat-revenue">
-                        ₱{(stats as any)?.revenueToday?.toFixed(2) || "0.00"}
-                      </p>
-                      <p className="text-teal-100 text-sm">+25% from yesterday</p>
+                <Card className="bg-gradient-to-r from-teal-500 to-teal-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-teal-100 text-sm font-medium">Revenue Today</p>
+                        <p className="text-3xl font-bold" data-testid="stat-revenue">
+                          ₱{(stats as any)?.revenueToday?.toFixed(2) || "0.00"}
+                        </p>
+                        <p className="text-teal-100 text-sm">+25% from yesterday</p>
+                      </div>
+                      <DollarSign className="h-8 w-8 text-teal-200" />
                     </div>
-                    <DollarSign className="h-8 w-8 text-teal-200" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Tab Content */}
+            <div className="space-y-6">
+              {renderTabContent()}
             </div>
-          )}
-
-          {/* Tab Content */}
-          <div className="space-y-6">
-            {renderTabContent()}
-          </div>
-        </main>
+          </main>
+        </AdminPageWrapper>
       </div>
     </div>
   );

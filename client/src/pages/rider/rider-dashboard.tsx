@@ -11,6 +11,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import RiderMapTracking from "@/components/rider/rider-map-tracking";
+import { RiderPageWrapper } from "@/components/rider/rider-page-wrapper";
+import { RiderDashboardSkeleton, RiderDeliveryCardSkeleton } from "@/components/rider/rider-skeletons";
+import { NoActiveDeliveriesEmptyState } from "@/components/rider/rider-empty-states";
 import {
   MapPin, Package, Clock, DollarSign, Star, TrendingUp,
   Navigation, Phone, CheckCircle, XCircle, AlertCircle,
@@ -19,7 +22,7 @@ import {
   Truck, Target, Award, RotateCcw, Eye, LogOut,
   Wifi, WifiOff, CircleDot, Plus, Minus, MessageCircle
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useRiderToast } from "@/hooks/use-rider-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -28,7 +31,7 @@ import OrderChat, { ChatButton } from "@/components/order-chat";
 
 export default function RiderDashboard() {
   const { user, logout } = useAuth();
-  const { toast } = useToast();
+  const riderToast = useRiderToast();
   const [, navigate] = useLocation();
   const [isOnline, setIsOnline] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
@@ -69,17 +72,18 @@ export default function RiderDashboard() {
   // Update online status
   const updateStatusMutation = useMutation({
     mutationFn: async (online: boolean) => {
-      return await apiRequest("PATCH", "/api/rider/status", { 
+      return await apiRequest("PATCH", "/api/rider/status", {
         isOnline: online,
-        currentLocation 
+        currentLocation
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rider/profile"] });
-      toast({
-        title: isOnline ? "Online na kayo!" : "Offline na kayo",
-        description: isOnline ? "Makakatanggap na kayo ng deliveries" : "Hindi na kayo makakatanggap ng bagong delivery",
-      });
+      if (isOnline) {
+        riderToast.wentOnline();
+      } else {
+        riderToast.wentOffline();
+      }
     }
   });
 
@@ -90,10 +94,7 @@ export default function RiderDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries"] });
-      toast({
-        title: "Delivery accepted!",
-        description: "Puntahan ang restaurant para kunin ang order",
-      });
+      riderToast.deliveryAccepted();
     }
   });
 
@@ -133,10 +134,7 @@ export default function RiderDashboard() {
   // Handle logout
   const handleLogout = () => {
     logout();
-    toast({
-      title: "Logged out",
-      description: "Successfully logged out from your account",
-    });
+    riderToast.success("Successfully logged out from your account");
   };
 
   // Mobile-first Header Component
@@ -389,11 +387,9 @@ export default function RiderDashboard() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-500">
-          <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No active deliveries</p>
-          <p className="text-sm">Turn on to receive new orders</p>
-        </div>
+        <NoActiveDeliveriesEmptyState
+          onGoOnline={!isOnline ? () => handleStatusToggle(true) : undefined}
+        />
       )}
     </div>
   );
@@ -520,29 +516,31 @@ export default function RiderDashboard() {
 
   if (riderLoading || deliveriesLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading rider dashboard...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50">
+        <RiderDashboardSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" data-testid="rider-dashboard">
-      <MobileHeader />
-      {renderContent()}
-      <BottomNav />
+    <RiderPageWrapper
+      pageTitle="Rider Dashboard"
+      pageDescription="Manage your deliveries, earnings, and performance"
+    >
+      <div className="min-h-screen bg-gray-50" data-testid="rider-dashboard">
+        <MobileHeader />
+        {renderContent()}
+        <BottomNav />
 
-      {/* Chat with Customer */}
-      {chatOrderId && (
-        <OrderChat
-          orderId={chatOrderId}
-          open={!!chatOrderId}
-          onOpenChange={(open) => !open && setChatOrderId(null)}
-        />
-      )}
-    </div>
+        {/* Chat with Customer */}
+        {chatOrderId && (
+          <OrderChat
+            orderId={chatOrderId}
+            open={!!chatOrderId}
+            onOpenChange={(open) => !open && setChatOrderId(null)}
+          />
+        )}
+      </div>
+    </RiderPageWrapper>
   );
 }

@@ -1,22 +1,30 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Home, Package, Clock, Star, TrendingUp, 
-  ShoppingBag, CreditCard, Navigation, Phone, 
-  User, Bell, Settings, Menu, LogOut, Award,
-  MapPin, Truck, Heart, Gift, Wallet
+import {
+  Package, ShoppingBag, CreditCard,
+  User, Bell, Menu, LogOut,
+  MapPin, Truck, Heart, Gift, Wallet,
+  ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
+
+// Import new components
+import PromoBannerCarousel from "@/components/customer/promo-banner-carousel";
+import CategoryPills from "@/components/customer/category-pills";
+import FlashDealsSection from "@/components/customer/flash-deals-section";
+import TrendingSection from "@/components/customer/trending-section";
+import FeaturedCarousel from "@/components/customer/featured-carousel";
+import CustomerPageWrapper from "@/components/customer/customer-page-wrapper";
+import { DashboardSkeleton } from "@/components/skeletons";
 
 interface CustomerProfile {
   totalOrders?: number;
@@ -31,12 +39,12 @@ interface RecentOrder {
   totalAmount: string;
   createdAt: string;
   restaurantName: string;
+  restaurant?: { name: string };
 }
 
 export default function CustomerDashboard() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("home");
   const [showMenu, setShowMenu] = useState(false);
 
   // Fetch customer data with proper typing
@@ -49,11 +57,6 @@ export default function CustomerDashboard() {
   const { data: recentOrders = [], isLoading: ordersLoading } = useQuery<RecentOrder[]>({
     queryKey: ["/api/customer/orders/recent"],
     refetchInterval: 30000
-  });
-
-  // Fetch favorite restaurants with proper typing
-  const { data: favoriteRestaurants = [] } = useQuery<any[]>({
-    queryKey: ["/api/customer/favorites"]
   });
 
   // Fetch loyalty points
@@ -81,12 +84,15 @@ export default function CustomerDashboard() {
         <div className="flex items-center space-x-3">
           <img src={btsLogo} alt="BTS Delivery" className="w-8 h-8" />
           <div>
-            <h1 className="text-lg font-bold text-[#004225]">BTS Customer</h1>
-            <p className="text-xs text-gray-600">Batangas Province</p>
+            <h1 className="text-lg font-bold text-[#004225]">BTS Delivery</h1>
+            <p className="text-xs text-gray-600 flex items-center">
+              <MapPin className="w-3 h-3 mr-1" />
+              Batangas Province
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           {/* Notifications */}
           <Button variant="ghost" size="sm" className="p-2 relative">
             <Bell className="w-5 h-5" />
@@ -117,29 +123,37 @@ export default function CustomerDashboard() {
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
-                <div className="space-y-3">
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("profile"); setShowMenu(false); }}>
-                    <User className="w-4 h-4 mr-3" />
-                    My Profile
-                  </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("wallet"); setShowMenu(false); }}>
-                    <Wallet className="w-4 h-4 mr-3" />
-                    Wallet & Payments
-                  </Button>
-                  <Link href="/loyalty">
-                    <Button variant="ghost" className="w-full justify-start" onClick={() => setShowMenu(false)}>
+                <div className="space-y-1">
+                  <Link href="/profile-settings" onClick={() => setShowMenu(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <User className="w-4 h-4 mr-3" />
+                      My Profile
+                    </Button>
+                  </Link>
+                  <Link href="/wallet" onClick={() => setShowMenu(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Wallet className="w-4 h-4 mr-3" />
+                      Wallet & Payments
+                    </Button>
+                  </Link>
+                  <Link href="/loyalty" onClick={() => setShowMenu(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
                       <Gift className="w-4 h-4 mr-3" />
                       Rewards & Points
                     </Button>
                   </Link>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("favorites"); setShowMenu(false); }}>
-                    <Heart className="w-4 h-4 mr-3" />
-                    Favorites
-                  </Button>
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => { setActiveTab("settings"); setShowMenu(false); }}>
-                    <Settings className="w-4 h-4 mr-3" />
-                    Settings
-                  </Button>
+                  <Link href="/favorites" onClick={() => setShowMenu(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Heart className="w-4 h-4 mr-3" />
+                      Favorites
+                    </Button>
+                  </Link>
+                  <Link href="/addresses" onClick={() => setShowMenu(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <MapPin className="w-4 h-4 mr-3" />
+                      My Addresses
+                    </Button>
+                  </Link>
                 </div>
 
                 <Separator />
@@ -156,67 +170,102 @@ export default function CustomerDashboard() {
     </div>
   );
 
-  // Quick Stats Component
+  // Quick Stats Component - Enhanced
   const QuickStats = () => (
-    <div className="px-4 py-3 bg-gradient-to-r from-[#004225] to-green-700">
+    <div className="px-4 py-4 bg-gradient-to-r from-[#004225] to-green-700">
       <div className="grid grid-cols-3 gap-4 text-white">
-        <div className="text-center">
-          <div className="text-lg font-bold">{customerData?.totalOrders || "0"}</div>
+        <Link href="/customer-orders" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="text-2xl font-bold">{customerData?.totalOrders || "0"}</div>
           <div className="text-xs opacity-90">Orders</div>
-        </div>
-        <Link href="/loyalty" className="text-center cursor-pointer hover:opacity-80">
-          <div className="text-lg font-bold">{loyaltyData?.points?.toLocaleString() || "0"}</div>
+        </Link>
+        <Link href="/loyalty" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="text-2xl font-bold">{loyaltyData?.points?.toLocaleString() || "0"}</div>
           <div className="text-xs opacity-90">Points</div>
         </Link>
-        <div className="text-center">
-          <div className="text-lg font-bold">₱{customerData?.totalSaved || "0"}</div>
+        <Link href="/wallet" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="text-2xl font-bold">PHP {customerData?.totalSaved || "0"}</div>
           <div className="text-xs opacity-90">Saved</div>
-        </div>
+        </Link>
       </div>
     </div>
   );
 
-  // Service Cards Component
+  // Service Cards Component - Enhanced with modern styling
   const ServiceCards = () => (
     <div className="px-4 py-4">
-      <h3 className="font-semibold text-[#004225] mb-3">Our Services</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-[#004225] text-lg">Our Services</h3>
+        <Link href="/services">
+          <Button variant="ghost" size="sm" className="text-[#FF6B35] font-medium text-sm">
+            View All
+          </Button>
+        </Link>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Link href="/restaurants">
-          <Card className="border-l-4 border-l-[#FF6B35] cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4 text-center">
-              <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-[#FF6B35]" />
-              <h4 className="font-medium text-sm">Food Delivery</h4>
-              <p className="text-xs text-gray-600">Order from restaurants</p>
+          <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden group border-0 shadow-md">
+            <div className="h-2 bg-gradient-to-r from-[#FF6B35] to-[#FFD23F]" />
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-[#FF6B35]/10 to-[#FFD23F]/10 group-hover:from-[#FF6B35]/20 group-hover:to-[#FFD23F]/20 transition-colors">
+                  <ShoppingBag className="w-6 h-6 text-[#FF6B35]" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-gray-900">Food Delivery</h4>
+                  <p className="text-xs text-gray-500">Order from restaurants</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </Link>
-        
+
         <Link href="/pabili">
-          <Card className="border-l-4 border-l-green-600 cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4 text-center">
-              <Package className="w-8 h-8 mx-auto mb-2 text-green-600" />
-              <h4 className="font-medium text-sm">Pabili Service</h4>
-              <p className="text-xs text-gray-600">Shopping assistance</p>
+          <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden group border-0 shadow-md">
+            <div className="h-2 bg-gradient-to-r from-green-500 to-green-400" />
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-green-50 group-hover:bg-green-100 transition-colors">
+                  <Package className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-gray-900">Pabili Service</h4>
+                  <p className="text-xs text-gray-500">Shopping assistance</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </Link>
-        
+
         <Link href="/pabayad">
-          <Card className="border-l-4 border-l-blue-600 cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4 text-center">
-              <CreditCard className="w-8 h-8 mx-auto mb-2 text-blue-600" />
-              <h4 className="font-medium text-sm">Pabayad Service</h4>
-              <p className="text-xs text-gray-600">Bills payment</p>
+          <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden group border-0 shadow-md">
+            <div className="h-2 bg-gradient-to-r from-blue-500 to-blue-400" />
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-blue-50 group-hover:bg-blue-100 transition-colors">
+                  <CreditCard className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-gray-900">Pabayad Service</h4>
+                  <p className="text-xs text-gray-500">Bills payment</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </Link>
-        
+
         <Link href="/parcel">
-          <Card className="border-l-4 border-l-purple-600 cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4 text-center">
-              <Truck className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-              <h4 className="font-medium text-sm">Parcel Delivery</h4>
-              <p className="text-xs text-gray-600">Package delivery</p>
+          <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden group border-0 shadow-md">
+            <div className="h-2 bg-gradient-to-r from-purple-500 to-purple-400" />
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-purple-50 group-hover:bg-purple-100 transition-colors">
+                  <Truck className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-gray-900">Parcel Delivery</h4>
+                  <p className="text-xs text-gray-500">Package delivery</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </Link>
@@ -224,125 +273,120 @@ export default function CustomerDashboard() {
     </div>
   );
 
-  // Recent Orders Component
+  // Recent Orders Component - Enhanced
   const RecentOrders = () => (
-    <div className="px-4 py-3">
+    <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-[#004225]">Recent Orders</h3>
+        <h3 className="font-bold text-[#004225] text-lg">Recent Orders</h3>
         <Link href="/customer-orders">
-          <Button variant="ghost" size="sm" className="text-[#FF6B35]">View All</Button>
+          <Button variant="ghost" size="sm" className="text-[#FF6B35] font-medium text-sm">
+            View All
+          </Button>
         </Link>
       </div>
-      
+
       {recentOrders.length > 0 ? (
         <div className="space-y-3">
-          {recentOrders.slice(0, 3).map((order: any) => (
-            <Card key={order.id} className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium">Order #{order.orderNumber}</div>
-                  <Badge variant={order.status === "delivered" ? "default" : "secondary"}>
-                    {order.status}
-                  </Badge>
-                </div>
-                <div className="text-sm text-gray-600 mb-2">
-                  {order.restaurant?.name || "Unknown Restaurant"}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-green-600">₱{order.totalAmount}</div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(order.createdAt).toLocaleDateString()}
+          {recentOrders.slice(0, 3).map((order: RecentOrder) => (
+            <Link key={order.id} href={`/order/${order.id}`}>
+              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium text-gray-900">Order #{order.orderNumber}</div>
+                    <Badge
+                      variant={order.status === "delivered" ? "default" : "secondary"}
+                      className={order.status === "delivered"
+                        ? "bg-green-100 text-green-700 hover:bg-green-100"
+                        : order.status === "preparing"
+                          ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                          : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                      }
+                    >
+                      {order.status}
+                    </Badge>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="text-sm text-gray-600 mb-2">
+                    {order.restaurant?.name || "Unknown Restaurant"}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-[#004225]">PHP {order.totalAmount}</div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      {new Date(order.createdAt).toLocaleDateString()}
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-500">
-          <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No recent orders</p>
-          <p className="text-sm">Start ordering to see your history here</p>
-        </div>
+        <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50">
+          <CardContent className="text-center py-8">
+            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 font-medium">No recent orders</p>
+            <p className="text-sm text-gray-400 mb-4">Start ordering to see your history here</p>
+            <Link href="/restaurants">
+              <Button size="sm" className="bg-[#FF6B35] hover:bg-[#FF6B35]/90">
+                Order Now
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 
-  // Mobile Bottom Navigation
-  const BottomNav = () => (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
-      <div className="grid grid-cols-5 text-center">
-        {[
-          { id: "home", icon: Home, label: "Home", path: "/customer-dashboard" },
-          { id: "restaurants", icon: ShoppingBag, label: "Food", path: "/restaurants" },
-          { id: "orders", icon: Package, label: "Orders", path: "/customer-orders" },
-          { id: "tracking", icon: MapPin, label: "Track", path: "/order-tracking" },
-          { id: "profile", icon: User, label: "Profile", path: "#" }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id || (tab.id === "home" && activeTab === "home");
-          
-          return tab.path === "#" ? (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab("profile"); setShowMenu(true); }}
-              className={`py-3 px-2 transition-colors ${
-                isActive 
-                  ? 'text-[#FF6B35] bg-orange-50' 
-                  : 'text-gray-600 hover:text-[#FF6B35]'
-              }`}
-            >
-              <Icon className={`w-5 h-5 mx-auto mb-1 ${isActive ? 'text-[#FF6B35]' : ''}`} />
-              <div className="text-xs font-medium">{tab.label}</div>
-            </button>
-          ) : (
-            <Link key={tab.id} href={tab.path}>
-              <div className={`py-3 px-2 transition-colors ${
-                isActive 
-                  ? 'text-[#FF6B35] bg-orange-50' 
-                  : 'text-gray-600 hover:text-[#FF6B35]'
-              }`}>
-                <Icon className={`w-5 h-5 mx-auto mb-1 ${isActive ? 'text-[#FF6B35]' : ''}`} />
-                <div className="text-xs font-medium">{tab.label}</div>
-              </div>
-            </Link>
-          );
-        })}
+  // Main Content - displays the dashboard home with new layout
+  const MainContent = () => (
+    <div className="pb-20">
+      {/* Hero Promo Banner */}
+      <div className="pt-4">
+        <PromoBannerCarousel />
       </div>
+
+      {/* Quick Stats */}
+      <QuickStats />
+
+      {/* Category Pills */}
+      <CategoryPills />
+
+      {/* Flash Deals - Time Limited */}
+      <FlashDealsSection />
+
+      {/* Service Cards */}
+      <ServiceCards />
+
+      {/* Trending Restaurants */}
+      <TrendingSection />
+
+      {/* Featured Restaurants Carousel */}
+      <FeaturedCarousel />
+
+      {/* Recent Orders */}
+      <RecentOrders />
     </div>
   );
 
-  // Main Content Renderer
-  const renderContent = () => {
-    switch (activeTab) {
-      case "home":
-      default:
-        return (
-          <div className="pb-20">
-            <QuickStats />
-            <ServiceCards />
-            <RecentOrders />
-          </div>
-        );
-    }
-  };
-
   if (customerLoading || ordersLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading customer dashboard...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" data-testid="customer-dashboard">
-      <MobileHeader />
-      {renderContent()}
-      <BottomNav />
-    </div>
+    <CustomerPageWrapper
+      pageTitle="BTS Delivery Dashboard"
+      pageDescription="Your personal dashboard for ordering food, tracking deliveries, and managing your account"
+      refreshQueryKeys={[
+        "/api/customer/profile",
+        "/api/customer/orders/recent",
+        "/api/restaurants",
+        "/api/loyalty/points"
+      ]}
+    >
+      <div className="min-h-screen bg-gray-50" data-testid="customer-dashboard">
+        <MobileHeader />
+        <MainContent />
+      </div>
+    </CustomerPageWrapper>
   );
 }

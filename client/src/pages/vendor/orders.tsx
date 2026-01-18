@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VendorOrderCardSkeleton } from "@/components/skeletons";
-import { 
-  ShoppingBag, 
+import { NoOrdersEmptyState } from "@/components/vendor/vendor-empty-states";
+import {
+  ShoppingBag,
   Search,
-  CheckCircle, 
+  CheckCircle,
   XCircle,
   Bell,
   Clock,
@@ -20,12 +21,12 @@ import {
   Volume2,
   VolumeX
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useVendorToast } from "@/hooks/use-vendor-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Order, Restaurant } from "@shared/schema";
 
 export default function VendorOrders() {
-  const { toast } = useToast();
+  const vendorToast = useVendorToast();
   const queryClient = useQueryClient();
   const [searchFilter, setSearchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -77,9 +78,9 @@ export default function VendorOrders() {
             if (soundEnabled && audioRef.current) {
               audioRef.current.play().catch(() => {});
             }
-            
+
             // Show toast notification
-            toast({
+            vendorToast.toast({
               title: "New Order Received!",
               description: `Order #${data.order.orderNumber || data.order.id.slice(-8)} for ₱${parseFloat(data.order.totalAmount).toFixed(2)}`,
               duration: 5000,
@@ -131,7 +132,7 @@ export default function VendorOrders() {
         wsRef.current.close();
       }
     };
-  }, [restaurant?.id, soundEnabled, toast, queryClient]);
+  }, [restaurant?.id, soundEnabled, vendorToast.toast, queryClient]);
 
   // Clear notifications when user views orders
   useEffect(() => {
@@ -154,19 +155,28 @@ export default function VendorOrders() {
     mutationFn: async ({ orderId, status, notes }: { orderId: string; status: string; notes?: string }) => {
       return await apiRequest("PATCH", `/api/orders/${orderId}/status`, { status, notes });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/orders"] });
-      toast({
-        title: "Order status updated",
-        description: "The order status has been successfully updated.",
-      });
+      // Use specific vendor toast based on status
+      switch (variables.status) {
+        case 'confirmed':
+          vendorToast.orderAccepted();
+          break;
+        case 'cancelled':
+          vendorToast.orderRejected();
+          break;
+        case 'ready':
+          vendorToast.orderReady();
+          break;
+        case 'completed':
+          vendorToast.orderCompleted();
+          break;
+        default:
+          vendorToast.success("Order status updated successfully.");
+      }
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to update order",
-        description: error.message,
-        variant: "destructive",
-      });
+      vendorToast.error(error.message || "Failed to update order status.");
     },
   });
 
@@ -361,11 +371,9 @@ export default function VendorOrders() {
       {/* Orders List */}
       <div className="space-y-4">
         {filteredOrders.length === 0 ? (
-          <div className="text-center py-12">
-            <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Orders Found</h3>
-            <p className="text-gray-500 dark:text-gray-400">When you receive orders, they'll appear here.</p>
-          </div>
+          <NoOrdersEmptyState
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/vendor/orders"] })}
+          />
         ) : (
           filteredOrders.map((order) => (
             <Card 

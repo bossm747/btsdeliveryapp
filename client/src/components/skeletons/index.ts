@@ -18,3 +18,15 @@ export {
   MenuCategoriesSkeleton,
   MenuBrowserSkeleton
 } from "./menu-item-skeleton";
+
+export {
+  DashboardSkeleton,
+  PromoBannerSkeleton,
+  QuickStatsSkeleton,
+  CategoryPillsSkeleton,
+  FlashDealsSkeleton,
+  ServiceCardsSkeleton,
+  TrendingSectionSkeleton,
+  FeaturedCarouselSkeleton,
+  RecentOrdersSkeleton
+} from "./dashboard-skeleton";

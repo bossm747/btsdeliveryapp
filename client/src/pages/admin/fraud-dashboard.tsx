@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import AdminHeader from "@/components/admin/admin-header";
 import AdminSidebar from "@/components/admin/admin-sidebar";
+import { AdminPageWrapper, AdminFraudSkeleton, NoFraudAlertsEmptyState } from "@/components/admin";
+import { useAdminToast } from "@/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +59,7 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+// useAdminToast imported above from @/hooks
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 
@@ -182,7 +184,7 @@ const RiskScoreGauge = ({ score }: { score: number }) => {
 };
 
 export default function FraudDashboard() {
-  const { toast } = useToast();
+  const adminToast = useAdminToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("alerts");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -265,14 +267,20 @@ export default function FraudDashboard() {
       if (!response.ok) throw new Error("Failed to review alert");
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Alert reviewed successfully" });
+    onSuccess: (_, variables) => {
+      if (variables.status === "dismissed") {
+        adminToast.fraudAlertDismissed();
+      } else if (variables.status === "confirmed") {
+        adminToast.fraudAlertConfirmed();
+      } else {
+        adminToast.success("Alert reviewed successfully");
+      }
       refetchAlerts();
       setReviewDialogOpen(false);
       setSelectedAlert(null);
     },
     onError: () => {
-      toast({ title: "Failed to review alert", variant: "destructive" });
+      adminToast.error("Failed to review alert");
     },
   });
 
@@ -289,11 +297,11 @@ export default function FraudDashboard() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "Rule updated successfully" });
+      adminToast.configurationUpdated("Fraud rule");
       refetchRules();
     },
     onError: () => {
-      toast({ title: "Failed to update rule", variant: "destructive" });
+      adminToast.error("Failed to update rule");
     },
   });
 
@@ -310,12 +318,12 @@ export default function FraudDashboard() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "User blocked successfully" });
+      adminToast.userBanned();
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fraud/blocked-users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fraud/high-risk-users"] });
     },
     onError: () => {
-      toast({ title: "Failed to block user", variant: "destructive" });
+      adminToast.error("Failed to block user");
     },
   });
 
@@ -330,11 +338,11 @@ export default function FraudDashboard() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "User unblocked successfully" });
+      adminToast.userUnbanned();
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fraud/blocked-users"] });
     },
     onError: () => {
-      toast({ title: "Failed to unblock user", variant: "destructive" });
+      adminToast.error("Failed to unblock user");
     },
   });
 
@@ -417,7 +425,16 @@ export default function FraudDashboard() {
         />
 
         {/* Page Content */}
-        <main className="p-6">
+        <AdminPageWrapper
+          pageTitle="Fraud Detection"
+          pageDescription="Fraud detection and risk management for BTS Delivery"
+          refreshQueryKeys={[
+            "/api/admin/fraud/stats",
+            "/api/admin/fraud/alerts",
+            "/api/admin/fraud/rules",
+          ]}
+        >
+          <main className="p-6">
           <div className="space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -927,7 +944,8 @@ export default function FraudDashboard() {
               </TabsContent>
             </Tabs>
           </div>
-        </main>
+          </main>
+        </AdminPageWrapper>
       </div>
 
       {/* Review Alert Dialog */}
