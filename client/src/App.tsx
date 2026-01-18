@@ -1,3 +1,4 @@
+import { useState, lazy, Suspense } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -5,75 +6,88 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Preloader from "@/components/preloader";
 
-// Public pages
-import Landing from "@/pages/shared/landing";
-import Login from "@/pages/shared/login";
-import Signup from "@/pages/shared/signup";
-import MultiStepSignup from "@/pages/shared/multistep-signup";
-import NotFound from "@/pages/shared/not-found";
+// Lazy load all pages for code splitting
+const Landing = lazy(() => import("@/pages/shared/landing"));
+const Login = lazy(() => import("@/pages/shared/login"));
+const MultiStepSignup = lazy(() => import("@/pages/shared/multistep-signup"));
+const NotFound = lazy(() => import("@/pages/shared/not-found"));
 
 // Customer pages
-import Home from "@/pages/shared/home";
-import Restaurants from "@/pages/shared/restaurants";
-import RestaurantDetail from "@/pages/shared/restaurant-detail";
-import Cart from "@/pages/customer/cart";
-import OrderTracking from "@/pages/shared/order-tracking";
-import CustomerOrders from "@/pages/customer/customer-orders";
-import CustomerAddresses from "@/pages/customer/addresses";
-import CustomerFavorites from "@/pages/customer/favorites";
-import CustomerProfileSettings from "@/pages/customer/profile-settings";
-import CustomerLoyalty from "@/pages/customer/loyalty";
-import CustomerWallet from "@/pages/customer/wallet";
-import Pabili from "@/pages/shared/pabili";
-import Pabayad from "@/pages/shared/pabayad";
-import Parcel from "@/pages/shared/parcel";
+const Home = lazy(() => import("@/pages/shared/home"));
+const Restaurants = lazy(() => import("@/pages/shared/restaurants"));
+const RestaurantDetail = lazy(() => import("@/pages/shared/restaurant-detail"));
+const Cart = lazy(() => import("@/pages/customer/cart"));
+const OrderTracking = lazy(() => import("@/pages/shared/order-tracking"));
+const CustomerOrders = lazy(() => import("@/pages/customer/customer-orders"));
+const CustomerAddresses = lazy(() => import("@/pages/customer/addresses"));
+const CustomerFavorites = lazy(() => import("@/pages/customer/favorites"));
+const CustomerProfileSettings = lazy(() => import("@/pages/customer/profile-settings"));
+const CustomerLoyalty = lazy(() => import("@/pages/customer/loyalty"));
+const CustomerWallet = lazy(() => import("@/pages/customer/wallet"));
+const Pabili = lazy(() => import("@/pages/shared/pabili"));
+const Pabayad = lazy(() => import("@/pages/shared/pabayad"));
+const Parcel = lazy(() => import("@/pages/shared/parcel"));
 
 // Role-specific dashboards
-import CustomerDashboard from "@/pages/customer/customer-dashboard";
-import RiderDashboard from "@/pages/rider/rider-dashboard";
-import RiderPendingOrders from "@/pages/rider/pending-orders";
-import RiderEarnings from "@/pages/rider/earnings";
-import RiderPerformance from "@/pages/rider/performance";
+const CustomerDashboard = lazy(() => import("@/pages/customer/customer-dashboard"));
+const RiderDashboard = lazy(() => import("@/pages/rider/rider-dashboard"));
+const RiderPendingOrders = lazy(() => import("@/pages/rider/pending-orders"));
+const RiderEarnings = lazy(() => import("@/pages/rider/earnings"));
+const RiderPerformance = lazy(() => import("@/pages/rider/performance"));
 
 // Vendor components
-import VendorLayout from "@/pages/vendor/vendor-layout";
-import VendorOverview from "@/pages/vendor/overview";
-import VendorOrders from "@/pages/vendor/orders";
-import VendorMenu from "@/pages/vendor/menu";
-import VendorPromotions from "@/pages/vendor/promotions";
-import VendorStaff from "@/pages/vendor/staff";
-import VendorInventory from "@/pages/vendor/inventory";
-import VendorEarnings from "@/pages/vendor/earnings";
-import VendorProfile from "@/pages/vendor/profile";
-import VendorAnalytics from "@/pages/vendor/analytics";
-import VendorCommission from "@/pages/vendor/commission";
-import VendorBusinessSettings from "@/pages/vendor/business-settings";
-import AIAssistant from "@/pages/vendor/ai-assistant";
+const VendorLayout = lazy(() => import("@/pages/vendor/vendor-layout"));
+const VendorOverview = lazy(() => import("@/pages/vendor/overview"));
+const VendorOrders = lazy(() => import("@/pages/vendor/orders"));
+const VendorMenu = lazy(() => import("@/pages/vendor/menu"));
+const VendorPromotions = lazy(() => import("@/pages/vendor/promotions"));
+const VendorStaff = lazy(() => import("@/pages/vendor/staff"));
+const VendorInventory = lazy(() => import("@/pages/vendor/inventory"));
+const VendorEarnings = lazy(() => import("@/pages/vendor/earnings"));
+const VendorProfile = lazy(() => import("@/pages/vendor/profile"));
+const VendorAnalytics = lazy(() => import("@/pages/vendor/analytics"));
+const VendorCommission = lazy(() => import("@/pages/vendor/commission"));
+const VendorBusinessSettings = lazy(() => import("@/pages/vendor/business-settings"));
+const AIAssistant = lazy(() => import("@/pages/vendor/ai-assistant"));
 
-import AdminDashboard from "@/pages/admin/admin-dashboard";
-import AdminDispatch from "@/pages/admin/admin-dispatch";
-import DispatchConsoleEnhanced from "@/pages/admin/dispatch-console-enhanced";
-import AdminAnalyticsPage from "@/pages/admin/admin-analytics";
-import AdminOrders from "@/pages/admin/admin-orders";
-import AdminRestaurants from "@/pages/admin/admin-restaurants";
-import AdminUsers from "@/pages/admin/admin-users";
-import VendorApproval from "@/pages/admin/vendor-approval";
-import RiderVerification from "@/pages/admin/rider-verification";
-import SupportTickets from "@/pages/admin/support-tickets";
-import CommissionSettings from "@/pages/admin/commission-settings";
-import DeliveryZones from "@/pages/admin/delivery-zones";
-import PromoManagement from "@/pages/admin/promo-management";
-import FinancialDashboard from "@/pages/admin/financial-dashboard";
-import FraudDashboard from "@/pages/admin/fraud-dashboard";
-import TaxManagement from "@/pages/admin/tax-management";
-import VendorTaxReports from "@/pages/vendor/tax-reports";
+// Admin pages
+const AdminDashboard = lazy(() => import("@/pages/admin/admin-dashboard"));
+const DispatchConsoleEnhanced = lazy(() => import("@/pages/admin/dispatch-console-enhanced"));
+const AdminAnalyticsPage = lazy(() => import("@/pages/admin/admin-analytics"));
+const AdminOrders = lazy(() => import("@/pages/admin/admin-orders"));
+const AdminRestaurants = lazy(() => import("@/pages/admin/admin-restaurants"));
+const AdminUsers = lazy(() => import("@/pages/admin/admin-users"));
+const VendorApproval = lazy(() => import("@/pages/admin/vendor-approval"));
+const RiderVerification = lazy(() => import("@/pages/admin/rider-verification"));
+const SupportTickets = lazy(() => import("@/pages/admin/support-tickets"));
+const CommissionSettings = lazy(() => import("@/pages/admin/commission-settings"));
+const DeliveryZones = lazy(() => import("@/pages/admin/delivery-zones"));
+const PromoManagement = lazy(() => import("@/pages/admin/promo-management"));
+const FinancialDashboard = lazy(() => import("@/pages/admin/financial-dashboard"));
+const FraudDashboard = lazy(() => import("@/pages/admin/fraud-dashboard"));
+const TaxManagement = lazy(() => import("@/pages/admin/tax-management"));
+const AdminRiders = lazy(() => import("@/pages/admin/admin-riders"));
+const VendorTaxReports = lazy(() => import("@/pages/vendor/tax-reports"));
 
-// Customer layout components
+// Layout components (loaded immediately as they're used often)
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { LanguageProvider } from "@/contexts/language-context";
+
+// Loading fallback for lazy components
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-orange-50 to-green-50">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 function CustomerLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -104,28 +118,12 @@ function Router() {
   const { user, isAuthenticated } = useAuth();
 
   return (
+    <Suspense fallback={<PageLoader />}>
     <Switch>
       {/* Public routes - available to everyone */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={MultiStepSignup} />
-      <Route path="/signup-basic" component={Signup} />
-      
-      {/* Root route - redirect based on auth status */}
-      <Route path="/">
-        {isAuthenticated ? (
-          // Redirect authenticated users to their role-specific dashboard
-          <Redirect 
-            to={
-              user?.role === "customer" ? "/customer-dashboard" :
-              user?.role === "vendor" ? "/vendor-dashboard" :
-              user?.role === "rider" ? "/rider-dashboard" :
-              user?.role === "admin" ? "/admin/dispatch" : "/login"
-            } 
-          />
-        ) : (
-          <Landing />
-        )}
-      </Route>
+      <Route path="/signup-basic" component={MultiStepSignup} />
 
       {/* Customer Dashboard */}
       <Route path="/customer-dashboard">
@@ -400,14 +398,6 @@ function Router() {
       <Route path="/admin/dispatch">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
-            <AdminDispatch />
-          </DashboardLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/admin/dispatch-enhanced">
-        <ProtectedRoute allowedRoles={["admin"]}>
-          <DashboardLayout>
             <DispatchConsoleEnhanced />
           </DashboardLayout>
         </ProtectedRoute>
@@ -515,11 +505,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Placeholder routes for remaining admin sections */}
+      {/* Admin Riders Management */}
       <Route path="/admin/riders">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
-            <RiderVerification />
+            <AdminRiders />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
@@ -532,23 +522,45 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* Root route - redirect based on auth status (must be near end to not match other routes) */}
+      <Route path="/">
+        {isAuthenticated ? (
+          <Redirect
+            to={
+              user?.role === "customer" ? "/customer-dashboard" :
+              user?.role === "vendor" ? "/vendor-dashboard" :
+              user?.role === "rider" ? "/rider-dashboard" :
+              user?.role === "admin" ? "/admin-dashboard" : "/login"
+            }
+          />
+        ) : (
+          <Landing />
+        )}
+      </Route>
+
       {/* Fallback for unknown routes */}
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 
 function App() {
+  const [isLoading, setIsLoading] = useState(true);
+
   return (
     <div className="App">
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <Router />
-            <Toaster />
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      {isLoading && <Preloader onLoadComplete={() => setIsLoading(false)} />}
+      {!isLoading && (
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <Router />
+              <Toaster />
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      )}
     </div>
   );
 }

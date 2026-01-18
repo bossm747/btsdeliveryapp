@@ -21,62 +21,100 @@ interface AdminAnalyticsProps {
   stats?: any;
 }
 
+// Type definitions for analytics data
+interface RealTimeMetrics {
+  activeOrders?: number;
+  onlineRiders?: number;
+  todayRevenue?: number;
+  activeRestaurants?: number;
+  avgDeliveryTime?: number;
+  successRate?: number;
+}
+
+interface RevenueAnalytics {
+  total_revenue?: number;
+  delivery_revenue?: number;
+  service_revenue?: number;
+  avg_order_value?: number;
+}
+
+interface OrderAnalytics {
+  total_orders?: number;
+  completed_orders?: number;
+  cancelled_orders?: number;
+  pending_orders?: number;
+}
+
+interface UserAnalytics {
+  total_customers?: number;
+  total_vendors?: number;
+  total_riders?: number;
+  verified_users?: number;
+}
+
+interface RiderAnalytics {
+  total_riders?: number;
+  verified_riders?: number;
+  online_riders?: number;
+  avg_rider_rating?: number;
+}
+
 export default function AdminAnalytics({ stats }: AdminAnalyticsProps) {
   const [timeRange, setTimeRange] = useState("7d");
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Real-time metrics queries
-  const { data: realTimeMetrics, refetch: refetchMetrics } = useQuery({
+  // Real-time metrics queries with proper types
+  const { data: realTimeMetrics = {} as RealTimeMetrics, refetch: refetchMetrics } = useQuery<RealTimeMetrics>({
     queryKey: ["/api/admin/analytics/real-time"],
     refetchInterval: refreshInterval,
   });
 
-  const { data: orderAnalytics } = useQuery({
+  const { data: orderAnalytics = {} as OrderAnalytics } = useQuery<OrderAnalytics>({
     queryKey: ["/api/admin/analytics/orders", timeRange],
   });
 
-  const { data: revenueAnalytics } = useQuery({
+  const { data: revenueAnalytics = {} as RevenueAnalytics } = useQuery<RevenueAnalytics>({
     queryKey: ["/api/admin/analytics/revenue", timeRange],
   });
 
-  const { data: userAnalytics } = useQuery({
+  const { data: userAnalytics = {} as UserAnalytics } = useQuery<UserAnalytics>({
     queryKey: ["/api/admin/analytics/users", timeRange],
   });
 
-  const { data: riderAnalytics } = useQuery({
+  const { data: riderAnalytics = {} as RiderAnalytics } = useQuery<RiderAnalytics>({
     queryKey: ["/api/admin/analytics/riders", timeRange],
   });
 
-  const { data: restaurantAnalytics } = useQuery({
+  const { data: restaurantAnalytics = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/restaurants", timeRange],
   });
 
-  const { data: orderTrends } = useQuery({
+  const { data: orderTrends = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/trends/orders", timeRange],
   });
 
-  const { data: revenueTrends } = useQuery({
+  const { data: revenueTrends = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/trends/revenue", timeRange],
   });
 
-  const { data: serviceBreakdown } = useQuery({
+  const { data: serviceBreakdown = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/service-breakdown", timeRange],
   });
 
-  const { data: topRestaurants } = useQuery({
+  const { data: topRestaurants = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/top-restaurants", timeRange],
   });
 
-  const { data: riderPerformance } = useQuery({
+  const { data: riderPerformance = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/rider-performance", timeRange],
   });
 
-  const { data: geographicAnalytics } = useQuery({
+  const { data: geographicAnalytics = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/analytics/geographic", timeRange],
   });
 
-  const { data: performanceMetrics } = useQuery({
+  const { data: performanceMetrics } = useQuery<any>({
     queryKey: ["/api/admin/analytics/performance", timeRange],
   });
 

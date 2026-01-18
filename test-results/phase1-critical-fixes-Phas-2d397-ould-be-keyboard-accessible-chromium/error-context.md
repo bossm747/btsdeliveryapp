@@ -1,0 +1,97 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - img "PayVerse" [ref=e8]
+        - generic [ref=e9]:
+          - link "Sign In" [ref=e10] [cursor=pointer]:
+            - /url: /auth
+            - button "Sign In" [ref=e11]
+          - link "Get Started" [ref=e12] [cursor=pointer]:
+            - /url: /auth
+            - button "Get Started" [ref=e13]:
+              - text: Get Started
+              - img
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e18]:
+          - img [ref=e20]
+          - generic [ref=e23]:
+            - paragraph [ref=e24]: Sent
+            - paragraph [ref=e25]: ₱2,500.00
+        - generic [ref=e28]:
+          - img [ref=e30]
+          - generic [ref=e32]:
+            - paragraph [ref=e33]: PHPT Balance
+            - paragraph [ref=e34]: 12,450.00
+        - generic [ref=e37]:
+          - img [ref=e39]
+          - generic [ref=e42]:
+            - paragraph [ref=e43]: Received
+            - paragraph [ref=e44]: ₱5,000.00
+        - generic [ref=e47]:
+          - img [ref=e49]
+          - generic [ref=e52]: Mobile Ready
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e59]: Now with Crypto Integration
+          - heading "The Future of Digital Payments" [level=1] [ref=e60]
+          - paragraph [ref=e61]: Send, receive, and manage your money with ease. Experience seamless P2P transfers and crypto trading in one beautiful app.
+          - generic [ref=e62]:
+            - link "Start for Free" [ref=e63] [cursor=pointer]:
+              - /url: /auth
+              - button "Start for Free" [ref=e64]:
+                - text: Start for Free
+                - generic [ref=e65]:
+                  - img
+            - button "Learn More" [ref=e66]:
+              - img
+              - text: Learn More
+        - img [ref=e69]
+    - generic [ref=e72]:
+      - generic [ref=e73]:
+        - heading "Why Choose PayVerse?" [level=2] [ref=e74]
+        - paragraph [ref=e75]: Experience the next generation of digital payments with features designed for the modern world.
+      - generic [ref=e76]:
+        - generic [ref=e78]:
+          - img [ref=e80]
+          - heading "Instant Transfers" [level=3] [ref=e82]
+          - paragraph [ref=e83]: Send money in seconds, not days
+        - generic [ref=e85]:
+          - img [ref=e87]
+          - heading "Bank-Grade Security" [level=3] [ref=e89]
+          - paragraph [ref=e90]: Your funds are always protected
+        - generic [ref=e92]:
+          - img [ref=e94]
+          - heading "Global Access" [level=3] [ref=e97]
+          - paragraph [ref=e98]: Transfer anywhere, anytime
+        - generic [ref=e100]:
+          - img [ref=e102]
+          - heading "Crypto Ready" [level=3] [ref=e104]
+          - paragraph [ref=e105]: Buy, sell, and hold crypto assets
+    - generic [ref=e109]:
+      - heading "Ready to Get Started?" [level=2] [ref=e110]
+      - paragraph [ref=e111]: Join thousands of users who trust PayVerse for their daily transactions.
+      - link "Create Free Account" [ref=e112] [cursor=pointer]:
+        - /url: /auth
+        - button "Create Free Account" [ref=e113]:
+          - text: Create Free Account
+          - img
+    - contentinfo [ref=e114]:
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - img "PayVerse" [ref=e118]
+          - generic [ref=e119]: © 2024 PayVerse. All rights reserved.
+        - generic [ref=e120]:
+          - link "Privacy" [ref=e121] [cursor=pointer]:
+            - /url: "#"
+          - link "Terms" [ref=e122] [cursor=pointer]:
+            - /url: "#"
+          - link "Support" [ref=e123] [cursor=pointer]:
+            - /url: "#"
+```

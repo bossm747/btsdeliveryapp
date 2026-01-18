@@ -11,19 +11,20 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import RiderMapTracking from "@/components/rider/rider-map-tracking";
-import { 
-  MapPin, Package, Clock, DollarSign, Star, TrendingUp, 
+import {
+  MapPin, Package, Clock, DollarSign, Star, TrendingUp,
   Navigation, Phone, CheckCircle, XCircle, AlertCircle,
-  Activity, Zap, Shield, Brain, BarChart3, User, Bell, 
+  Activity, Zap, Shield, Brain, BarChart3, User, Bell,
   Settings, Wallet, ChevronRight, Menu, Home, Map,
   Truck, Target, Award, RotateCcw, Eye, LogOut,
-  Wifi, WifiOff, CircleDot, Plus, Minus
+  Wifi, WifiOff, CircleDot, Plus, Minus, MessageCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import OrderChat, { ChatButton } from "@/components/order-chat";
 
 export default function RiderDashboard() {
   const { user, logout } = useAuth();
@@ -33,6 +34,7 @@ export default function RiderDashboard() {
   const [activeTab, setActiveTab] = useState("home");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [chatOrderId, setChatOrderId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch rider data
@@ -362,6 +364,14 @@ export default function RiderDashboard() {
                     Navigate
                   </Button>
                   <Button
+                    onClick={() => setChatOrderId(delivery.id)}
+                    variant="outline"
+                    size="sm"
+                    className="relative"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </Button>
+                  <Button
                     onClick={() => updateDeliveryStatusMutation.mutate({
                       orderId: delivery.id,
                       status: getNextStatus(delivery.status)
@@ -524,6 +534,15 @@ export default function RiderDashboard() {
       <MobileHeader />
       {renderContent()}
       <BottomNav />
+
+      {/* Chat with Customer */}
+      {chatOrderId && (
+        <OrderChat
+          orderId={chatOrderId}
+          open={!!chatOrderId}
+          onOpenChange={(open) => !open && setChatOrderId(null)}
+        />
+      )}
     </div>
   );
 }

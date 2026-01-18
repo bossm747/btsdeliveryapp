@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MenuBrowserSkeleton } from "@/components/skeletons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,7 +39,7 @@ export default function RestaurantDetail() {
     enabled: !!id,
   });
 
-  const { data: reviews, isLoading: reviewsLoading } = useQuery({
+  const { data: reviews, isLoading: reviewsLoading } = useQuery<any[]>({
     queryKey: ["/api/restaurants", id, "reviews"],
     enabled: !!id,
   });
@@ -50,14 +51,83 @@ export default function RestaurantDetail() {
     return (
       <div className="min-h-screen bg-background py-8" data-testid="restaurant-loading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-32 mb-6" />
+          {/* Back button skeleton */}
+          <Skeleton className="h-10 w-40 mb-6 rounded-md" />
+
           <div className="grid lg:grid-cols-4 gap-8">
             <div className="lg:col-span-3">
-              <Skeleton className="h-64 w-full rounded-xl mb-6" />
-              <Skeleton className="h-96 w-full rounded-xl" />
+              {/* Restaurant header card skeleton */}
+              <div className="mb-8 rounded-xl overflow-hidden border bg-card">
+                {/* Hero image */}
+                <Skeleton className="h-64 w-full rounded-none" />
+
+                {/* Content */}
+                <div className="p-6">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+                    <div className="flex-1">
+                      <Skeleton className="h-9 w-64 mb-3" />
+                      <div className="flex items-center space-x-4 mb-3">
+                        <Skeleton className="h-5 w-24" />
+                        <Skeleton className="h-5 w-4" />
+                        <Skeleton className="h-5 w-28" />
+                        <Skeleton className="h-5 w-4" />
+                        <Skeleton className="h-5 w-8" />
+                      </div>
+                      <Skeleton className="h-16 w-full max-w-2xl" />
+                    </div>
+                    <div className="flex flex-col items-end space-y-3 mt-4 md:mt-0">
+                      <Skeleton className="h-12 w-36 rounded-xl" />
+                      <Skeleton className="h-5 w-32" />
+                    </div>
+                  </div>
+
+                  {/* Quick info grid */}
+                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center space-x-3 p-3 bg-white rounded-lg shadow-sm">
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <div className="flex-1">
+                          <Skeleton className="h-3 w-16 mb-1" />
+                          <Skeleton className="h-5 w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu browser skeleton */}
+              <div className="rounded-xl border bg-card p-6">
+                <div className="flex space-x-2 mb-6">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-24 rounded-md" />
+                  ))}
+                </div>
+                <MenuBrowserSkeleton itemCount={5} />
+              </div>
             </div>
+
+            {/* Cart sidebar skeleton */}
             <div className="lg:col-span-1">
-              <Skeleton className="h-96 w-full rounded-xl" />
+              <div className="sticky top-24">
+                <div className="rounded-xl border bg-card p-6">
+                  <Skeleton className="h-6 w-24 mb-4" />
+                  <div className="space-y-3 mb-6">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                  <Skeleton className="h-px w-full mb-4" />
+                  <div className="flex justify-between items-center mb-6">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-20" />
+                  </div>
+                  <Skeleton className="h-12 w-full rounded-md" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -90,7 +160,7 @@ export default function RestaurantDetail() {
   const isCurrentlyOpen = () => {
     if (!operatingHours) return null;
     const now = new Date();
-    const currentDay = now.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const currentTime = now.toTimeString().slice(0, 5);
     
     const dayHours = operatingHours[currentDay];
@@ -226,7 +296,7 @@ export default function RestaurantDetail() {
                       <h1 className="text-3xl font-bold text-[#004225]" data-testid="restaurant-name">
                         {restaurant.name}
                       </h1>
-                      {restaurant.isVerified && (
+                      {(restaurant as any).isVerified && (
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                           Verified
@@ -369,7 +439,7 @@ export default function RestaurantDetail() {
                       <CardContent className="space-y-3">
                         {operatingHours ? (
                           Object.entries(operatingHours).map(([day, hours]: [string, any]) => {
-                            const isToday = new Date().toLocaleDateString('en-US', { weekday: 'lowercase' }) === day;
+                            const isToday = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === day;
                             const isClosed = hours?.isClosed;
                             
                             return (

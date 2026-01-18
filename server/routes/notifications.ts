@@ -2,7 +2,7 @@
 // Handles push notifications, notification preferences, and notification management
 
 import { Router } from 'express';
-import { authenticateToken, requireAdmin } from '../routes.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { pushNotificationService } from '../integrations/push-notifications.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';

@@ -574,8 +574,9 @@ export default function VendorMenu() {
                 <div>
                   <Label>Item Image</Label>
                   <FileUpload
-                    onUpload={(url) => setNewMenuItem({...newMenuItem, image_url: url})}
-                    accept="image/*"
+                    onUploadComplete={(url: string) => setNewMenuItem({...newMenuItem, image_url: url})}
+                    acceptedTypes="image/*"
+                    uploadType="restaurant"
                     data-testid="upload-item-image"
                   />
                 </div>
@@ -776,7 +777,7 @@ export default function VendorMenu() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Switch
-                        checked={item.isAvailable}
+                        checked={item.isAvailable ?? false}
                         onCheckedChange={(checked) => toggleMenuItemAvailability(item.id, checked)}
                         data-testid={`switch-availability-${item.id}`}
                       />

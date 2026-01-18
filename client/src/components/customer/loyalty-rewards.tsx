@@ -17,22 +17,45 @@ interface LoyaltyRewardsProps {
   userId: string;
 }
 
+interface LoyaltyData {
+  points?: number;
+  lifetimePoints?: number;
+  tier?: string;
+}
+
+interface Reward {
+  id: string;
+  name: string;
+  description: string;
+  pointsCost: number;
+  category: string;
+  isAvailable: boolean;
+}
+
+interface Transaction {
+  id: string;
+  type: string;
+  points: number;
+  description: string;
+  createdAt: string;
+}
+
 export default function LoyaltyRewards({ userId }: LoyaltyRewardsProps) {
   const { toast } = useToast();
   const [selectedReward, setSelectedReward] = useState<any>(null);
 
-  // Fetch user points
-  const { data: loyaltyData } = useQuery({
+  // Fetch user points with proper typing
+  const { data: loyaltyData = {} as LoyaltyData } = useQuery<LoyaltyData>({
     queryKey: [`/api/users/${userId}/loyalty`],
   });
 
-  // Fetch available rewards
-  const { data: rewards = [] } = useQuery({
+  // Fetch available rewards with proper typing
+  const { data: rewards = [] } = useQuery<Reward[]>({
     queryKey: ["/api/rewards"],
   });
 
-  // Fetch points history
-  const { data: transactions = [] } = useQuery({
+  // Fetch points history with proper typing
+  const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: [`/api/users/${userId}/points-history`],
   });
 

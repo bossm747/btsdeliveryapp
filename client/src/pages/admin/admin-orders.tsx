@@ -22,17 +22,27 @@ import { Package, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+interface Order {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  restaurantName: string;
+  totalAmount: string;
+  status: string;
+  createdAt: string;
+}
+
 export default function AdminOrders() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
 
-  // Fetch orders
-  const { data: orders = [], isLoading: ordersLoading, isError: ordersError } = useQuery({
+  // Fetch orders with proper typing
+  const { data: orders = [], isLoading: ordersLoading, isError: ordersError } = useQuery<Order[]>({
     queryKey: ["/api/admin/orders", { status: filterStatus }],
   });
 
-  // Fetch stats
-  const { data: stats = {}, isLoading: statsLoading } = useQuery({
+  // Fetch stats with proper typing
+  const { data: stats = {}, isLoading: statsLoading } = useQuery<Record<string, any>>({
     queryKey: ["/api/admin/stats"],
   });
 

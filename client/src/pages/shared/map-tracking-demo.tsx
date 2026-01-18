@@ -11,7 +11,7 @@ import {
   AlertTriangle, RefreshCw, Maximize2,
   Navigation2, Gauge, TrendingUp, AlertCircle
 } from "lucide-react";
-import DeliveryLiveTracking from "@/components/shared/delivery-live-tracking";
+import RealTimeTracking from "@/components/shared/real-time-tracking";
 import RiderMapTracking from "@/components/rider/rider-map-tracking";
 import GoogleMapsTracking from "@/components/shared/google-maps-tracking";
 
@@ -89,12 +89,8 @@ export default function MapTrackingDemo() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <DeliveryLiveTracking 
+                <RealTimeTracking
                   orderId={demoOrderId}
-                  userRole="customer"
-                  onLocationUpdate={(location) => {
-                    // Location updates are handled internally
-                  }}
                 />
               </CardContent>
             </Card>

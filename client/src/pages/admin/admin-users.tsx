@@ -16,17 +16,26 @@ import { Users, CheckCircle, TrendingUp, BarChart3, Search } from "lucide-react"
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+interface User {
+  id: string;
+  displayName: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+}
+
 export default function AdminUsers() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Fetch users
-  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery({
+  // Fetch users with proper typing
+  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { search: searchTerm }],
   });
 
-  // Fetch stats
-  const { data: stats = {}, isLoading: statsLoading } = useQuery({
+  // Fetch stats with proper typing
+  const { data: stats = {}, isLoading: statsLoading } = useQuery<Record<string, any>>({
     queryKey: ["/api/admin/stats"],
   });
 

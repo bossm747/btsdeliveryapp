@@ -128,10 +128,10 @@ export default function VendorProfile() {
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">Address</p>
                     <p className="text-gray-600 dark:text-gray-400">
-                      {restaurant.address ? 
-                        typeof restaurant.address === 'object' ? 
-                          `${(restaurant.address as any).street}, ${(restaurant.address as any).city}` :
-                          restaurant.address
+                      {restaurant.address ?
+                        typeof restaurant.address === 'object' ?
+                          `${(restaurant.address as any).street || ''}, ${(restaurant.address as any).city || ''}` :
+                          String(restaurant.address)
                         : 'Not provided'
                       }
                     </p>

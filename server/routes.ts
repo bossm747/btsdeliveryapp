@@ -5,6 +5,15 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import {
+  authenticateToken,
+  optionalAuthenticateToken,
+  requireRole,
+  requireAdmin,
+  requireAdminOrVendor,
+  requireAdminOrRider,
+  auditLog
+} from './middleware/auth';
+import {
   insertRestaurantSchema,
   insertMenuCategorySchema,
   insertMenuItemSchema,
@@ -58,7 +67,11 @@ import {
   type VendorOnboardingStatus,
   KYC_DOC_STATUS,
   KYC_DOC_TYPES,
-  VENDOR_KYC_STATUS
+  VENDOR_KYC_STATUS,
+  // Customer Payment Methods
+  customerPaymentMethods,
+  insertCustomerPaymentMethodSchema,
+  type CustomerPaymentMethod
 } from "@shared/schema";
 import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, pool } from "./db";
@@ -67,6 +80,7 @@ import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
 import { enhancedPricingService, pricingService, type OrderType, type VehicleType, type PaymentMethodType } from "./services/pricing";
 import { financialAnalyticsService } from "./services/financial-analytics";
 import * as geminiAI from "./services/gemini";
+import { processAssistantQuery, type AssistantContext } from "./services/ai-assistant";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { gpsTrackingService } from "./gps-tracking";
@@ -84,6 +98,28 @@ import taxRoutes from './routes/tax';
 import fraudRoutes from './routes/fraud';
 import { fraudCheckMiddleware } from './middleware/fraud-check';
 import { registerNexusPayRoutes } from './routes/nexuspay';
+import { chatService } from './services/chat-service';
+import multer from 'multer';
+import { LocalStorageService } from './services/local-storage';
+import { analyzeMenuImage, analyzeImage, createMenuFromAnalysis } from './services/ai-vision';
+
+// Configure multer for memory storage (for AI processing)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 5
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images and PDFs
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
+  }
+});
 
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
@@ -123,129 +159,6 @@ declare global {
     }
   }
 }
-
-// Authentication middleware
-export const authenticateToken = async (req: any, res: any, next: any) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: "Access token required" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
-    // Check if session is still valid
-    const [session] = await db.select()
-      .from(userSessions)
-      .where(eq(userSessions.sessionToken, token));
-    
-    if (!session || new Date() > session.expiresAt) {
-      return res.status(401).json({ message: "Token expired" });
-    }
-
-    // Get user data
-    const [user] = await db.select()
-      .from(users)
-      .where(eq(users.id, decoded.userId));
-
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    // Check if user has verified their email (except for certain endpoints)
-    const allowUnverifiedPaths = [
-      '/api/auth/verify-email', 
-      '/api/auth/resend-verification', 
-      '/api/auth/me',
-      // Allow pending users to complete onboarding steps
-      '/api/user/address',
-      '/api/user/dietary-preferences',
-      '/api/user/notification-preferences',
-      '/api/user/onboarding-status'
-    ];
-    const isAllowedPath = allowUnverifiedPaths.some(path => req.path.startsWith(path));
-    
-    if (!isAllowedPath && user.status === "pending" && !user.emailVerifiedAt) {
-      return res.status(403).json({ 
-        message: "Email verification required. Please verify your email address to access this feature.",
-        requiresEmailVerification: true 
-      });
-    }
-
-    req.user = user;
-    req.sessionId = session.id;
-    next();
-  } catch (error) {
-    return res.status(403).json({ message: "Invalid token" });
-  }
-};
-
-// Role-based access control middleware
-export const requireRole = (allowedRoles: string[]) => {
-  return (req: any, res: any, next: any) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        message: "Insufficient permissions",
-        required: allowedRoles,
-        current: req.user.role
-      });
-    }
-
-    next();
-  };
-};
-
-// Admin-only middleware
-export const requireAdmin = requireRole(['admin']);
-
-// Admin or vendor middleware
-export const requireAdminOrVendor = requireRole(['admin', 'vendor']);
-
-// Admin or rider middleware  
-export const requireAdminOrRider = requireRole(['admin', 'rider']);
-
-// Audit logging middleware for admin actions
-export const auditLog = (action: string, resource: string) => {
-  return async (req: any, res: any, next: any) => {
-    const originalSend = res.send;
-    
-    res.send = function(body: any) {
-      // Log the admin action if it was successful (200-299 status)
-      if (res.statusCode >= 200 && res.statusCode < 300 && req.user?.role === 'admin') {
-        // Import adminAuditLogs here to avoid circular dependency
-        const { adminAuditLogs } = require("@shared/schema");
-        
-        db.insert(adminAuditLogs).values({
-          adminUserId: req.user.id,
-          action,
-          resource,
-          resourceId: req.params.id || req.body?.id || 'unknown',
-          details: {
-            method: req.method,
-            path: req.path,
-            body: req.body,
-            query: req.query,
-            params: req.params
-          },
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        }).catch((error) => {
-          console.error('Failed to log admin action:', error);
-        });
-      }
-      
-      return originalSend.call(this, body);
-    };
-    
-    next();
-  };
-};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -329,14 +242,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create session for continued onboarding
-      const sessionToken = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+      // Access token is short-lived (15 minutes), refresh token lasts 30 days
+      const sessionToken = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '15m' });
       const refreshToken = jwt.sign({ userId: newUser.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
-      
+
       await db.insert(userSessions).values({
         userId: newUser.id,
         sessionToken,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for session
         deviceInfo: {
           userAgent: req.headers['user-agent'],
           ip: req.ip
@@ -350,6 +264,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Account created successfully! Please check your email to verify your account.",
         user: userResponse,
         token: sessionToken,
+        refreshToken: refreshToken,
+        expiresIn: 15 * 60, // 15 minutes in seconds
         requiresEmailVerification: true,
         onboardingStep: "personal_info"
       });
@@ -396,14 +312,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create session
-      const sessionToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      // Access token is short-lived (15 minutes), refresh token lasts 30 days
+      const sessionToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
-      
+
       await db.insert(userSessions).values({
         userId: user.id,
         sessionToken,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for session
         deviceInfo: {
           userAgent: req.headers['user-agent'],
           ip: req.ip
@@ -421,7 +338,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         message: "Login successful",
         user: userResponse,
-        token: sessionToken
+        token: sessionToken,
+        refreshToken: refreshToken,
+        expiresIn: 15 * 60 // 15 minutes in seconds
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -450,6 +369,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Logged out successfully" });
     } catch (error) {
       console.error("Logout error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Token Refresh endpoint
+  app.post("/api/auth/refresh", async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(400).json({ message: "Refresh token is required" });
+      }
+
+      // Verify the refresh token
+      let decoded: any;
+      try {
+        decoded = jwt.verify(refreshToken, JWT_SECRET) as any;
+      } catch (jwtError: any) {
+        if (jwtError.name === 'TokenExpiredError') {
+          return res.status(401).json({ message: "Refresh token expired", code: "REFRESH_TOKEN_EXPIRED" });
+        }
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      // Ensure it's a refresh token (has type: 'refresh')
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({ message: "Invalid token type" });
+      }
+
+      // Find the session by refresh token
+      const [session] = await db.select()
+        .from(userSessions)
+        .where(eq(userSessions.refreshToken, refreshToken));
+
+      if (!session) {
+        return res.status(401).json({ message: "Session not found" });
+      }
+
+      // Get user data
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.id, decoded.userId));
+
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      // Check if user is still active
+      if (user.status !== "active" && user.status !== "pending") {
+        return res.status(401).json({ message: "Account is suspended or inactive" });
+      }
+
+      // Generate new access token (short-lived: 15 minutes)
+      const newAccessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+
+      // Rotate refresh token for enhanced security
+      const newRefreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
+
+      // Update session with new tokens
+      await db.update(userSessions)
+        .set({
+          sessionToken: newAccessToken,
+          refreshToken: newRefreshToken,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for session
+          lastActiveAt: new Date(),
+          deviceInfo: {
+            ...(session.deviceInfo as any || {}),
+            lastRefresh: new Date().toISOString(),
+            userAgent: req.headers['user-agent'],
+            ip: req.ip
+          }
+        })
+        .where(eq(userSessions.id, session.id));
+
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+
+      res.json({
+        message: "Token refreshed successfully",
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        expiresIn: 15 * 60, // 15 minutes in seconds
+        user: userResponse
+      });
+    } catch (error) {
+      console.error("Token refresh error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -671,7 +676,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
-      res.json(user);
+      // Filter out sensitive data before sending response
+      const { passwordHash: _, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
       console.error("Error creating user:", error);
       res.status(400).json({ message: "Invalid user data" });
@@ -684,7 +691,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json(user);
+      // Filter out sensitive data before sending response
+      const { passwordHash: _, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -1020,11 +1029,254 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       const orderData = insertOrderSchema.parse(req.body);
-      const order = await storage.createOrder(orderData);
+
+      // Validate scheduledFor if provided (pre-order scheduling)
+      if (orderData.scheduledFor) {
+        const scheduledTime = new Date(orderData.scheduledFor);
+        const now = new Date();
+        const minTime = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+        const maxTime = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours from now
+
+        if (scheduledTime < minTime) {
+          return res.status(400).json({
+            message: "Scheduled delivery time must be at least 1 hour from now",
+            code: "SCHEDULED_TIME_TOO_SOON"
+          });
+        }
+
+        if (scheduledTime > maxTime) {
+          return res.status(400).json({
+            message: "Scheduled delivery time cannot be more than 48 hours in advance",
+            code: "SCHEDULED_TIME_TOO_FAR"
+          });
+        }
+      }
+
+      // PAYMENT-ORDER RACE CONDITION FIX:
+      // For online payment methods, create order with 'payment_pending' status
+      // This prevents vendor notification before payment is confirmed
+      // For COD (cash on delivery), use normal 'pending' status
+      const paymentMethod = orderData.paymentMethod?.toLowerCase() || 'cash';
+      const paymentProvider = orderData.paymentProvider?.toLowerCase() || 'cash';
+      const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod' || paymentProvider === 'cod';
+
+      // Set initial status based on payment method
+      const initialStatus = isCOD ? 'pending' : 'payment_pending';
+      const orderDataWithStatus = {
+        ...orderData,
+        status: initialStatus,
+        paymentPendingAt: isCOD ? null : new Date(),
+      };
+
+      const order = await storage.createOrder(orderDataWithStatus);
+
+      // Only notify vendor immediately for COD orders
+      // Online payment orders will notify vendor after payment confirmation
+      if (isCOD) {
+        console.log(`[Order ${order.id}] COD order created, notifying vendor immediately`);
+        // Note: Vendor notification happens via WebSocket broadcast in the enhanced order endpoint
+      } else {
+        console.log(`[Order ${order.id}] Online payment order created with payment_pending status, waiting for payment confirmation`);
+      }
+
       res.status(201).json(order);
     } catch (error) {
       console.error("Error creating order:", error);
       res.status(400).json({ message: "Invalid order data" });
+    }
+  });
+
+  // ============= ORDER MODIFICATION ENDPOINT =============
+
+  /**
+   * Modify an order within the 2-minute modification window
+   * Allows customers to add/remove items, update quantities, change delivery instructions
+   * Only works for orders with status 'pending' or 'confirmed' (not yet preparing)
+   */
+  app.patch("/api/orders/:orderId/modify", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const { items, specialInstructions, deliveryAddress, customerNotes } = req.body;
+
+      // Get the order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify user owns this order
+      if (order.customerId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "You don't have permission to modify this order" });
+      }
+
+      // Check modification window (2 minutes = 120,000 ms)
+      const MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
+      const orderCreatedAt = new Date(order.createdAt!).getTime();
+      const now = Date.now();
+      const elapsed = now - orderCreatedAt;
+      const remainingMs = Math.max(0, MODIFICATION_WINDOW_MS - elapsed);
+
+      if (remainingMs <= 0) {
+        return res.status(400).json({
+          message: "Modification window has expired",
+          code: "MODIFICATION_WINDOW_EXPIRED",
+          windowExpiredAt: new Date(orderCreatedAt + MODIFICATION_WINDOW_MS).toISOString()
+        });
+      }
+
+      // Check if order status allows modification (only pending or confirmed)
+      const modifiableStatuses = ['pending', 'confirmed'];
+      if (!modifiableStatuses.includes(order.status)) {
+        return res.status(400).json({
+          message: `Order cannot be modified. Current status: ${order.status}`,
+          code: "ORDER_STATUS_NOT_MODIFIABLE",
+          currentStatus: order.status
+        });
+      }
+
+      // Build update object
+      const updates: any = {
+        updatedAt: new Date()
+      };
+
+      // Update items and recalculate pricing if items are provided
+      if (items && Array.isArray(items) && items.length > 0) {
+        // Validate items
+        for (const item of items) {
+          if (!item.name || !item.price || !item.quantity || item.quantity < 1) {
+            return res.status(400).json({
+              message: "Invalid item data. Each item must have name, price, and quantity >= 1",
+              code: "INVALID_ITEM_DATA"
+            });
+          }
+        }
+
+        // Calculate new subtotal
+        const newSubtotal = items.reduce((sum: number, item: any) => {
+          return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+
+        // Recalculate total (keeping existing delivery fee, service fee, tax, tip, discount)
+        const deliveryFee = parseFloat(order.deliveryFee) || 0;
+        const serviceFee = parseFloat(order.serviceFee || '0') || 0;
+        const tax = parseFloat(order.tax || '0') || 0;
+        const tip = parseFloat(order.tip || '0') || 0;
+        const discount = parseFloat(order.discount || '0') || 0;
+
+        const newTotal = newSubtotal + deliveryFee + serviceFee + tax + tip - discount;
+
+        updates.items = items;
+        updates.subtotal = newSubtotal.toFixed(2);
+        updates.totalAmount = newTotal.toFixed(2);
+      }
+
+      // Update special instructions if provided
+      if (specialInstructions !== undefined) {
+        updates.specialInstructions = specialInstructions;
+      }
+
+      // Update customer notes if provided
+      if (customerNotes !== undefined) {
+        updates.customerNotes = customerNotes;
+      }
+
+      // Update delivery address if provided and order hasn't been picked up yet
+      if (deliveryAddress && !['picked_up', 'in_transit', 'delivered', 'completed'].includes(order.status)) {
+        updates.deliveryAddress = deliveryAddress;
+      }
+
+      // Update the order
+      const updatedOrder = await storage.updateOrder(orderId, updates);
+
+      if (!updatedOrder) {
+        return res.status(500).json({ message: "Failed to update order" });
+      }
+
+      // Notify via WebSocket about the modification
+      wsManager.broadcastOrderStatusUpdate({
+        orderId: updatedOrder.id,
+        status: updatedOrder.status,
+        previousStatus: updatedOrder.status,
+        message: 'Order has been modified by customer',
+        estimatedDelivery: updatedOrder.estimatedDeliveryTime?.toString(),
+        timestamp: new Date().toISOString(),
+        modificationType: 'customer_modification'
+      });
+
+      // Notify vendor about the modification
+      const restaurant = await storage.getRestaurant(updatedOrder.restaurantId);
+      if (restaurant) {
+        wsManager.broadcastVendorAlert({
+          type: 'order_modified',
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber || updatedOrder.id,
+          vendorId: restaurant.id,
+          data: {
+            status: updatedOrder.status,
+            totalAmount: updatedOrder.totalAmount,
+            message: 'Customer modified their order',
+            modifications: {
+              itemsChanged: !!items,
+              instructionsChanged: specialInstructions !== undefined,
+              addressChanged: !!deliveryAddress
+            }
+          },
+          urgency: 'high',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      res.json({
+        ...updatedOrder,
+        modificationWindow: {
+          remainingSeconds: Math.floor(remainingMs / 1000),
+          expiresAt: new Date(orderCreatedAt + MODIFICATION_WINDOW_MS).toISOString()
+        }
+      });
+    } catch (error) {
+      console.error("Error modifying order:", error);
+      res.status(500).json({ message: "Failed to modify order" });
+    }
+  });
+
+  /**
+   * Check if an order can be modified (modification window status)
+   */
+  app.get("/api/orders/:orderId/can-modify", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify user owns this order or is admin
+      if (order.customerId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "You don't have permission to check this order" });
+      }
+
+      const MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
+      const orderCreatedAt = new Date(order.createdAt!).getTime();
+      const elapsed = Date.now() - orderCreatedAt;
+      const remainingMs = Math.max(0, MODIFICATION_WINDOW_MS - elapsed);
+      const remainingSeconds = Math.floor(remainingMs / 1000);
+
+      const modifiableStatuses = ['pending', 'confirmed'];
+      const canModify = remainingMs > 0 && modifiableStatuses.includes(order.status);
+
+      res.json({
+        canModify,
+        remainingSeconds,
+        expiresAt: new Date(orderCreatedAt + MODIFICATION_WINDOW_MS).toISOString(),
+        status: order.status,
+        reason: !canModify
+          ? (remainingMs <= 0 ? 'Modification window expired' : `Order status is ${order.status}`)
+          : null
+      });
+    } catch (error) {
+      console.error("Error checking order modification status:", error);
+      res.status(500).json({ message: "Failed to check modification status" });
     }
   });
 
@@ -1495,7 +1747,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Create NexusPay payment
-      const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+      // Use PUBLIC_APP_URL for production, fallback to request host
+      const baseUrl = process.env.PUBLIC_APP_URL || `https://${req.get('host')}`;
       const webhookUrl = `${baseUrl}/api/payment/webhook`;
       const redirectUrl = `${baseUrl}/order/${orderId}/payment-result`;
 
@@ -1600,25 +1853,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function handlePaymentSuccess(transactionId: string, provider: 'nexuspay', data: any) {
     try {
       // Find order with this transaction ID
-      const orders = await storage.getOrders();
-      const order = orders.find(o => o.paymentTransactionId === transactionId);
-      
+      const allOrders = await storage.getOrders();
+      const order = allOrders.find(o => o.paymentTransactionId === transactionId);
+
       if (order) {
-        // Update order payment status
+        // Idempotent check: if already paid, skip processing
+        if (order.paymentStatus === 'paid') {
+          console.log(`[Order ${order.id}] Payment already processed (duplicate webhook), skipping`);
+          return;
+        }
+
+        // PAYMENT-ORDER RACE CONDITION FIX:
+        // Now that payment is confirmed, transition from payment_pending to pending
+        const wasPaymentPending = order.status === 'payment_pending';
+        const newStatus = wasPaymentPending ? 'pending' : order.status;
+
+        // Update order payment status AND order status
         await storage.updateOrder(order.id, {
           paymentStatus: 'paid',
-          paidAt: new Date().toISOString(),
+          paidAt: new Date(),
+          paymentConfirmedAt: new Date(),
+          status: newStatus,
         });
 
-        // Broadcast payment success via WebSocket
-        broadcastToClients('payment_success', {
+        // If order was payment_pending, NOW notify the vendor
+        if (wasPaymentPending) {
+          console.log(`[Order ${order.id}] Payment confirmed, transitioning from payment_pending to pending`);
+
+          // Create SLA tracking now that order is active
+          try {
+            await storage.createOrderSlaTracking({
+              orderId: order.id,
+              deliveryTimeSla: 45 * 60, // 45 minutes
+              vendorAcceptanceSla: 5 * 60, // 5 minutes
+              preparationTimeSla: 20 * 60, // 20 minutes
+              pickupTimeSla: 10 * 60 // 10 minutes
+            });
+          } catch (slaError) {
+            console.error(`[Order ${order.id}] Failed to create SLA tracking:`, slaError);
+          }
+
+          // NOW notify the vendor via WebSocket - this is the key fix!
+          broadcastToSubscribers('new_order', {
+            orderId: order.id,
+            restaurantId: order.restaurantId,
+            orderType: order.orderType,
+            totalAmount: order.totalAmount,
+            paymentConfirmed: true
+          });
+
+          // Send vendor alert via WebSocket manager
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          if (restaurant) {
+            wsManager.broadcastVendorAlert({
+              type: 'new_order',
+              orderId: order.id,
+              orderNumber: order.orderNumber || order.id,
+              vendorId: restaurant.id,
+              data: {
+                orderType: order.orderType,
+                totalAmount: order.totalAmount,
+                items: order.items,
+                paymentMethod: order.paymentMethod,
+                paymentStatus: 'paid',
+                deliveryAddress: order.deliveryAddress
+              },
+              urgency: 'high',
+              timestamp: new Date().toISOString()
+            });
+            console.log(`[Order ${order.id}] Vendor ${restaurant.id} notified of new order`);
+          }
+
+          // Notify customer that payment was successful and order is now active
+          wsManager.broadcastToChannel(`order:${order.id}`, {
+            type: 'order_activated',
+            orderId: order.id,
+            status: 'pending',
+            message: 'Payment confirmed! Your order is now being processed.',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        // Broadcast payment success via WebSocket (for all listeners)
+        broadcastToSubscribers('payment_success', {
           orderId: order.id,
           transactionId,
           amount: data.amount,
-          provider
+          provider,
+          orderActivated: wasPaymentPending
         });
 
-        console.log(`Payment successful for order ${order.id}: ${transactionId}`);
+        console.log(`[Order ${order.id}] Payment successful: ${transactionId}${wasPaymentPending ? ' (order now active)' : ''}`);
       }
     } catch (error) {
       console.error('Error handling payment success:', error);
@@ -1627,24 +1952,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function handlePaymentFailure(transactionId: string, provider: 'nexuspay', data: any) {
     try {
-      const orders = await storage.getOrders();
-      const order = orders.find(o => o.paymentTransactionId === transactionId);
-      
+      const allOrders = await storage.getOrders();
+      const order = allOrders.find(o => o.paymentTransactionId === transactionId);
+
       if (order) {
+        // PAYMENT-ORDER RACE CONDITION FIX:
+        // If payment fails and order was payment_pending, cancel the order
+        const wasPaymentPending = order.status === 'payment_pending';
+
         await storage.updateOrder(order.id, {
           paymentStatus: 'failed',
           paymentFailureReason: data.error,
+          // If order was waiting for payment, mark as cancelled
+          status: wasPaymentPending ? 'cancelled' : order.status,
         });
 
+        // Release any reserved inventory if order was payment_pending
+        if (wasPaymentPending && order.items) {
+          try {
+            await storage.releaseInventory(order.restaurantId, order.items as any[]);
+            console.log(`[Order ${order.id}] Released inventory after payment failure`);
+          } catch (inventoryError) {
+            console.error(`[Order ${order.id}] Failed to release inventory:`, inventoryError);
+          }
+        }
+
         // Broadcast payment failure via WebSocket
-        broadcastToClients('payment_failed', {
+        broadcastToSubscribers('payment_failed', {
           orderId: order.id,
           transactionId,
           error: data.error,
-          provider
+          provider,
+          orderCancelled: wasPaymentPending
         });
 
-        console.log(`Payment failed for order ${order.id}: ${data.error}`);
+        // Notify customer about payment failure
+        wsManager.broadcastToChannel(`order:${order.id}`, {
+          type: 'payment_failed',
+          orderId: order.id,
+          status: wasPaymentPending ? 'cancelled' : order.status,
+          message: 'Payment failed. Please try again or choose a different payment method.',
+          error: data.error,
+          timestamp: new Date().toISOString()
+        });
+
+        console.log(`[Order ${order.id}] Payment failed: ${data.error}${wasPaymentPending ? ' (order cancelled)' : ''}`);
       }
     } catch (error) {
       console.error('Error handling payment failure:', error);
@@ -1653,27 +2005,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function handlePaymentCancellation(transactionId: string, provider: 'nexuspay') {
     try {
-      const orders = await storage.getOrders();
-      const order = orders.find(o => o.paymentTransactionId === transactionId);
-      
+      const allOrders = await storage.getOrders();
+      const order = allOrders.find(o => o.paymentTransactionId === transactionId);
+
       if (order) {
+        // PAYMENT-ORDER RACE CONDITION FIX:
+        // If payment cancelled and order was payment_pending, cancel the order
+        const wasPaymentPending = order.status === 'payment_pending';
+
         await storage.updateOrder(order.id, {
           paymentStatus: 'canceled',
+          // If order was waiting for payment, mark as cancelled
+          status: wasPaymentPending ? 'cancelled' : order.status,
         });
+
+        // Release any reserved inventory if order was payment_pending
+        if (wasPaymentPending && order.items) {
+          try {
+            await storage.releaseInventory(order.restaurantId, order.items as any[]);
+            console.log(`[Order ${order.id}] Released inventory after payment cancellation`);
+          } catch (inventoryError) {
+            console.error(`[Order ${order.id}] Failed to release inventory:`, inventoryError);
+          }
+        }
 
         // Broadcast payment cancellation via WebSocket
-        broadcastToClients('payment_canceled', {
+        broadcastToSubscribers('payment_canceled', {
           orderId: order.id,
           transactionId,
-          provider
+          provider,
+          orderCancelled: wasPaymentPending
         });
 
-        console.log(`Payment canceled for order ${order.id}`);
+        // Notify customer about payment cancellation
+        wsManager.broadcastToChannel(`order:${order.id}`, {
+          type: 'payment_cancelled',
+          orderId: order.id,
+          status: wasPaymentPending ? 'cancelled' : order.status,
+          message: 'Payment was cancelled. You can retry or place a new order.',
+          timestamp: new Date().toISOString()
+        });
+
+        console.log(`[Order ${order.id}] Payment canceled${wasPaymentPending ? ' (order cancelled)' : ''}`);
       }
     } catch (error) {
       console.error('Error handling payment cancellation:', error);
     }
   }
+
+  // ============= PAYMENT CONFIRMATION ENDPOINT =============
+  // Manual payment confirmation endpoint (for retries or alternative verification)
+  // This is used when the webhook might have failed or for manual admin confirmation
+  app.post("/api/payment/confirm/:orderId", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const { transactionId, verificationCode } = req.body;
+
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify user owns this order or is admin
+      if (order.customerId !== req.user?.id && req.user?.role !== 'admin') {
+        return res.status(403).json({ message: "Not authorized to confirm this payment" });
+      }
+
+      // Only allow confirmation for payment_pending orders
+      if (order.status !== 'payment_pending') {
+        return res.status(400).json({
+          message: `Order is not in payment_pending status. Current status: ${order.status}`,
+          code: "INVALID_ORDER_STATUS"
+        });
+      }
+
+      // Verify with payment provider if transactionId provided
+      if (transactionId || order.paymentTransactionId) {
+        const txnId = transactionId || order.paymentTransactionId;
+        try {
+          const paymentStatus = await nexusPayService.getTransactionDetails(txnId);
+          if (paymentStatus.status !== 'success' && paymentStatus.status !== 'paid') {
+            return res.status(400).json({
+              message: "Payment not yet confirmed by payment provider",
+              providerStatus: paymentStatus.status,
+              code: "PAYMENT_NOT_CONFIRMED"
+            });
+          }
+        } catch (verifyError) {
+          console.error(`[Order ${orderId}] Failed to verify payment with provider:`, verifyError);
+          // If admin and has verification code, allow manual override
+          if (req.user?.role !== 'admin' || !verificationCode) {
+            return res.status(400).json({
+              message: "Unable to verify payment with provider",
+              code: "VERIFICATION_FAILED"
+            });
+          }
+          console.log(`[Order ${orderId}] Admin override with verification code`);
+        }
+      }
+
+      // Transition order from payment_pending to pending
+      await storage.updateOrder(orderId, {
+        status: 'pending',
+        paymentStatus: 'paid',
+        paymentConfirmedAt: new Date(),
+        paidAt: new Date(),
+      });
+
+      // Create SLA tracking
+      try {
+        await storage.createOrderSlaTracking({
+          orderId: order.id,
+          deliveryTimeSla: 45 * 60,
+          vendorAcceptanceSla: 5 * 60,
+          preparationTimeSla: 20 * 60,
+          pickupTimeSla: 10 * 60
+        });
+      } catch (slaError) {
+        console.error(`[Order ${orderId}] Failed to create SLA tracking:`, slaError);
+      }
+
+      // Notify vendor
+      broadcastToSubscribers('new_order', {
+        orderId: order.id,
+        restaurantId: order.restaurantId,
+        orderType: order.orderType,
+        totalAmount: order.totalAmount,
+        paymentConfirmed: true
+      });
+
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+      if (restaurant) {
+        wsManager.broadcastVendorAlert({
+          type: 'new_order',
+          orderId: order.id,
+          orderNumber: order.orderNumber || order.id,
+          vendorId: restaurant.id,
+          data: {
+            orderType: order.orderType,
+            totalAmount: order.totalAmount,
+            items: order.items,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: 'paid',
+            deliveryAddress: order.deliveryAddress
+          },
+          urgency: 'high',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Notify customer
+      wsManager.broadcastToChannel(`order:${orderId}`, {
+        type: 'order_activated',
+        orderId: order.id,
+        status: 'pending',
+        message: 'Payment confirmed! Your order is now being processed.',
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[Order ${orderId}] Payment manually confirmed by ${req.user?.role || 'user'}`);
+
+      const updatedOrder = await storage.getOrder(orderId);
+      res.json({
+        success: true,
+        message: "Payment confirmed and order activated",
+        order: updatedOrder
+      });
+    } catch (error) {
+      console.error("Error confirming payment:", error);
+      res.status(500).json({ message: "Failed to confirm payment" });
+    }
+  });
+
+  // ============= PAYMENT PENDING ORDER STATUS CHECK =============
+  // Endpoint for client to poll order status after payment redirect
+  app.get("/api/orders/:orderId/payment-status", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const order = await storage.getOrder(orderId);
+
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      res.json({
+        orderId: order.id,
+        orderStatus: order.status,
+        paymentStatus: order.paymentStatus,
+        isPaymentPending: order.status === 'payment_pending',
+        isActive: order.status === 'pending' && order.paymentStatus === 'paid',
+        paymentPendingAt: order.paymentPendingAt,
+        paymentConfirmedAt: order.paymentConfirmedAt,
+      });
+    } catch (error) {
+      console.error("Error checking payment status:", error);
+      res.status(500).json({ message: "Failed to check payment status" });
+    }
+  });
 
   // Enhanced Payment Status Check - Supports both providers
   app.get("/api/payment/status/:transactionId", async (req, res) => {
@@ -2459,7 +2987,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Create NexusPay payment
-      const baseUrl = process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://localhost:5000';
+      // Use PUBLIC_APP_URL for production, fallback to request host
+      const baseUrl = process.env.PUBLIC_APP_URL || `https://${req.get('host')}`;
       const webhookUrl = `${baseUrl}/api/payment/webhook`;
       const redirectUrl = `${baseUrl}/order/${validatedData.orderId}/payment-result`;
 
@@ -2902,6 +3431,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== BATCH ROUTE PREVIEW ====================
+  // Get batch preview data for riders to review before accepting
+  app.get("/api/rider/batch-preview/:batchId", async (req, res) => {
+    try {
+      const { batchId } = req.params;
+
+      // For demo/development: Generate mock batch preview data
+      // In production, this would query the dispatchBatches and dispatchBatchOrders tables
+
+      // Get the rider's current location from request or use default
+      const riderLat = parseFloat(req.query.lat as string) || 13.7565;
+      const riderLng = parseFloat(req.query.lng as string) || 121.0583;
+
+      // Get pending orders that could form a batch
+      const pendingOrders = await db
+        .select({
+          order: orders,
+          restaurant: restaurants,
+          customer: users,
+        })
+        .from(orders)
+        .leftJoin(restaurants, eq(orders.restaurantId, restaurants.id))
+        .leftJoin(users, eq(orders.customerId, users.id))
+        .where(
+          and(
+            eq(orders.status, "ready"),
+            isNull(orders.riderId)
+          )
+        )
+        .limit(3);
+
+      if (pendingOrders.length === 0) {
+        // Generate mock data for demo
+        const mockOrders = [
+          {
+            id: 'order-1',
+            orderNumber: 'ORD-1001',
+            restaurantName: 'Lomi King',
+            restaurantAddress: '123 Main St, Batangas City',
+            restaurantLocation: { lat: riderLat + 0.01, lng: riderLng + 0.005, address: '123 Main St, Batangas City' },
+            customerName: 'Juan Dela Cruz',
+            deliveryAddress: '456 Rizal Ave, Batangas City',
+            deliveryLocation: { lat: riderLat + 0.02, lng: riderLng + 0.01, address: '456 Rizal Ave, Batangas City' },
+            items: 3,
+            earnings: 65,
+            tip: 20,
+            priority: 'normal' as const,
+          },
+          {
+            id: 'order-2',
+            orderNumber: 'ORD-1002',
+            restaurantName: 'Bulalo Express',
+            restaurantAddress: '789 Mabini St, Batangas City',
+            restaurantLocation: { lat: riderLat + 0.015, lng: riderLng + 0.008, address: '789 Mabini St, Batangas City' },
+            customerName: 'Maria Santos',
+            deliveryAddress: '101 Bonifacio St, Batangas City',
+            deliveryLocation: { lat: riderLat + 0.025, lng: riderLng + 0.015, address: '101 Bonifacio St, Batangas City' },
+            items: 2,
+            earnings: 55,
+            tip: 15,
+            priority: 'high' as const,
+          },
+        ];
+
+        const stops = [
+          {
+            type: 'pickup' as const,
+            orderId: 'order-1',
+            orderNumber: 'ORD-1001',
+            sequence: 1,
+            name: 'Lomi King',
+            address: '123 Main St, Batangas City',
+            location: mockOrders[0].restaurantLocation,
+            estimatedArrival: 5,
+            distanceFromPrevious: 1.2,
+          },
+          {
+            type: 'pickup' as const,
+            orderId: 'order-2',
+            orderNumber: 'ORD-1002',
+            sequence: 2,
+            name: 'Bulalo Express',
+            address: '789 Mabini St, Batangas City',
+            location: mockOrders[1].restaurantLocation,
+            estimatedArrival: 10,
+            distanceFromPrevious: 0.8,
+          },
+          {
+            type: 'delivery' as const,
+            orderId: 'order-1',
+            orderNumber: 'ORD-1001',
+            sequence: 3,
+            name: 'Juan Dela Cruz',
+            address: '456 Rizal Ave, Batangas City',
+            location: mockOrders[0].deliveryLocation,
+            estimatedArrival: 18,
+            distanceFromPrevious: 1.5,
+          },
+          {
+            type: 'delivery' as const,
+            orderId: 'order-2',
+            orderNumber: 'ORD-1002',
+            sequence: 4,
+            name: 'Maria Santos',
+            address: '101 Bonifacio St, Batangas City',
+            location: mockOrders[1].deliveryLocation,
+            estimatedArrival: 25,
+            distanceFromPrevious: 1.0,
+          },
+        ];
+
+        return res.json({
+          batchId,
+          batchNumber: `BATCH-${Date.now().toString(36).toUpperCase()}`,
+          orders: mockOrders,
+          route: {
+            stops,
+            totalDistance: 4.5,
+            totalDuration: 25,
+          },
+          earnings: {
+            basePay: 120,
+            tips: 35,
+            batchBonus: 25,
+            total: 180,
+          },
+          expiresAt: new Date(Date.now() + 120000).toISOString(),
+        });
+      }
+
+      // Build batch preview from actual orders
+      const batchOrders = pendingOrders.map((po, index) => {
+        const restaurantAddr = po.restaurant?.address as any || {};
+        const deliveryAddr = po.order.deliveryAddress as any || {};
+
+        return {
+          id: po.order.id,
+          orderNumber: po.order.orderNumber,
+          restaurantName: po.restaurant?.name || 'Unknown Restaurant',
+          restaurantAddress: restaurantAddr.formatted || restaurantAddr.street || 'Restaurant Address',
+          restaurantLocation: {
+            lat: restaurantAddr.lat || riderLat + 0.01 * (index + 1),
+            lng: restaurantAddr.lng || riderLng + 0.005 * (index + 1),
+            address: restaurantAddr.formatted || 'Restaurant Address',
+          },
+          customerName: po.customer ? `${po.customer.firstName} ${po.customer.lastName}` : 'Customer',
+          deliveryAddress: deliveryAddr.formatted || deliveryAddr.street || 'Delivery Address',
+          deliveryLocation: {
+            lat: deliveryAddr.lat || riderLat + 0.02 * (index + 1),
+            lng: deliveryAddr.lng || riderLng + 0.01 * (index + 1),
+            address: deliveryAddr.formatted || 'Delivery Address',
+          },
+          items: (po.order as any).items?.length || Math.floor(Math.random() * 5) + 1,
+          earnings: parseFloat(po.order.totalAmount) * 0.15 || 50,
+          tip: Math.floor(Math.random() * 30) + 10,
+          priority: (po.order.orderPriority || 1) > 2 ? 'high' as const : 'normal' as const,
+        };
+      });
+
+      // Build optimized route stops
+      const stops: any[] = [];
+      let sequence = 1;
+      let totalDistance = 0;
+      let totalDuration = 0;
+
+      // Add all pickups first
+      batchOrders.forEach((order, index) => {
+        const distFromPrev = index === 0 ? 1.2 : 0.8;
+        const arrivalTime = index === 0 ? 5 : 5 * (index + 1);
+        totalDistance += distFromPrev;
+        totalDuration = arrivalTime;
+
+        stops.push({
+          type: 'pickup',
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          sequence: sequence++,
+          name: order.restaurantName,
+          address: order.restaurantAddress,
+          location: order.restaurantLocation,
+          estimatedArrival: arrivalTime,
+          distanceFromPrevious: distFromPrev,
+        });
+      });
+
+      // Then add all deliveries
+      batchOrders.forEach((order, index) => {
+        const distFromPrev = 1.5 - index * 0.2;
+        totalDistance += distFromPrev;
+        totalDuration += 7;
+
+        stops.push({
+          type: 'delivery',
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          sequence: sequence++,
+          name: order.customerName,
+          address: order.deliveryAddress,
+          location: order.deliveryLocation,
+          estimatedArrival: totalDuration,
+          distanceFromPrevious: Math.max(0.5, distFromPrev),
+        });
+      });
+
+      // Calculate earnings
+      const basePay = batchOrders.reduce((sum, o) => sum + o.earnings, 0);
+      const tips = batchOrders.reduce((sum, o) => sum + o.tip, 0);
+      const batchBonus = batchOrders.length >= 2 ? 25 : 0;
+
+      res.json({
+        batchId,
+        batchNumber: `BATCH-${Date.now().toString(36).toUpperCase()}`,
+        orders: batchOrders,
+        route: {
+          stops,
+          totalDistance: Math.round(totalDistance * 10) / 10,
+          totalDuration: Math.round(totalDuration),
+        },
+        earnings: {
+          basePay: Math.round(basePay * 100) / 100,
+          tips: Math.round(tips * 100) / 100,
+          batchBonus,
+          total: Math.round((basePay + tips + batchBonus) * 100) / 100,
+        },
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
+      });
+    } catch (error) {
+      console.error("Error fetching batch preview:", error);
+      res.status(500).json({ message: "Failed to fetch batch preview" });
+    }
+  });
+
+  // Accept a batch of orders
+  app.post("/api/rider/batch/:batchId/accept", async (req, res) => {
+    try {
+      const { batchId } = req.params;
+      const { orderIds } = req.body;
+
+      // In production, this would update the dispatchBatch status
+      // and assign all orders to the rider
+
+      // For now, return success
+      res.json({
+        success: true,
+        message: "Batch accepted successfully",
+        batchId,
+        ordersAccepted: orderIds?.length || 0,
+      });
+    } catch (error) {
+      console.error("Error accepting batch:", error);
+      res.status(500).json({ message: "Failed to accept batch" });
+    }
+  });
+
+  // Decline a batch offer
+  app.post("/api/rider/batch/:batchId/decline", async (req, res) => {
+    try {
+      const { batchId } = req.params;
+
+      // In production, this would update the dispatchBatch status
+      // and potentially offer to other riders
+
+      res.json({
+        success: true,
+        message: "Batch declined",
+        batchId,
+      });
+    } catch (error) {
+      console.error("Error declining batch:", error);
+      res.status(500).json({ message: "Failed to decline batch" });
+    }
+  });
+
+  // ==================== END BATCH ROUTE PREVIEW ====================
+
   // Update rider location for real-time tracking
   app.post("/api/rider/location", authenticateToken, async (req: any, res) => {
     try {
@@ -3338,8 +4142,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== DELIVERY PROOF PHOTO ENDPOINTS ====================
+
+  /**
+   * Upload delivery proof photo for contactless deliveries
+   * Used by riders when completing "Leave at Door" deliveries
+   */
+  app.post("/api/delivery-proof/upload", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderId, photoType, timestamp } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({ message: "Order ID is required" });
+      }
+
+      // Get the order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify the rider is assigned to this order
+      if (order.riderId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "Not authorized to upload proof for this order" });
+      }
+
+      // Generate upload URL for the photo
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+
+      // For now, we'll return a mock URL - in production this would be the actual uploaded file URL
+      // The actual file upload would be handled by the client directly to object storage
+      const photoUrl = `/objects/delivery-proofs/${orderId}/${Date.now()}.jpg`;
+
+      // Update order with the delivery proof photo URL
+      const updatedOrder = await storage.updateOrder(orderId, {
+        deliveryProofPhoto: photoUrl,
+        proofOfDelivery: {
+          type: 'photo',
+          photoUrl: photoUrl,
+          uploadedAt: timestamp || new Date().toISOString(),
+          uploadedBy: req.user.id
+        }
+      });
+
+      res.json({
+        success: true,
+        photoUrl: photoUrl,
+        uploadURL: uploadURL,
+        order: updatedOrder
+      });
+    } catch (error) {
+      console.error("Error uploading delivery proof:", error);
+      res.status(500).json({ message: "Failed to upload delivery proof" });
+    }
+  });
+
+  /**
+   * Get delivery proof photo for an order
+   * Available to customer, rider, and admin
+   */
+  app.get("/api/delivery-proof/:orderId", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderId } = req.params;
+      const order = await storage.getOrder(orderId);
+
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify authorization - customer, assigned rider, or admin can view
+      const isCustomer = order.customerId === req.user.id;
+      const isRider = order.riderId === req.user.id;
+      const isAdmin = req.user.role === 'admin';
+
+      if (!isCustomer && !isRider && !isAdmin) {
+        return res.status(403).json({ message: "Not authorized to view delivery proof" });
+      }
+
+      if (!order.deliveryProofPhoto) {
+        return res.status(404).json({ message: "No delivery proof photo available" });
+      }
+
+      res.json({
+        orderId: order.id,
+        photoUrl: order.deliveryProofPhoto,
+        deliveryType: order.deliveryType,
+        contactlessInstructions: order.contactlessInstructions,
+        proofOfDelivery: order.proofOfDelivery
+      });
+    } catch (error) {
+      console.error("Error fetching delivery proof:", error);
+      res.status(500).json({ message: "Failed to fetch delivery proof" });
+    }
+  });
+
+  /**
+   * Validate delivery proof requirements for contactless deliveries
+   * Returns whether photo proof is required before delivery can be marked as complete
+   */
+  app.get("/api/delivery-proof/:orderId/requirements", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { orderId } = req.params;
+      const order = await storage.getOrder(orderId);
+
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const requiresPhoto = order.deliveryType === 'leave_at_door';
+      const hasPhoto = !!order.deliveryProofPhoto;
+
+      res.json({
+        orderId: order.id,
+        deliveryType: order.deliveryType,
+        contactlessInstructions: order.contactlessInstructions,
+        requiresPhoto,
+        hasPhoto,
+        canComplete: !requiresPhoto || hasPhoto,
+        message: requiresPhoto && !hasPhoto
+          ? "Photo proof is required for contactless deliveries"
+          : "Order can be completed"
+      });
+    } catch (error) {
+      console.error("Error checking delivery proof requirements:", error);
+      res.status(500).json({ message: "Failed to check requirements" });
+    }
+  });
+
   // ==================== CUSTOMER API ENDPOINTS ====================
-  
+
   // Customer Profile endpoints
   app.get("/api/customer/profile", authenticateToken, async (req, res) => {
     try {
@@ -3387,6 +4331,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================
+  // CUSTOMER NOTIFICATION PREFERENCES ROUTES
+  // ============================================================
+
+  // GET /api/customer/notification-preferences - Get notification preferences
+  app.get("/api/customer/notification-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const preferences = await storage.getUserNotificationPreferences(req.user.id);
+
+      // Return default preferences if none exist
+      if (!preferences) {
+        return res.json({
+          emailNotifications: true,
+          smsNotifications: true,
+          pushNotifications: true,
+          orderUpdates: true,
+          orderPlaced: true,
+          orderConfirmed: true,
+          orderPreparing: true,
+          orderReady: true,
+          orderDelivered: true,
+          riderUpdates: true,
+          riderAssigned: true,
+          riderArriving: true,
+          promotionalEmails: true,
+          restaurantUpdates: true,
+          loyaltyRewards: true,
+          securityAlerts: true,
+          weeklyDigest: false,
+          quietHoursEnabled: false,
+          quietHoursStart: "22:00",
+          quietHoursEnd: "08:00"
+        });
+      }
+
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error fetching notification preferences:", error);
+      res.status(500).json({ message: "Failed to fetch notification preferences" });
+    }
+  });
+
+  // PUT /api/customer/notification-preferences - Update notification preferences
+  app.put("/api/customer/notification-preferences", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const updates = req.body;
+
+      // Remove fields that shouldn't be updated directly
+      delete updates.id;
+      delete updates.userId;
+      delete updates.createdAt;
+
+      // Add updatedAt timestamp
+      updates.updatedAt = new Date();
+
+      // Check if preferences exist, create if not
+      const existingPrefs = await storage.getUserNotificationPreferences(req.user.id);
+
+      let preferences;
+      if (!existingPrefs) {
+        // Create new preferences
+        preferences = await storage.createUserNotificationPreferences({
+          userId: req.user.id,
+          ...updates
+        });
+      } else {
+        // Update existing preferences
+        preferences = await storage.updateUserNotificationPreferences(req.user.id, updates);
+      }
+
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error updating notification preferences:", error);
+      res.status(500).json({ message: "Failed to update notification preferences" });
+    }
+  });
+
   // User Address Management Routes
   app.post("/api/user/address", authenticateToken, async (req, res) => {
     try {
@@ -3428,6 +4457,549 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user addresses:", error);
       res.status(500).json({ message: "Failed to fetch addresses" });
+    }
+  });
+
+  // ============================================================
+  // CUSTOMER ADDRESS MANAGEMENT ROUTES (for address book/checkout)
+  // ============================================================
+
+  // GET /api/customer/addresses - List all saved addresses
+  app.get("/api/customer/addresses", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const addresses = await storage.getUserAddresses(req.user.id);
+      res.json(addresses);
+    } catch (error) {
+      console.error("Error fetching customer addresses:", error);
+      res.status(500).json({ message: "Failed to fetch addresses" });
+    }
+  });
+
+  // POST /api/customer/addresses - Add new address
+  app.post("/api/customer/addresses", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { title, streetAddress, barangay, city, province, zipCode, landmark, deliveryInstructions, isDefault } = req.body;
+
+      // Validate required fields
+      if (!title || !streetAddress || !city || !province) {
+        return res.status(400).json({ message: "Title, street address, city, and province are required" });
+      }
+
+      // If setting as default, unset other defaults first
+      if (isDefault) {
+        await storage.setDefaultAddress(req.user.id, ""); // This will unset all defaults
+      }
+
+      const addressData = {
+        userId: req.user.id,
+        title,
+        streetAddress,
+        barangay: barangay || null,
+        city,
+        province: province || "Batangas",
+        zipCode: zipCode || null,
+        landmark: landmark || null,
+        deliveryInstructions: deliveryInstructions || null,
+        isDefault: isDefault || false,
+        isActive: true
+      };
+
+      const address = await storage.createUserAddress(addressData);
+
+      // If this is the first address, make it default
+      const existingAddresses = await storage.getUserAddresses(req.user.id);
+      if (existingAddresses.length === 1) {
+        await storage.setDefaultAddress(req.user.id, address.id);
+        address.isDefault = true;
+      }
+
+      res.json(address);
+    } catch (error) {
+      console.error("Error creating customer address:", error);
+      res.status(500).json({ message: "Failed to save address" });
+    }
+  });
+
+  // PUT /api/customer/addresses/:id - Update address
+  app.put("/api/customer/addresses/:id", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+      const { title, streetAddress, barangay, city, province, zipCode, landmark, deliveryInstructions, isDefault } = req.body;
+
+      // Verify ownership
+      const existingAddress = await storage.getUserAddress(id);
+      if (!existingAddress || existingAddress.userId !== req.user.id) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      // If setting as default, update all addresses
+      if (isDefault && !existingAddress.isDefault) {
+        await storage.setDefaultAddress(req.user.id, id);
+      }
+
+      const updates = {
+        title,
+        streetAddress,
+        barangay: barangay || null,
+        city,
+        province: province || "Batangas",
+        zipCode: zipCode || null,
+        landmark: landmark || null,
+        deliveryInstructions: deliveryInstructions || null,
+        isDefault: isDefault || false
+      };
+
+      const address = await storage.updateUserAddress(id, updates);
+      res.json(address);
+    } catch (error) {
+      console.error("Error updating customer address:", error);
+      res.status(500).json({ message: "Failed to update address" });
+    }
+  });
+
+  // DELETE /api/customer/addresses/:id - Delete address
+  app.delete("/api/customer/addresses/:id", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      // Verify ownership
+      const existingAddress = await storage.getUserAddress(id);
+      if (!existingAddress || existingAddress.userId !== req.user.id) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      const wasDefault = existingAddress.isDefault;
+
+      // Soft delete by setting isActive to false
+      await storage.updateUserAddress(id, { isActive: false });
+
+      // If deleted address was default, set another address as default
+      if (wasDefault) {
+        const remainingAddresses = await storage.getUserAddresses(req.user.id);
+        if (remainingAddresses.length > 0) {
+          await storage.setDefaultAddress(req.user.id, remainingAddresses[0].id);
+        }
+      }
+
+      res.json({ message: "Address deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting customer address:", error);
+      res.status(500).json({ message: "Failed to delete address" });
+    }
+  });
+
+  // PUT /api/customer/addresses/:id/default - Set as default address
+  app.put("/api/customer/addresses/:id/default", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      // Verify ownership
+      const existingAddress = await storage.getUserAddress(id);
+      if (!existingAddress || existingAddress.userId !== req.user.id) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      await storage.setDefaultAddress(req.user.id, id);
+
+      // Fetch updated address
+      const address = await storage.getUserAddress(id);
+      res.json(address);
+    } catch (error) {
+      console.error("Error setting default address:", error);
+      res.status(500).json({ message: "Failed to set default address" });
+    }
+  });
+
+  // ============================================
+  // CUSTOMER SAVED PAYMENT METHODS
+  // ============================================
+
+  // GET /api/customer/payment-methods - List all saved payment methods
+  app.get("/api/customer/payment-methods", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const methods = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isActive, true)
+        ))
+        .orderBy(desc(customerPaymentMethods.isDefault), desc(customerPaymentMethods.createdAt));
+
+      res.json({
+        success: true,
+        paymentMethods: methods,
+        total: methods.length
+      });
+    } catch (error: any) {
+      console.error("Error fetching customer payment methods:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch payment methods"
+      });
+    }
+  });
+
+  // POST /api/customer/payment-methods - Save new payment method (tokenized)
+  app.post("/api/customer/payment-methods", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const paymentMethodSchema = z.object({
+        type: z.enum(['card', 'gcash', 'maya', 'bank_account']),
+        provider: z.string().min(1),
+        token: z.string().min(1), // Tokenized reference from payment provider
+        displayName: z.string().optional(),
+        lastFour: z.string().length(4).optional(),
+        expiryMonth: z.number().min(1).max(12).optional(),
+        expiryYear: z.number().min(2024).optional(),
+        brand: z.string().optional(),
+        nickname: z.string().max(100).optional(),
+        isDefault: z.boolean().optional().default(false),
+        fingerprint: z.string().optional(), // Unique identifier for deduplication
+        metadata: z.record(z.any()).optional()
+      });
+
+      const validatedData = paymentMethodSchema.parse(req.body);
+
+      // Check for duplicate payment method using fingerprint
+      if (validatedData.fingerprint) {
+        const existingMethod = await db.select()
+          .from(customerPaymentMethods)
+          .where(and(
+            eq(customerPaymentMethods.customerId, req.user.id),
+            eq(customerPaymentMethods.fingerprint, validatedData.fingerprint),
+            eq(customerPaymentMethods.isActive, true)
+          ))
+          .limit(1);
+
+        if (existingMethod.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: "This payment method is already saved",
+            existingMethodId: existingMethod[0].id
+          });
+        }
+      }
+
+      // If this is set as default, unset any existing defaults
+      if (validatedData.isDefault) {
+        await db.update(customerPaymentMethods)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(and(
+            eq(customerPaymentMethods.customerId, req.user.id),
+            eq(customerPaymentMethods.isDefault, true)
+          ));
+      }
+
+      // Check if this is the first payment method - make it default automatically
+      const existingMethods = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isActive, true)
+        ));
+
+      const shouldBeDefault = existingMethods.length === 0 || validatedData.isDefault;
+
+      // Generate display name if not provided
+      let displayName = validatedData.displayName;
+      if (!displayName && validatedData.lastFour) {
+        const typeLabel = validatedData.type === 'gcash' ? 'GCash'
+          : validatedData.type === 'maya' ? 'Maya'
+          : validatedData.brand || 'Card';
+        displayName = `${typeLabel} •••• ${validatedData.lastFour}`;
+      }
+
+      // Insert new payment method
+      const [newMethod] = await db.insert(customerPaymentMethods)
+        .values({
+          customerId: req.user.id,
+          type: validatedData.type,
+          provider: validatedData.provider,
+          token: validatedData.token,
+          fingerprint: validatedData.fingerprint,
+          displayName,
+          lastFour: validatedData.lastFour,
+          expiryMonth: validatedData.expiryMonth,
+          expiryYear: validatedData.expiryYear,
+          brand: validatedData.brand,
+          nickname: validatedData.nickname,
+          isDefault: shouldBeDefault,
+          isActive: true,
+          metadata: validatedData.metadata || {},
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      res.status(201).json({
+        success: true,
+        message: "Payment method saved successfully",
+        paymentMethod: newMethod
+      });
+    } catch (error: any) {
+      console.error("Error saving customer payment method:", error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid payment method data",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to save payment method"
+      });
+    }
+  });
+
+  // DELETE /api/customer/payment-methods/:id - Remove saved payment method
+  app.delete("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      // Verify ownership
+      const existingMethod = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.id, id),
+          eq(customerPaymentMethods.customerId, req.user.id)
+        ))
+        .limit(1);
+
+      if (existingMethod.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment method not found"
+        });
+      }
+
+      // Soft delete - set isActive to false
+      await db.update(customerPaymentMethods)
+        .set({
+          isActive: false,
+          isDefault: false,
+          updatedAt: new Date()
+        })
+        .where(eq(customerPaymentMethods.id, id));
+
+      // If deleted method was default, set another method as default
+      if (existingMethod[0].isDefault) {
+        const remainingMethods = await db.select()
+          .from(customerPaymentMethods)
+          .where(and(
+            eq(customerPaymentMethods.customerId, req.user.id),
+            eq(customerPaymentMethods.isActive, true)
+          ))
+          .orderBy(desc(customerPaymentMethods.createdAt))
+          .limit(1);
+
+        if (remainingMethods.length > 0) {
+          await db.update(customerPaymentMethods)
+            .set({ isDefault: true, updatedAt: new Date() })
+            .where(eq(customerPaymentMethods.id, remainingMethods[0].id));
+        }
+      }
+
+      res.json({
+        success: true,
+        message: "Payment method removed successfully"
+      });
+    } catch (error: any) {
+      console.error("Error removing customer payment method:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to remove payment method"
+      });
+    }
+  });
+
+  // PATCH /api/customer/payment-methods/:id/default - Set as default payment method
+  app.patch("/api/customer/payment-methods/:id/default", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      // Verify ownership
+      const existingMethod = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.id, id),
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isActive, true)
+        ))
+        .limit(1);
+
+      if (existingMethod.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment method not found"
+        });
+      }
+
+      // Unset any existing default
+      await db.update(customerPaymentMethods)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(and(
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isDefault, true)
+        ));
+
+      // Set new default
+      const [updatedMethod] = await db.update(customerPaymentMethods)
+        .set({ isDefault: true, updatedAt: new Date() })
+        .where(eq(customerPaymentMethods.id, id))
+        .returning();
+
+      res.json({
+        success: true,
+        message: "Default payment method updated",
+        paymentMethod: updatedMethod
+      });
+    } catch (error: any) {
+      console.error("Error setting default payment method:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to set default payment method"
+      });
+    }
+  });
+
+  // PATCH /api/customer/payment-methods/:id - Update payment method (nickname, etc.)
+  app.patch("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      const updateSchema = z.object({
+        nickname: z.string().max(100).optional(),
+        displayName: z.string().max(100).optional()
+      });
+
+      const validatedData = updateSchema.parse(req.body);
+
+      // Verify ownership
+      const existingMethod = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.id, id),
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isActive, true)
+        ))
+        .limit(1);
+
+      if (existingMethod.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment method not found"
+        });
+      }
+
+      // Update payment method
+      const [updatedMethod] = await db.update(customerPaymentMethods)
+        .set({
+          ...validatedData,
+          updatedAt: new Date()
+        })
+        .where(eq(customerPaymentMethods.id, id))
+        .returning();
+
+      res.json({
+        success: true,
+        message: "Payment method updated",
+        paymentMethod: updatedMethod
+      });
+    } catch (error: any) {
+      console.error("Error updating payment method:", error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid update data",
+          errors: error.errors
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to update payment method"
+      });
+    }
+  });
+
+  // GET /api/customer/payment-methods/:id - Get single payment method
+  app.get("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+
+      const method = await db.select()
+        .from(customerPaymentMethods)
+        .where(and(
+          eq(customerPaymentMethods.id, id),
+          eq(customerPaymentMethods.customerId, req.user.id),
+          eq(customerPaymentMethods.isActive, true)
+        ))
+        .limit(1);
+
+      if (method.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment method not found"
+        });
+      }
+
+      res.json({
+        success: true,
+        paymentMethod: method[0]
+      });
+    } catch (error: any) {
+      console.error("Error fetching payment method:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch payment method"
+      });
     }
   });
 
@@ -6354,19 +7926,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer support chatbot
-  app.post("/api/ai/chat-support", async (req, res) => {
+  // Customer support chatbot - Agent-based AI Assistant with Function Calling
+  // Supports both authenticated and anonymous users
+  app.post("/api/ai/chat-support", optionalAuthenticateToken, async (req: any, res) => {
     try {
-      const { query, orderId, orderStatus, customerName } = req.body;
-      const response = await geminiAI.processCustomerQuery(query, {
+      const {
+        query,
         orderId,
         orderStatus,
-        customerName
+        customerName,
+        userRole,
+        conversationHistory,
+        userId,           // Allow passing userId for testing
+        restaurantId,     // For vendors
+        riderId,          // For riders
+        enableFunctions   // Enable/disable function calling
+      } = req.body;
+
+      // Determine if user is logged in (from optional auth middleware)
+      const isLoggedIn = !!req.user;
+      const authenticatedUserId = req.user?.id || userId;
+      const authenticatedUserRole = req.user?.role || userRole || 'customer';
+
+      // Build context from request
+      const context: AssistantContext = {
+        userId: authenticatedUserId,
+        userRole: authenticatedUserRole,
+        userName: customerName || req.user?.firstName ? `${req.user?.firstName} ${req.user?.lastName || ''}`.trim() : undefined,
+        orderId,
+        orderStatus,
+        restaurantId,
+        riderId,
+        conversationHistory,
+        enableFunctions: isLoggedIn && enableFunctions !== false, // Only enable for logged in users
+        isLoggedIn
+      };
+
+      // Process with agent-based AI assistant
+      const response = await processAssistantQuery(query, context);
+
+      res.json({
+        response: response.response,
+        suggestedActions: response.suggestedActions,
+        requiresHumanSupport: response.requiresHumanSupport,
+        agent: response.agent,
+        model: response.model,
+        functionsExecuted: response.functionsExecuted,
+        metadata: response.metadata,
+        isLoggedIn  // Include in response so client knows login status
       });
-      res.json(response);
     } catch (error) {
       console.error("Error processing chat:", error);
-      res.status(500).json({ message: "Failed to process chat query" });
+      res.status(500).json({
+        response: "Pasensya na po, may technical difficulty. Please try again.",
+        requiresHumanSupport: true,
+        agent: "error",
+        model: "error"
+      });
+    }
+  });
+
+  // AI Chat with file/image upload support (supports both authenticated and anonymous users)
+  app.post("/api/ai/chat-with-upload", optionalAuthenticateToken, upload.array("files", 5), async (req: any, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      const { query, userRole, userId, restaurantId, action } = req.body;
+
+      // Determine if user is logged in (from optional auth middleware)
+      const isLoggedIn = !!req.user;
+      const authenticatedUserId = req.user?.id || userId;
+      const authenticatedUserRole = req.user?.role || userRole || "customer";
+
+      // Process uploaded files
+      const uploadedFiles: Array<{ url: string; type: string; analysis?: any }> = [];
+
+      if (files && files.length > 0) {
+        for (const file of files) {
+          // Save file to local storage
+          const saveResult = await LocalStorageService.saveFile(
+            file.buffer,
+            file.originalname,
+            "ai-uploads"
+          );
+
+          if (saveResult.success && saveResult.url) {
+            const fileInfo: any = {
+              url: saveResult.url,
+              type: file.mimetype,
+              originalName: file.originalname
+            };
+
+            // Analyze images with AI vision if requested
+            if (file.mimetype.startsWith("image/") && action !== "upload-only") {
+              // Determine analysis type
+              const isMenuAnalysis = action === "analyze-menu" || query?.toLowerCase().includes("menu");
+
+              if (isMenuAnalysis) {
+                const menuAnalysis = await analyzeMenuImage(file.buffer);
+                fileInfo.analysis = {
+                  type: "menu",
+                  ...menuAnalysis
+                };
+
+                // Auto-create menu items if restaurantId provided and action is create-menu
+                if (action === "create-menu" && restaurantId && menuAnalysis.success) {
+                  const createResult = await createMenuFromAnalysis(restaurantId, menuAnalysis);
+                  fileInfo.menuCreated = createResult;
+                }
+              } else {
+                // General image analysis
+                const imageAnalysis = await analyzeImage(file.buffer, query || "Describe this image in detail.");
+                fileInfo.analysis = {
+                  type: "image",
+                  ...imageAnalysis
+                };
+              }
+            }
+
+            uploadedFiles.push(fileInfo);
+          }
+        }
+      }
+
+      // If there's a query, also process it through the AI assistant
+      let assistantResponse = null;
+      if (query) {
+        // Build context message including file analysis
+        let contextQuery = query;
+        if (uploadedFiles.length > 0) {
+          const analysisContext = uploadedFiles
+            .filter(f => f.analysis)
+            .map(f => {
+              if (f.analysis.type === "menu") {
+                return `Menu analysis found ${f.analysis.items?.length || 0} items: ${f.analysis.items?.map((i: any) => i.name).join(", ")}`;
+              }
+              return `Image analysis: ${f.analysis.description}`;
+            })
+            .join("\n");
+
+          if (analysisContext) {
+            contextQuery = `${query}\n\nContext from uploaded files:\n${analysisContext}`;
+          }
+        }
+
+        const context: AssistantContext = {
+          userId: authenticatedUserId,
+          userRole: authenticatedUserRole,
+          restaurantId,
+          enableFunctions: isLoggedIn, // Only enable function calling for authenticated users
+          isLoggedIn // Pass login status to AI
+        };
+
+        assistantResponse = await processAssistantQuery(contextQuery, context);
+      }
+
+      res.json({
+        success: true,
+        files: uploadedFiles,
+        response: assistantResponse?.response,
+        suggestedActions: assistantResponse?.suggestedActions,
+        agent: assistantResponse?.agent,
+        model: assistantResponse?.model,
+        functionsExecuted: assistantResponse?.functionsExecuted,
+        metadata: assistantResponse?.metadata,
+        isLoggedIn // Let the client know login status
+      });
+    } catch (error) {
+      console.error("Error processing chat with upload:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to process upload"
+      });
+    }
+  });
+
+  // Analyze menu image and optionally create menu items
+  app.post("/api/ai/analyze-menu", upload.single("menuImage"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, error: "No image uploaded" });
+      }
+
+      const { restaurantId, createItems } = req.body;
+
+      // Analyze the menu image
+      const analysis = await analyzeMenuImage(file.buffer);
+
+      // Save the uploaded image
+      const saveResult = await LocalStorageService.saveFile(file.buffer, file.originalname, "menu");
+
+      // Create menu items if requested
+      let createResult = null;
+      if (createItems === "true" && restaurantId && analysis.success) {
+        createResult = await createMenuFromAnalysis(restaurantId, analysis);
+      }
+
+      res.json({
+        success: true,
+        analysis,
+        imageUrl: saveResult.url,
+        menuCreated: createResult
+      });
+    } catch (error) {
+      console.error("Error analyzing menu:", error);
+      res.status(500).json({ success: false, error: "Failed to analyze menu image" });
     }
   });
 
@@ -7615,7 +9379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Dynamically import to avoid circular dependencies
       const { geofenceService } = await import("./services/geofence-service");
 
-      const result = await geofenceService.checkGeofence(
+      const result = await geofenceService.checkOrderGeofence(
         riderId,
         orderId,
         { latitude, longitude, accuracy }
@@ -7646,7 +9410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { geofenceService } = await import("./services/geofence-service");
 
       const locationData = riderLocation.location as any;
-      const result = await geofenceService.checkGeofence(
+      const result = await geofenceService.checkOrderGeofence(
         riderId,
         orderId,
         {
@@ -8311,13 +10075,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     ws.on("close", () => {
+      // Clean up all resources for this connection
       if (ws.userId) {
         clients.delete(ws.userId);
       }
+      // Clear subscriptions to prevent memory leaks
+      if (ws.subscriptions) {
+        ws.subscriptions.clear();
+      }
+      // Remove all event listeners from this socket
+      ws.removeAllListeners();
+      console.log(`WebSocket connection closed for client ${clientId}`);
     });
 
     ws.on("error", (error) => {
       console.error(`WebSocket error for ${clientId}:`, error);
+      // Clean up on error as well
+      if (ws.userId) {
+        clients.delete(ws.userId);
+      }
+      if (ws.subscriptions) {
+        ws.subscriptions.clear();
+      }
+      ws.removeAllListeners();
     });
   });
 
@@ -8338,9 +10118,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on("close", () => {
     clearInterval(interval);
   });
-  
+
   // ============================================================================
-  // AI SERVICES ENDPOINTS  
+  // PAYMENT TIMEOUT CLEANUP JOB
+  // Automatically cancels orders that have been in 'payment_pending' status
+  // for longer than the configured timeout (default: 15 minutes)
+  // ============================================================================
+  const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+  const PAYMENT_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
+
+  const paymentTimeoutInterval = setInterval(async () => {
+    try {
+      // Only fetch payment_pending orders instead of all orders (performance fix)
+      const pendingOrders = await storage.getOrdersByStatus('payment_pending');
+      const now = new Date();
+      const timedOutOrders = pendingOrders.filter(order => {
+        // Check if paymentPendingAt is set and older than timeout
+        const pendingAt = order.paymentPendingAt ? new Date(order.paymentPendingAt) : new Date(order.createdAt!);
+        const elapsed = now.getTime() - pendingAt.getTime();
+        return elapsed > PAYMENT_TIMEOUT_MS;
+      });
+
+      // Process in batches of 10 to avoid blocking the event loop
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < timedOutOrders.length; i += BATCH_SIZE) {
+        const batch = timedOutOrders.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (order) => {
+          console.log(`[Order ${order.id}] Payment timeout - cancelling order after ${PAYMENT_TIMEOUT_MS / 60000} minutes`);
+
+          // Cancel the order
+          await storage.updateOrder(order.id, {
+            status: 'cancelled',
+            paymentStatus: 'failed',
+            paymentFailureReason: 'Payment timeout - no payment received',
+          });
+
+          // Release reserved inventory
+          if (order.items) {
+            try {
+              await storage.releaseInventory(order.restaurantId, order.items as any[]);
+              console.log(`[Order ${order.id}] Released inventory after payment timeout`);
+            } catch (inventoryError) {
+              console.error(`[Order ${order.id}] Failed to release inventory:`, inventoryError);
+            }
+          }
+
+          // Notify customer via WebSocket
+          wsManager.broadcastToChannel(`order:${order.id}`, {
+            type: 'payment_timeout',
+            orderId: order.id,
+            status: 'cancelled',
+            message: 'Your order was cancelled because payment was not received in time. Please place a new order.',
+            timestamp: new Date().toISOString()
+          });
+
+          // Broadcast to admin
+          broadcastToSubscribers('order_payment_timeout', {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            customerId: order.customerId,
+          });
+
+          console.log(`[Order ${order.id}] Order cancelled due to payment timeout`);
+        }));
+      }
+
+      if (timedOutOrders.length > 0) {
+        console.log(`[Payment Timeout Job] Processed ${timedOutOrders.length} timed-out orders`);
+      }
+    } catch (error) {
+      console.error('[Payment Timeout Job] Error processing timed-out orders:', error);
+    }
+  }, PAYMENT_CLEANUP_INTERVAL_MS);
+
+  // Clean up intervals on server shutdown (use SIGTERM/SIGINT for reliable cleanup)
+  const cleanupPaymentTimeout = () => {
+    clearInterval(paymentTimeoutInterval);
+    console.log('[Payment Timeout Job] Stopped payment timeout job');
+  };
+  process.on('SIGTERM', cleanupPaymentTimeout);
+  process.on('SIGINT', cleanupPaymentTimeout);
+  process.on('beforeExit', cleanupPaymentTimeout);
+
+  // ============================================================================
+  // AI SERVICES ENDPOINTS
   // ============================================================================
 
   // Generate menu item description using AI
@@ -8460,7 +10321,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deliveryFee = 50; // Base delivery fee
       const serviceFee = Math.ceil(subtotal * 0.05); // 5% service fee
       const totalAmount = subtotal + deliveryFee + serviceFee;
-      
+
+      // PAYMENT-ORDER RACE CONDITION FIX:
+      // Get payment info from request body
+      const { paymentMethod = 'cash', paymentProvider = 'cash' } = req.body;
+      const isCOD = paymentMethod.toLowerCase() === 'cash' ||
+                    paymentMethod.toLowerCase() === 'cod' ||
+                    paymentProvider?.toLowerCase() === 'cod';
+
+      // For online payments, start with 'payment_pending' status
+      // For COD, use 'pending' (visible to vendor immediately)
+      const initialStatus = isCOD ? 'pending' : 'payment_pending';
+
       // Create the order
       const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const order = await storage.createOrder({
@@ -8473,36 +10345,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryFee: deliveryFee.toString(),
         serviceFee: serviceFee.toString(),
         totalAmount: totalAmount.toString(),
-        status: 'pending',
-        paymentMethod: 'cash',
+        status: initialStatus,
+        paymentMethod: paymentMethod,
+        paymentProvider: paymentProvider,
         paymentStatus: 'pending',
         deliveryAddress,
-        specialInstructions
+        specialInstructions,
+        paymentPendingAt: isCOD ? null : new Date(),
       });
-      
-      // Create SLA tracking
-      await storage.createOrderSlaTracking({
-        orderId: order.id,
-        restaurantId,
-        deliveryTimeSla: 45 * 60, // 45 minutes
-        vendorAcceptanceSla: 5 * 60, // 5 minutes
-        preparationTimeSla: 20 * 60, // 20 minutes
-        pickupTimeSla: 10 * 60 // 10 minutes
-      });
-      
-      // Broadcast order creation
-      broadcastToSubscribers('new_order', {
-        orderId: order.id,
-        restaurantId,
-        orderType: order.orderType,
-        totalAmount: order.totalAmount
-      });
-      
+
+      // Create SLA tracking (only for COD orders immediately, online payments after confirmation)
+      if (isCOD) {
+        await storage.createOrderSlaTracking({
+          orderId: order.id,
+          deliveryTimeSla: 45 * 60, // 45 minutes
+          vendorAcceptanceSla: 5 * 60, // 5 minutes
+          preparationTimeSla: 20 * 60, // 20 minutes
+          pickupTimeSla: 10 * 60 // 10 minutes
+        });
+
+        // Broadcast order creation for COD orders only
+        // Online payment orders will be broadcast after payment confirmation
+        broadcastToSubscribers('new_order', {
+          orderId: order.id,
+          restaurantId,
+          orderType: order.orderType,
+          totalAmount: order.totalAmount
+        });
+
+        console.log(`[Order ${order.id}] COD order placed, vendor notified immediately`);
+      } else {
+        console.log(`[Order ${order.id}] Online payment order created with payment_pending status, awaiting payment`);
+      }
+
       res.status(201).json({
         order,
         validation: {
           warnings: validation.warnings
-        }
+        },
+        paymentPending: !isCOD
       });
     } catch (error) {
       console.error("Error placing enhanced order:", error);
@@ -9681,7 +11562,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get('User-Agent')
       });
 
-      res.json(user);
+      // Filter out sensitive data before sending response
+      const { passwordHash: _, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
       console.error("Error updating user status:", error);
       res.status(500).json({ message: "Failed to update user status" });
@@ -10166,7 +12049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emergencyAlerts
       ] = await Promise.all([
         storage.getActiveOrdersForDispatch(),
-        storage.getAvailableRiders(),
+        storage.getAllAvailableRiders(),
         storage.getActiveSystemAlerts(),
         storage.getRealTimePerformanceMetrics(),
         storage.getEmergencyAlerts()
@@ -10559,7 +12442,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api', authenticateToken, fraudRoutes);
 
   // Export fraud detection service for global access
-  (global as any).fraudDetectionService = require('./services/fraud-detection').fraudDetectionService;
+  import('./services/fraud-detection').then(module => {
+    (global as any).fraudDetectionService = module.fraudDetectionService;
+  });
 
   // ============================================================
   // REGISTER NEXUSPAY PAYMENT ROUTES
@@ -10582,6 +12467,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // - GET /api/admin/nexuspay/pending-payments - Get pending payments
   // - POST /api/admin/nexuspay/check-payment/:id - Manually verify payment
   registerNexusPayRoutes(app);
+
+  // ============================================================
+  // ORDER CHAT ENDPOINTS
+  // ============================================================
+  // In-app messaging between customers and riders during active deliveries
+
+  // GET /api/orders/:orderId/messages - Get chat history
+  app.get("/api/orders/:orderId/messages", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const userId = req.user.id;
+
+      const messages = await chatService.getMessages(orderId, userId);
+      res.json(messages);
+    } catch (error: any) {
+      console.error("[Chat] Error getting messages:", error.message);
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ message: error.message });
+      }
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to get messages" });
+    }
+  });
+
+  // POST /api/orders/:orderId/messages - Send message
+  app.post("/api/orders/:orderId/messages", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const { message } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+
+      if (message.length > 1000) {
+        return res.status(400).json({ message: "Message is too long (max 1000 characters)" });
+      }
+
+      // Determine sender role based on user role
+      const senderRole = userRole === 'rider' ? 'rider' : 'customer';
+
+      const newMessage = await chatService.sendMessage({
+        orderId,
+        senderId: userId,
+        senderRole,
+        message: message.trim(),
+      });
+
+      res.status(201).json(newMessage);
+    } catch (error: any) {
+      console.error("[Chat] Error sending message:", error.message);
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ message: error.message });
+      }
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  // PATCH /api/orders/:orderId/messages/read - Mark messages as read
+  app.patch("/api/orders/:orderId/messages/read", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const userId = req.user.id;
+
+      const count = await chatService.markAsRead(orderId, userId);
+      res.json({ success: true, markedAsRead: count });
+    } catch (error: any) {
+      console.error("[Chat] Error marking messages as read:", error.message);
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ message: error.message });
+      }
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to mark messages as read" });
+    }
+  });
+
+  // GET /api/orders/:orderId/messages/unread-count - Get unread message count
+  app.get("/api/orders/:orderId/messages/unread-count", authenticateToken, async (req: any, res) => {
+    try {
+      const { orderId } = req.params;
+      const userId = req.user.id;
+
+      const count = await chatService.getUnreadCount(orderId, userId);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("[Chat] Error getting unread count:", error.message);
+      res.status(500).json({ message: "Failed to get unread count" });
+    }
+  });
 
   return httpServer;
 }

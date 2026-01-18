@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useCart } from "@/hooks/use-cart";
+import { useCartStore } from "@/stores/cart-store";
 import { ShoppingCart, Menu, ChevronDown, Package, Users, Settings, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 import NotificationCenter from "@/components/notification-center";
@@ -20,7 +20,7 @@ import btsLogo from "@assets/bts-logo-transparent.png";
 
 export default function Navbar() {
   const [, setLocation] = useLocation();
-  const { getTotalItems } = useCart();
+  const { getTotalItems } = useCartStore();
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useLanguage();
 
@@ -57,10 +57,10 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bts-glass border-b border-border/50" data-testid="navbar">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link href="/" className="flex items-center space-x-2" data-testid="logo-link">
-            <img 
-              src={btsLogo} 
-              alt="BTS Delivery Logo" 
+          <Link href="/" className="flex items-center space-x-2" data-testid="logo-link" aria-label="BTS Delivery Home">
+            <img
+              src={btsLogo}
+              alt="BTS Delivery Logo"
               className="w-10 h-10 object-contain rounded-full bg-white p-0.5"
             />
             <span className="font-bold text-xl bts-text-gradient">BTS Delivery</span>
@@ -74,6 +74,7 @@ export default function Navbar() {
                 href={item.href}
                 className="text-foreground hover:text-primary transition-colors bts-hover-lift"
                 data-testid={`nav-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                aria-label={`Navigate to ${item.label}`}
               >
                 {item.label}
               </Link>
@@ -82,9 +83,9 @@ export default function Navbar() {
             {/* Customer Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-1">
+                <Button variant="ghost" className="flex items-center space-x-1" aria-label="My Account menu" aria-haspopup="menu">
                   <span>My Account</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -107,9 +108,9 @@ export default function Navbar() {
             {/* Business Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-1">
+                <Button variant="ghost" className="flex items-center space-x-1" aria-label="Business menu" aria-haspopup="menu">
                   <span>Business</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -132,9 +133,9 @@ export default function Navbar() {
             {/* Admin Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-1">
+                <Button variant="ghost" className="flex items-center space-x-1" aria-label="Admin menu" aria-haspopup="menu">
                   <span>Admin</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -199,8 +200,8 @@ export default function Navbar() {
             
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" data-testid="mobile-menu-button">
-                  <Menu className="h-5 w-5" />
+                <Button variant="ghost" size="sm" data-testid="mobile-menu-button" aria-label="Open navigation menu" aria-expanded={isOpen}>
+                  <Menu className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px]">

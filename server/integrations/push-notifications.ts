@@ -289,44 +289,54 @@ export class PushNotificationService {
 
   // Order-specific notification methods
   async notifyOrderStatusUpdate(userId: string, orderData: any) {
-    const statusMessages = {
-      confirmed: { 
-        title: '🎉 Order Confirmed!', 
-        body: `Your order from ${orderData.restaurantName} is confirmed and being prepared.`,
-        icon: '/icons/order-confirmed.png'
-      },
-      preparing: { 
-        title: '👨‍🍳 Order Being Prepared', 
-        body: `${orderData.restaurantName} is preparing your delicious meal!`,
-        icon: '/icons/preparing.png'
-      },
-      ready: { 
-        title: '📦 Order Ready!', 
-        body: `Your order is ready for pickup. A rider will collect it soon.`,
-        icon: '/icons/ready.png'
-      },
-      picked_up: { 
-        title: '🏃‍♂️ Order Picked Up', 
-        body: `Your order has been picked up and is on the way to you!`,
-        icon: '/icons/picked-up.png'
-      },
-      in_transit: { 
-        title: '🚗 Rider On The Way!', 
-        body: `Your rider is heading to your location. Track them live!`,
-        icon: '/icons/in-transit.png',
-        requireInteraction: true
-      },
-      delivered: { 
-        title: '✅ Order Delivered!', 
-        body: `Enjoy your meal! Please rate your experience.`,
-        icon: '/icons/delivered.png',
-        requireInteraction: true
-      }
+    // Get user notification preferences
+    const preferences = await storage.getUserNotificationPreferences(userId) || {
+      pushNotifications: true,
+      orderUpdates: true,
+      orderPlaced: true,
+      orderConfirmed: true,
+      orderPreparing: true,
+      orderReady: true,
+      orderDelivered: true,
+      quietHoursEnabled: false
     };
 
-    const notification = statusMessages[orderData.status as keyof typeof statusMessages];
+    // Check if push notifications are enabled
+    if (!preferences.pushNotifications) {
+      // Still send WebSocket notification for real-time UI updates
+      const notification = this.getOrderStatusMessage(orderData);
+      if (notification) {
+        this.sendToUser(userId, {
+          type: 'order_status_update',
+          orderId: orderData.orderId,
+          status: orderData.status,
+          message: notification.body,
+          data: orderData
+        });
+      }
+      return;
+    }
+
+    // Check granular order status preferences
+    const statusPreferenceMap: Record<string, string> = {
+      'placed': 'orderPlaced',
+      'confirmed': 'orderConfirmed',
+      'preparing': 'orderPreparing',
+      'ready': 'orderReady',
+      'ready_for_pickup': 'orderReady',
+      'delivered': 'orderDelivered',
+      'completed': 'orderDelivered'
+    };
+
+    const preferenceKey = statusPreferenceMap[orderData.status?.toLowerCase()];
+    const shouldSendStatusNotification = preferenceKey ? (preferences as any)[preferenceKey] ?? true : true;
+
+    // Check if quiet hours apply (not for critical statuses)
+    const shouldSendNow = this.shouldSendNotificationNow(preferences, orderData.status === 'cancelled' ? 'high' : 'medium');
+
+    const notification = this.getOrderStatusMessage(orderData);
     if (notification) {
-      // Send real-time WebSocket notification
+      // Always send real-time WebSocket notification (doesn't disturb user)
       this.sendToUser(userId, {
         type: 'order_status_update',
         orderId: orderData.orderId,
@@ -335,34 +345,120 @@ export class PushNotificationService {
         data: orderData
       });
 
-      // Send push notification
-      await this.sendPushToUser(userId, {
-        ...notification,
-        data: {
-          type: 'order_update',
-          orderId: orderData.orderId,
-          status: orderData.status,
-          url: `/orders/${orderData.orderId}/track`
-        },
-        actions: [
-          {
-            action: 'track',
-            title: 'Track Order',
-            icon: '/icons/track.png'
+      // Only send push notification if preferences allow
+      if (preferences.orderUpdates && shouldSendStatusNotification && shouldSendNow) {
+        await this.sendPushToUser(userId, {
+          ...notification,
+          data: {
+            type: 'order_update',
+            orderId: orderData.orderId,
+            status: orderData.status,
+            url: `/orders/${orderData.orderId}/track`
           },
-          {
-            action: 'view',
-            title: 'View Details',
-            icon: '/icons/view.png'
-          }
-        ],
-        tag: `order-${orderData.orderId}`
-      });
+          actions: [
+            {
+              action: 'track',
+              title: 'Track Order',
+              icon: '/icons/track.png'
+            },
+            {
+              action: 'view',
+              title: 'View Details',
+              icon: '/icons/view.png'
+            }
+          ],
+          tag: `order-${orderData.orderId}`
+        });
+      }
     }
   }
 
+  // Helper method to get order status messages
+  private getOrderStatusMessage(orderData: any) {
+    const statusMessages = {
+      confirmed: {
+        title: 'Order Confirmed!',
+        body: `Your order from ${orderData.restaurantName} is confirmed and being prepared.`,
+        icon: '/icons/order-confirmed.png'
+      },
+      preparing: {
+        title: 'Order Being Prepared',
+        body: `${orderData.restaurantName} is preparing your delicious meal!`,
+        icon: '/icons/preparing.png'
+      },
+      ready: {
+        title: 'Order Ready!',
+        body: `Your order is ready for pickup. A rider will collect it soon.`,
+        icon: '/icons/ready.png'
+      },
+      picked_up: {
+        title: 'Order Picked Up',
+        body: `Your order has been picked up and is on the way to you!`,
+        icon: '/icons/picked-up.png'
+      },
+      in_transit: {
+        title: 'Rider On The Way!',
+        body: `Your rider is heading to your location. Track them live!`,
+        icon: '/icons/in-transit.png',
+        requireInteraction: true
+      },
+      delivered: {
+        title: 'Order Delivered!',
+        body: `Enjoy your meal! Please rate your experience.`,
+        icon: '/icons/delivered.png',
+        requireInteraction: true
+      }
+    };
+
+    return statusMessages[orderData.status as keyof typeof statusMessages];
+  }
+
+  // Check if we should send notification based on quiet hours
+  private shouldSendNotificationNow(preferences: any, urgency: 'low' | 'medium' | 'high' | 'critical'): boolean {
+    // Critical notifications always go through
+    if (urgency === 'critical') return true;
+
+    // If quiet hours not enabled, send notification
+    if (!preferences.quietHoursEnabled) return true;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const quietStart = preferences.quietHoursStart || '22:00';
+    const quietEnd = preferences.quietHoursEnd || '08:00';
+
+    const [startHour, startMinute] = quietStart.split(':').map(Number);
+    const [endHour, endMinute] = quietEnd.split(':').map(Number);
+
+    const currentTime = currentHour * 60 + currentMinute;
+    const startTime = startHour * 60 + startMinute;
+    const endTime = endHour * 60 + endMinute;
+
+    let isQuietHours = false;
+    if (startTime > endTime) {
+      // Overnight quiet hours (e.g., 22:00 to 08:00)
+      isQuietHours = currentTime >= startTime || currentTime < endTime;
+    } else {
+      isQuietHours = currentTime >= startTime && currentTime < endTime;
+    }
+
+    // High urgency can bypass quiet hours for push (but not for less urgent)
+    if (urgency === 'high') return true;
+
+    return !isQuietHours;
+  }
+
   async notifyRiderProximity(userId: string, riderData: any) {
-    // Send real-time location update
+    // Get user notification preferences
+    const preferences = await storage.getUserNotificationPreferences(userId) || {
+      pushNotifications: true,
+      riderUpdates: true,
+      riderArriving: true,
+      quietHoursEnabled: false
+    };
+
+    // Always send real-time WebSocket location update (doesn't disturb user)
     this.sendToUser(userId, {
       type: 'rider_proximity',
       orderId: riderData.orderId,
@@ -371,9 +467,18 @@ export class PushNotificationService {
       message: `Your rider ${riderData.riderName} is nearby!`
     });
 
+    // Check if push notifications and rider updates are enabled
+    if (!preferences.pushNotifications || !preferences.riderUpdates || !preferences.riderArriving) {
+      return;
+    }
+
+    // Rider proximity is high urgency - check quiet hours but still allow
+    const shouldSendNow = this.shouldSendNotificationNow(preferences, 'high');
+    if (!shouldSendNow) return;
+
     // Send push notification
     await this.sendPushToUser(userId, {
-      title: '📍 Rider Nearby!',
+      title: 'Rider Nearby!',
       body: `${riderData.riderName} is approaching your location. ETA: ${riderData.estimatedArrival}`,
       icon: '/icons/rider-nearby.png',
       data: {
@@ -428,6 +533,14 @@ export class PushNotificationService {
   }
 
   async notifyPromotion(userId: string, promotionData: any) {
+    // Get user notification preferences
+    const preferences = await storage.getUserNotificationPreferences(userId) || {
+      pushNotifications: true,
+      promotionalEmails: true,
+      quietHoursEnabled: false
+    };
+
+    // Always send WebSocket notification for real-time UI updates
     this.sendToUser(userId, {
       type: 'promotion',
       promotionId: promotionData.id,
@@ -437,8 +550,17 @@ export class PushNotificationService {
       validUntil: promotionData.validUntil
     });
 
+    // Check if push notifications and promotional notifications are enabled
+    if (!preferences.pushNotifications || !preferences.promotionalEmails) {
+      return;
+    }
+
+    // Promotions are low urgency - respect quiet hours
+    const shouldSendNow = this.shouldSendNotificationNow(preferences, 'low');
+    if (!shouldSendNow) return;
+
     await this.sendPushToUser(userId, {
-      title: `🎉 ${promotionData.title}`,
+      title: `${promotionData.title}`,
       body: promotionData.description,
       icon: '/icons/promotion.png',
       image: promotionData.imageUrl,

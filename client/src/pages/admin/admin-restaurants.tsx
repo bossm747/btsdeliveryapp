@@ -17,17 +17,27 @@ import { Store, AlertCircle, DollarSign, TrendingUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+interface Restaurant {
+  id: string;
+  name: string;
+  category: string;
+  status: string;
+  rating: string;
+  totalOrders: number;
+  createdAt: string;
+}
+
 export default function AdminRestaurants() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast } = useToast();
 
-  // Fetch restaurants
-  const { data: restaurants = [], isLoading: restaurantsLoading, isError: restaurantsError } = useQuery({
+  // Fetch restaurants with proper typing
+  const { data: restaurants = [], isLoading: restaurantsLoading, isError: restaurantsError } = useQuery<Restaurant[]>({
     queryKey: ["/api/admin/restaurants"],
   });
 
-  // Fetch stats
-  const { data: stats = {}, isLoading: statsLoading } = useQuery({
+  // Fetch stats with proper typing
+  const { data: stats = {}, isLoading: statsLoading } = useQuery<Record<string, any>>({
     queryKey: ["/api/admin/stats"],
   });
 

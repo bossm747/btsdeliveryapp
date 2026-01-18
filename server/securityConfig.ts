@@ -82,9 +82,9 @@ export const SecurityConfig = {
   // CORS configurations
   cors: {
     allowedOrigins: [
-      'http://localhost:5000',
+      'http://localhost:5001',
       'http://localhost:3000',
-      'https://localhost:5000',
+      'https://localhost:5001',
       process.env.FRONTEND_URL,
       process.env.DOMAIN_URL
     ].filter(Boolean),

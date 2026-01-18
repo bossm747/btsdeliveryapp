@@ -1,8 +1,114 @@
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
-// Initialize Gemini AI with the newest model
-// Note: gemini-2.0-flash-exp is the latest Gemini 2.0 Flash model
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+// ============================================================================
+// AI Provider Configuration - OpenRouter (primary) + Gemini (fallback)
+// ============================================================================
+
+// OpenRouter - Access to many AI providers (OpenAI, Anthropic, Google, Meta, etc.)
+const openRouter = process.env.OPENROUTER_API_KEY ? new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": process.env.PUBLIC_APP_URL || "https://btsdelivery.com",
+    "X-Title": "BTS Delivery Platform"
+  }
+}) : null;
+
+// Gemini - Google's AI (fallback)
+const gemini = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  : null;
+
+// Available models via OpenRouter
+const OPENROUTER_MODELS = {
+  fast: "google/gemini-3-flash-preview",           // Fast Google model
+  smart: "xiaomi/mimo-v2-flash:free",              // Free Xiaomi model
+  capable: "openai/gpt-oss-120b",                  // Capable OpenAI model
+  image: "google/gemini-2.5-flash-image",          // Image generation
+  fallback: "meta-llama/llama-3.2-3b-instruct:free" // Free fallback
+};
+
+// Log which AI providers are available
+console.log(`[AI Service] Providers: OpenRouter=${!!openRouter}, Gemini=${!!gemini}`);
+
+// ============================================================================
+// Unified AI Generation Function
+// ============================================================================
+
+async function generateAIContent(prompt: string, options?: {
+  jsonMode?: boolean;
+  model?: keyof typeof OPENROUTER_MODELS;
+}): Promise<string> {
+  const { jsonMode = false, model = "fast" } = options || {};
+
+  // Try OpenRouter first (multi-provider access)
+  if (openRouter) {
+    try {
+      const response = await openRouter.chat.completions.create({
+        model: OPENROUTER_MODELS[model],
+        messages: [
+          {
+            role: "system",
+            content: jsonMode
+              ? "You are a helpful AI assistant. You MUST respond with valid JSON only. No markdown, no code blocks, no explanations - just pure JSON."
+              : "You are a helpful AI assistant for BTS Delivery, a food delivery service in Batangas, Philippines."
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+        // Note: response_format not used as not all models support it
+      });
+
+      const result = response.choices[0]?.message?.content || "";
+      return result;
+    } catch (error: any) {
+      console.error("[AI Service] OpenRouter error:", error.message);
+      // Fall through to Gemini
+    }
+  }
+
+  // Try Gemini as fallback
+  if (gemini) {
+    try {
+      const response = await gemini.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+        config: jsonMode ? { responseMimeType: "application/json" } : undefined
+      });
+
+      return response.text || "";
+    } catch (error: any) {
+      console.error("[AI Service] Gemini error:", error.message);
+    }
+  }
+
+  throw new Error("No AI provider available");
+}
+
+// Helper to parse JSON safely
+function safeParseJSON<T>(text: string, fallback: T): T {
+  try {
+    // Clean up potential markdown code blocks
+    let cleaned = text.trim();
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.slice(7);
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.slice(3);
+    }
+    if (cleaned.endsWith("```")) {
+      cleaned = cleaned.slice(0, -3);
+    }
+    return JSON.parse(cleaned.trim());
+  } catch {
+    return fallback;
+  }
+}
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
 export interface RecommendationRequest {
   customerId: string;
@@ -29,6 +135,10 @@ export interface SentimentAnalysis {
   suggestions?: string[];
 }
 
+// ============================================================================
+// AI Service Functions
+// ============================================================================
+
 // Get personalized restaurant and food recommendations
 export async function getPersonalizedRecommendations(request: RecommendationRequest): Promise<{
   restaurants: Array<{ name: string; reason: string; matchScore: number }>;
@@ -39,7 +149,7 @@ export async function getPersonalizedRecommendations(request: RecommendationRequ
 Based on this customer's order history, provide personalized recommendations.
 
 Customer Order History:
-${request.orderHistory.map(order => 
+${request.orderHistory.map(order =>
   `- ${order.restaurantName}: ${order.items.join(", ")} (₱${order.totalAmount}) at ${order.orderTime}`
 ).join("\n")}
 
@@ -56,16 +166,12 @@ Provide recommendations in JSON format:
 Consider Filipino food preferences, meal timing (breakfast/lunch/merienda/dinner), and local Batangas specialties.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      restaurants: [],
+      dishes: [],
+      timeBasedSuggestion: "Try our popular restaurants!"
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error getting recommendations:", error);
     return {
@@ -103,19 +209,14 @@ Respond in JSON format:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      estimatedMinutes: Math.round(15 + (distance * 5) + restaurantPrepTime),
+      confidence: 50,
+      factors: ["Standard estimate"]
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error predicting delivery time:", error);
-    // Fallback calculation
     const baseTime = 15 + (distance * 5) + restaurantPrepTime;
     return {
       estimatedMinutes: Math.round(baseTime),
@@ -142,16 +243,13 @@ Provide analysis in JSON format:
 Consider Filipino communication style and common food delivery concerns.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      sentiment: "neutral" as const,
+      score: 50,
+      keywords: [],
+      suggestions: []
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error analyzing sentiment:", error);
     return {
@@ -197,16 +295,12 @@ Provide response in JSON format:
 Be empathetic, solution-oriented, and use common Filipino expressions like "po", "opo", "salamat".`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      response: "Pasensya na po, may technical difficulty kami ngayon. Please try again or contact our support team.",
+      suggestedActions: ["Try refreshing the page", "Contact support directly"],
+      requiresHumanSupport: true
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error processing customer query:", error);
     return {
@@ -249,19 +343,18 @@ Provide optimized route in JSON format:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      optimizedRoute: [
+        ...pickupLocations.map((p, i) => ({ type: "pickup" as const, id: p.id, sequence: i + 1 })),
+        ...deliveryLocations.map((d, i) => ({ type: "delivery" as const, id: d.id, sequence: pickupLocations.length + i + 1 }))
+      ],
+      estimatedTotalTime: 45,
+      estimatedDistance: 10,
+      efficiency: 70
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error optimizing route:", error);
-    // Simple fallback: pickup all first, then deliver
     const route = [
       ...pickupLocations.map((p, i) => ({ type: "pickup" as const, id: p.id, sequence: i + 1 })),
       ...deliveryLocations.map((d, i) => ({ type: "delivery" as const, id: d.id, sequence: pickupLocations.length + i + 1 }))
@@ -300,7 +393,7 @@ export async function predictDemandForecast(
   const prompt = `Forecast demand for a restaurant in Batangas based on historical data.
 
 Historical Data (last 30 days):
-${historicalData.slice(-30).map(d => 
+${historicalData.slice(-30).map(d =>
   `${d.date}: ${d.dayOfWeek}, ${d.orderCount} orders, ₱${d.totalRevenue}, Weather: ${d.weather}, Promo: ${d.hasPromo}`
 ).join("\n")}
 
@@ -319,20 +412,26 @@ Provide forecast in JSON format:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    const avgOrders = historicalData.length > 0
+      ? historicalData.reduce((sum, d) => sum + d.orderCount, 0) / historicalData.length
+      : 10;
 
-    const result = response.text || "{}";
-    return JSON.parse(result);
+    return safeParseJSON(result, {
+      forecast: Array.from({ length: upcomingDays }, (_, i) => ({
+        date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        expectedOrders: Math.round(avgOrders),
+        confidenceLevel: 60,
+        recommendations: ["Maintain standard inventory levels"]
+      })),
+      peakHours: ["11:30 AM - 1:00 PM", "6:00 PM - 8:00 PM"],
+      stockingSuggestions: ["Stock popular items based on historical demand"]
+    });
   } catch (error) {
     console.error("Error predicting demand:", error);
-    // Simple fallback forecast
-    const avgOrders = historicalData.reduce((sum, d) => sum + d.orderCount, 0) / historicalData.length;
+    const avgOrders = historicalData.length > 0
+      ? historicalData.reduce((sum, d) => sum + d.orderCount, 0) / historicalData.length
+      : 10;
     return {
       forecast: Array.from({ length: upcomingDays }, (_, i) => ({
         date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -380,16 +479,14 @@ Provide in JSON format:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const result = await generateAIContent(prompt, { jsonMode: true });
+    return safeParseJSON(result, {
+      tagline: "Special Promo Alert!",
+      description: "Enjoy our special offer today!",
+      socialMediaPost: "🎉 Special promo available now! Order via BTS Delivery!",
+      smsMessage: "Special promo at " + restaurantName + "! Order now via BTS Delivery.",
+      terms: ["Valid for limited time only", "Terms and conditions apply"]
     });
-
-    const result = response.text || "{}";
-    return JSON.parse(result);
   } catch (error) {
     console.error("Error generating promo content:", error);
     return {

@@ -9,47 +9,60 @@ BTS Delivery is a multi-service delivery platform for Batangas Province, Philipp
 ## Commands
 
 ```bash
-npm run dev        # Start development server (tsx with hot-reload)
+# Development
+npm run dev        # Start development server (tsx with hot-reload, port 5000)
 npm run build      # Build for production (Vite + esbuild)
 npm run start      # Run production build
 npm run check      # TypeScript type checking
+
+# Database
 npm run db:push    # Push schema changes to database (Drizzle Kit)
+
+# Testing (Playwright E2E)
+npm run test           # Run all E2E tests headless
+npm run test:headed    # Run tests with browser visible
+npm run test:ui        # Open Playwright UI mode
+npm run test:report    # View test report
 ```
 
 ## Architecture
 
 ### Stack
 - **Frontend**: React 18, Vite, Tailwind CSS, shadcn/ui (Radix primitives), Wouter routing
-- **Backend**: Express.js, TypeScript
-- **Database**: PostgreSQL (Neon serverless) with Drizzle ORM
-- **State**: React Query (server), Zustand (cart), React Context (auth, language)
+- **Backend**: Express.js, TypeScript, WebSocket (ws)
+- **Database**: PostgreSQL with Drizzle ORM
+- **State**: React Query (server state), Zustand (cart), React Context (auth, language)
 
 ### Directory Structure
 ```
 client/src/
-├── pages/           # Route components organized by role (admin/, customer/, rider/, vendor/, shared/)
+├── pages/           # Route components by role (admin/, customer/, rider/, vendor/, shared/)
 ├── components/      # UI components (ui/ for shadcn, role-specific subdirs)
 ├── contexts/        # AuthContext, LanguageContext
-├── stores/          # Zustand stores
+├── stores/          # Zustand stores (cart-store.ts)
 ├── hooks/           # Custom React hooks
 ├── lib/             # Utilities, queryClient, types
 
 server/
-├── index.ts         # Express entry point
+├── index.ts         # Express entry point with WebSocket setup
 ├── routes.ts        # All API route definitions
-├── db.ts            # Drizzle database connection
-├── storage.ts       # Storage abstraction layer
-├── middleware/      # Auth, security, rate limiting, validation
-├── services/        # Business logic (pricing, payments, notifications)
+├── db.ts            # Drizzle database connection with pool config
+├── storage.ts       # Database storage abstraction layer
+├── middleware/      # Auth, security, rate limiting, validation, payments
+├── services/        # Business logic (pricing, payments, notifications, chat)
 ├── integrations/    # External services (email, SMS, maps, push)
+├── routes/          # Modular route files (nexuspay, wallet, tax, fraud, etc.)
 
 shared/
 └── schema.ts        # Drizzle schema (single source of truth for DB types)
+
+e2e/                 # Playwright E2E tests
 ```
 
 ### Path Aliases
 - `@/*` → `./client/src/*`
 - `@shared/*` → `./shared/*`
+- `@assets/*` → `./attached_assets/*`
 
 ### Role-Based Architecture
 Four user roles with dedicated routes and dashboards:
@@ -58,34 +71,177 @@ Four user roles with dedicated routes and dashboards:
 - **rider**: `/rider-dashboard`
 - **admin**: `/admin/*` (dispatch, analytics, orders, restaurants, users, riders)
 
-Routes are protected via `<ProtectedRoute allowedRoles={[...]}>` wrapper.
+Routes are protected via `<ProtectedRoute allowedRoles={[...]}>` wrapper component.
 
 ### API Pattern
 All backend routes are under `/api/*`. Key prefixes:
-- `/api/auth/*` - Authentication
-- `/api/customer/*`, `/api/vendor/*`, `/api/rider/*`, `/api/admin/*` - Role-specific
+- `/api/auth/*` - Authentication (login, register, password reset)
+- `/api/customer/*`, `/api/vendor/*`, `/api/rider/*`, `/api/admin/*` - Role-specific endpoints
 - `/api/analytics/*` - Analytics and reporting
 
 ### Database
-- Schema defined in `shared/schema.ts`
+- Schema defined in `shared/schema.ts` (large file, use grep to find specific tables)
 - Migrations output to `./migrations/`
-- Requires `DATABASE_URL` environment variable (Neon PostgreSQL connection string)
+- Connection pool: max 20 connections, 30s query timeout
+- Requires `DATABASE_URL` environment variable
 
 ### Security Middleware Stack
-Located in `server/middleware/`. Applied layers include:
-- Rate limiting and slow-down
-- Helmet security headers
-- CORS configuration
-- XSS sanitization
-- JWT authentication (`authenticateToken`)
-- Role verification (`requireRole`, `requireAdmin`, etc.)
-- Specialized stacks for auth, payments (PCI compliance, fraud detection), uploads
+Located in `server/middleware/`. Key middleware configurations in `index.ts`:
+- `securityMiddlewareConfig.basic` - All routes (rate limiting, headers, CORS, XSS sanitization)
+- `securityMiddlewareConfig.auth` - Login/register (stricter rate limits, account lockout)
+- `securityMiddlewareConfig.payment` - Payment routes (PCI compliance, fraud detection)
+- `securityMiddlewareConfig.upload` - File uploads (50MB limit)
+
+Auth middleware: `authenticateToken`, `requireRole`, `requireAdmin`, `requireAdminOrVendor`, `requireAdminOrRider`
 
 ### Key Services
-- `server/services/pricing.ts` - Complex delivery pricing algorithm
-- `server/services/nexuspay.ts` - Payment gateway integration
+- `server/services/pricing.ts` - Delivery pricing algorithm with distance, surge, vehicle type factors
+- `server/services/nexuspay.ts` - NexusPay payment gateway integration
 - `server/services/gemini.ts` - Google Gemini AI integration
-- `server/services/notification-service.ts` - Multi-channel notifications
+- `server/services/notification-service.ts` - Multi-channel notifications (email, SMS, push)
+- `server/services/chat-service.ts` - Real-time customer-rider messaging
+- `server/services/websocket-manager.ts` - WebSocket connection management
 
 ### Real-time Features
-WebSocket support via `ws` library for live order tracking and rider location updates.
+WebSocket server runs alongside Express for:
+- Live order tracking
+- Rider location updates
+- Customer-rider chat
+
+### Required Environment Variables
+- `DATABASE_URL` - PostgreSQL connection string
+- `JWT_SECRET` - JWT signing secret (required, no fallback)
+- `PUBLIC_APP_URL` - Public URL for webhooks and emails
+- `SENDGRID_API_KEY` - Email service (optional)
+- `NEXUSPAY_*` - Payment gateway credentials
+
+### AI Service Configuration
+- `OPENROUTER_API_KEY` - OpenRouter API key (primary AI provider, multi-model access)
+- `GEMINI_API_KEY` - Google Gemini API key (fallback)
+
+**Available Models via OpenRouter:**
+- `google/gemini-3-flash-preview` - Text generation (default)
+- `xiaomi/mimo-v2-flash:free` - Free smart model
+- `openai/gpt-oss-120b` - Capable model
+- `google/gemini-2.5-flash-image` - Image generation
+
+---
+
+## AI Assistant System (2026-01-18)
+
+### Overview
+The BTS Delivery AI Assistant is an intelligent, multi-agent system that helps customers, riders, and vendors. It speaks in authentic **Batangas Tagalog dialect** mixed with English (Taglish).
+
+### Key Features
+
+#### 1. Agent-Based Query Routing
+Different agents handle different query types:
+- `customer_support` - Help with orders, tracking, complaints
+- `order_assistant` - Help place/modify orders
+- `restaurant_finder` - Find restaurants, recommend food
+- `rider_support` - Rider-specific queries
+- `vendor_analytics` - Business insights, sales analysis
+- `technical_help` - App usage, troubleshooting
+- `creative` - Marketing, content generation
+- `analytical` - Data analysis, predictions
+
+#### 2. Function Calling
+The AI can perform real actions for authenticated users:
+
+**Customer Functions:**
+- `browse_restaurants` - List available restaurants
+- `get_restaurant_menu` - Get menu with categories and items
+- `search_menu_items` - Search for dishes across restaurants
+- `create_order` - Place a new order
+- `get_order_status` - Check order status
+- `get_customer_orders` - List user's orders
+- `cancel_order` - Cancel an order
+- `apply_promo_code` - Validate and apply promo codes
+- `get_saved_addresses` - Retrieve saved delivery addresses
+
+**Rider Functions:**
+- `get_rider_assignments` - List assigned deliveries
+- `get_delivery_details` - Get full order details for delivery
+- `update_delivery_status` - Update order status
+- `get_delivery_route` - Get pickup and delivery coordinates
+
+**Vendor Functions:**
+- `get_vendor_orders` - List restaurant orders
+- `update_order_status` - Update order preparation status
+- `create_menu_item` - Add new menu item (with AI image generation)
+- `update_menu_item` - Modify existing item
+- `create_menu_category` - Add menu category
+- `create_promotion` - Create discount/promo
+- `generate_menu_content` - AI-generate descriptions, images, promo text
+
+#### 3. File Upload & AI Vision
+- **Endpoint:** `POST /api/ai/chat-with-upload`
+- Supports image uploads (JPEG, PNG, GIF, WebP) and PDFs
+- AI vision analyzes images using OpenRouter/Gemini
+- **Menu Analysis:** Can extract menu items from photos and auto-create in database
+- Files saved to `/uploads/images/ai-uploads/`
+
+#### 4. Login Awareness
+- Uses `optionalAuthenticateToken` middleware
+- Anonymous users: Can browse, get info, but prompted to login for actions
+- Authenticated users: Full function calling enabled
+- Response includes `isLoggedIn` flag for client awareness
+
+### API Endpoints
+
+```
+POST /api/ai/chat-support
+  - Main AI chat endpoint
+  - Body: { query, userRole, userId?, orderId?, restaurantId?, riderId?, conversationHistory? }
+  - Returns: { response, suggestedActions, agent, model, functionsExecuted, isLoggedIn }
+
+POST /api/ai/chat-with-upload
+  - Chat with file/image uploads
+  - FormData: files[], query, userRole, userId?, restaurantId?, action?
+  - Actions: "analyze" (analyze only), "create-menu" (analyze + create items)
+  - Returns: { success, files[], response, functionsExecuted, isLoggedIn }
+
+POST /api/ai/analyze-menu
+  - Analyze menu image
+  - FormData: menuImage, restaurantId?, createItems?
+  - Returns: { success, analysis, imageUrl, menuCreated? }
+```
+
+### Key Files
+- `server/services/ai-assistant.ts` - Main AI assistant with agent routing
+- `server/services/ai-functions.ts` - Function definitions and execution
+- `server/services/ai-vision.ts` - Image analysis and menu extraction
+- `server/services/local-storage.ts` - File upload storage
+- `client/src/components/ai-chat-interface.tsx` - Rich chat UI component
+
+### Batangas Dialect
+The AI uses authentic Batangas expressions:
+- "Ala eh!" - Emphasis/agreement
+- "Geh/Ge" - Okay (instead of "sige")
+- "Ga" - Question particle ("Gusto mo ga?")
+- "Anung" - What (instead of "ano")
+- "Ara" - Here/there
+- "'Di ba ga?" - Isn't it? (Batangas style)
+
+---
+
+## VPS Deployment
+
+### Production Setup
+```bash
+# Build for production
+npm run build
+
+# Start production server (port 5001)
+NODE_ENV=production npm start
+```
+
+### Required Directories
+- `./uploads/` - File uploads (images, documents)
+- `./logs/` - Application logs
+
+### Process Management
+Use PM2 or systemd for production process management:
+```bash
+pm2 start npm --name "bts-delivery" -- start
+```

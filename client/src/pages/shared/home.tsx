@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Restaurant } from "@shared/schema";
-import MobileNav from "@/components/mobile-nav";
 import PWAInstall from "@/components/pwa-install";
 
 // Import generated images
@@ -379,9 +378,6 @@ export default function Home() {
         </section>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileNav />
-      
       {/* PWA Install Prompt */}
       <PWAInstall />
     </div>

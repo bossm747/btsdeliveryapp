@@ -1,10 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { 
+import {
   Home, Search, ShoppingBag, User, Package
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useCart } from "@/hooks/use-cart";
+import { useCartStore } from "@/stores/cart-store";
 import { useAuth } from "@/contexts/AuthContext";
+import { haptic } from "@/hooks/use-haptic";
 
 interface NavItem {
   icon: any;
@@ -17,7 +18,7 @@ interface NavItem {
 export default function MobileBottomNav() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const { getTotalItems } = useCart();
+  const { getTotalItems } = useCartStore();
   const cartItemCount = getTotalItems();
 
   // Don't show navigation on role-specific dashboards as they have their own
@@ -81,11 +82,14 @@ export default function MobileBottomNav() {
           
           return (
             <Link key={item.label} href={item.path}>
-              <div className={`py-3 px-1 transition-colors ${
-                item.active 
-                  ? 'text-[#FF6B35] bg-orange-50' 
-                  : 'text-gray-600 hover:text-[#FF6B35]'
-              }`}>
+              <div
+                className={`py-3 px-1 transition-colors ${
+                  item.active
+                    ? 'text-[#FF6B35] bg-orange-50'
+                    : 'text-gray-600 hover:text-[#FF6B35]'
+                }`}
+                onClick={() => haptic.light()}
+              >
                 <div className="relative">
                   <Icon className={`w-5 h-5 mx-auto mb-1 ${
                     item.active ? 'text-[#FF6B35]' : ''

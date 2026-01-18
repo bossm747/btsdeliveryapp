@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RestaurantCardSkeleton } from "@/components/skeletons";
 import { Separator } from "@/components/ui/separator";
 import { MapPin, Star, Clock, Sparkles, TrendingUp, Heart } from "lucide-react";
 import RestaurantCard from "@/components/restaurant-card";
@@ -91,7 +91,7 @@ export default function Restaurants() {
     // Open now filter
     if (isOpen && restaurant.operatingHours) {
       const now = new Date();
-      const currentDay = now.toLocaleDateString('en-US', { weekday: 'lowercase' });
+      const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
       const currentTime = now.toTimeString().slice(0, 5);
       
       const dayHours = (restaurant.operatingHours as any)?.[currentDay];
@@ -192,20 +192,8 @@ export default function Restaurants() {
         )}
 
         {isLoading ? (
-          <div className="space-y-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 9 }).map((_, i) => (
-                <div key={i} className="space-y-3">
-                  <Skeleton className="h-48 w-full rounded-xl" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                  <div className="flex justify-between">
-                    <Skeleton className="h-4 w-1/4" />
-                    <Skeleton className="h-4 w-1/4" />
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="restaurants-loading">
+            <RestaurantCardSkeleton count={9} />
           </div>
         ) : sortedRestaurants.length === 0 ? (
           <Card className="text-center py-16" data-testid="no-restaurants">

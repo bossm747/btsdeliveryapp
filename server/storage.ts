@@ -793,11 +793,8 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
-  async getOrdersByCustomer(customerId: string): Promise<Order[]> {
-    return await db.select().from(orders)
-      .where(eq(orders.customerId, customerId))
-      .orderBy(desc(orders.createdAt));
-  }
+  // Note: getOrdersByCustomer is defined earlier in the class (line 603)
+  // Removed duplicate implementation here
 
   async getOrdersByRestaurant(restaurantId: string): Promise<Order[]> {
     return await db.select().from(orders)
@@ -805,10 +802,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(orders.createdAt));
   }
 
+  // Alias for getOrdersByRestaurant for backward compatibility
   async getRestaurantOrders(restaurantId: string): Promise<Order[]> {
-    return await db.select().from(orders)
-      .where(eq(orders.restaurantId, restaurantId))
-      .orderBy(desc(orders.createdAt));
+    return this.getOrdersByRestaurant(restaurantId);
   }
 
   async getOrdersByStatus(status: string): Promise<Order[]> {
@@ -3169,16 +3165,17 @@ export class DatabaseStorage implements IStorage {
     return result.rows || [];
   }
 
-  async getAvailableRiders(): Promise<any> {
+  // Get all available riders without location filter (for admin dashboard)
+  async getAllAvailableRiders(): Promise<any> {
     const result = await db.execute(sql`
-      SELECT 
+      SELECT
         r.*,
         u.first_name || ' ' || u.last_name as name,
         u.phone
       FROM riders r
       JOIN users u ON r.user_id = u.id
-      WHERE r.is_online = true 
-        AND r.is_verified = true 
+      WHERE r.is_online = true
+        AND r.is_verified = true
         AND r.current_order_id IS NULL
       ORDER BY r.rating DESC
     `);
@@ -3190,12 +3187,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRealTimePerformanceMetrics(): Promise<any> {
-    return {
-      averageDeliveryTime: 28,
-      onTimeDeliveryRate: 87.5,
-      customerSatisfaction: 4.2,
-      riderUtilization: 73.2
-    };
+    // Calculate real metrics from database
+    try {
+      const result = await db.execute(sql`
+        WITH delivery_stats AS (
+          SELECT
+            EXTRACT(EPOCH FROM (actual_delivery_time - created_at))/60 as delivery_minutes,
+            CASE WHEN actual_delivery_time <= estimated_delivery_time THEN 1 ELSE 0 END as on_time
+          FROM orders
+          WHERE status = 'delivered'
+            AND actual_delivery_time IS NOT NULL
+            AND created_at >= NOW() - INTERVAL '24 hours'
+        ),
+        rating_stats AS (
+          SELECT AVG(CAST(rating AS DECIMAL)) as avg_rating
+          FROM orders
+          WHERE rating IS NOT NULL
+            AND created_at >= NOW() - INTERVAL '24 hours'
+        ),
+        rider_stats AS (
+          SELECT
+            COUNT(*) FILTER (WHERE is_online = true) as online_riders,
+            COUNT(*) FILTER (WHERE is_online = true AND current_order_id IS NOT NULL) as busy_riders
+          FROM riders
+        )
+        SELECT
+          COALESCE(AVG(ds.delivery_minutes), 30) as avg_delivery_time,
+          COALESCE(AVG(ds.on_time) * 100, 85) as on_time_rate,
+          COALESCE((SELECT avg_rating FROM rating_stats), 4.0) as customer_satisfaction,
+          COALESCE(
+            CASE WHEN (SELECT online_riders FROM rider_stats) > 0
+              THEN (SELECT busy_riders::float / online_riders * 100 FROM rider_stats)
+              ELSE 0
+            END, 0
+          ) as rider_utilization
+        FROM delivery_stats ds
+      `);
+
+      const row = result.rows?.[0] || {};
+      return {
+        averageDeliveryTime: Math.round(Number(row.avg_delivery_time) || 30),
+        onTimeDeliveryRate: Math.round((Number(row.on_time_rate) || 85) * 10) / 10,
+        customerSatisfaction: Math.round((Number(row.customer_satisfaction) || 4.0) * 10) / 10,
+        riderUtilization: Math.round((Number(row.rider_utilization) || 0) * 10) / 10
+      };
+    } catch (error) {
+      console.error('Error fetching real-time metrics:', error);
+      // Return defaults on error
+      return {
+        averageDeliveryTime: 30,
+        onTimeDeliveryRate: 85,
+        customerSatisfaction: 4.0,
+        riderUtilization: 0
+      };
+    }
   }
 
   async getEmergencyAlerts(): Promise<any> {
@@ -3222,26 +3267,20 @@ export class DatabaseStorage implements IStorage {
 
   // Communication and Support
   async getSupportTickets(params: any): Promise<any> {
-    let whereConditions: string[] = [];
-    
-    if (params.status && params.status !== 'all') {
-      whereConditions.push(`status = '${params.status}'`);
-    }
-    
-    if (params.priority && params.priority !== 'all') {
-      whereConditions.push(`priority = '${params.priority}'`);
-    }
-    
-    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
     const offset = (params.page - 1) * params.limit;
-    
+    const statusFilter = params.status && params.status !== 'all' ? params.status : null;
+    const priorityFilter = params.priority && params.priority !== 'all' ? params.priority : null;
+
+    // Use parameterized queries to prevent SQL injection
     const result = await db.execute(sql`
-      SELECT 
+      SELECT
         st.*,
         u.first_name || ' ' || u.last_name as customer_name
       FROM support_tickets st
       LEFT JOIN users u ON st.user_id = u.id
-      ${sql.raw(whereClause)}
+      WHERE
+        (${statusFilter}::text IS NULL OR st.status = ${statusFilter})
+        AND (${priorityFilter}::text IS NULL OR st.priority = ${priorityFilter})
       ORDER BY st.created_at DESC
       LIMIT ${params.limit} OFFSET ${offset}
     `);
@@ -3352,26 +3391,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminAuditLogs(params: any): Promise<any> {
-    let whereConditions: string[] = [];
-    
-    if (params.action) {
-      whereConditions.push(`action = '${params.action}'`);
-    }
-    
-    if (params.resource) {
-      whereConditions.push(`resource = '${params.resource}'`);
-    }
-    
-    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
     const offset = (params.page - 1) * params.limit;
-    
+    const actionFilter = params.action || null;
+    const resourceFilter = params.resource || null;
+
+    // Use parameterized queries to prevent SQL injection
     const result = await db.execute(sql`
-      SELECT 
+      SELECT
         aal.*,
         u.first_name || ' ' || u.last_name as admin_name
       FROM admin_audit_logs aal
       LEFT JOIN users u ON aal.admin_user_id = u.id
-      ${sql.raw(whereClause)}
+      WHERE
+        (${actionFilter}::text IS NULL OR aal.action = ${actionFilter})
+        AND (${resourceFilter}::text IS NULL OR aal.resource = ${resourceFilter})
       ORDER BY aal.created_at DESC
       LIMIT ${params.limit} OFFSET ${offset}
     `);

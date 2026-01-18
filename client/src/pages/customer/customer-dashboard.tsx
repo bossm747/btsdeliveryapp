@@ -18,26 +18,41 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
+interface CustomerProfile {
+  totalOrders?: number;
+  totalSaved?: number;
+  [key: string]: any;
+}
+
+interface RecentOrder {
+  id: string;
+  orderNumber: string;
+  status: string;
+  totalAmount: string;
+  createdAt: string;
+  restaurantName: string;
+}
+
 export default function CustomerDashboard() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("home");
   const [showMenu, setShowMenu] = useState(false);
 
-  // Fetch customer data
-  const { data: customerData, isLoading: customerLoading } = useQuery({
+  // Fetch customer data with proper typing
+  const { data: customerData = {} as CustomerProfile, isLoading: customerLoading } = useQuery<CustomerProfile>({
     queryKey: ["/api/customer/profile"],
     enabled: true
   });
 
-  // Fetch recent orders
-  const { data: recentOrders = [], isLoading: ordersLoading } = useQuery({
+  // Fetch recent orders with proper typing
+  const { data: recentOrders = [], isLoading: ordersLoading } = useQuery<RecentOrder[]>({
     queryKey: ["/api/customer/orders/recent"],
     refetchInterval: 30000
   });
 
-  // Fetch favorite restaurants
-  const { data: favoriteRestaurants = [] } = useQuery({
+  // Fetch favorite restaurants with proper typing
+  const { data: favoriteRestaurants = [] } = useQuery<any[]>({
     queryKey: ["/api/customer/favorites"]
   });
 

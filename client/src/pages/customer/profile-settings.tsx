@@ -57,6 +57,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationPreferences, { NotificationPreferencesData } from "@/components/notification-preferences";
+import { useHapticSettings, isVibrationSupported, isMobileDevice } from "@/hooks/use-haptic";
 
 // Profile update schema
 const profileSchema = z.object({
@@ -87,18 +89,6 @@ const passwordSchema = z
 type ProfileFormData = z.infer<typeof profileSchema>;
 type PasswordFormData = z.infer<typeof passwordSchema>;
 
-interface NotificationPreferences {
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  pushNotifications: boolean;
-  orderUpdates: boolean;
-  promotionalEmails: boolean;
-  restaurantUpdates: boolean;
-  loyaltyRewards: boolean;
-  securityAlerts: boolean;
-  weeklyDigest: boolean;
-}
-
 export default function ProfileSettingsPage() {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
@@ -109,6 +99,11 @@ export default function ProfileSettingsPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  // Haptic feedback settings
+  const { enabled: hapticEnabled, setEnabled: setHapticEnabled } = useHapticSettings();
+  const hapticSupported = isVibrationSupported();
+  const isMobile = isMobileDevice();
+
   // Fetch user profile
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["/api/customer/profile"],
@@ -116,7 +111,7 @@ export default function ProfileSettingsPage() {
   });
 
   // Fetch notification preferences
-  const { data: notificationPrefs, isLoading: prefsLoading } = useQuery<NotificationPreferences>({
+  const { data: notificationPrefs, isLoading: prefsLoading } = useQuery<NotificationPreferencesData>({
     queryKey: ["/api/customer/notification-preferences"],
     enabled: !!user,
   });
@@ -187,28 +182,6 @@ export default function ProfileSettingsPage() {
     },
   });
 
-  // Update notification preferences mutation
-  const updateNotificationsMutation = useMutation({
-    mutationFn: async (data: Partial<NotificationPreferences>) => {
-      const response = await apiRequest("PUT", "/api/customer/notification-preferences", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Preferences Updated",
-        description: "Your notification preferences have been saved.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/customer/notification-preferences"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update preferences",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Update language mutation
   const updateLanguageMutation = useMutation({
     mutationFn: async (language: string) => {
@@ -236,10 +209,6 @@ export default function ProfileSettingsPage() {
 
   const handlePasswordSubmit = (data: PasswordFormData) => {
     changePasswordMutation.mutate(data);
-  };
-
-  const handleNotificationToggle = (key: keyof NotificationPreferences, value: boolean) => {
-    updateNotificationsMutation.mutate({ [key]: value });
   };
 
   const handleLanguageChange = (language: string) => {
@@ -636,185 +605,10 @@ export default function ProfileSettingsPage() {
 
           {/* Notifications Tab */}
           <TabsContent value="notifications">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-[#FF6B35]" />
-                  Notification Preferences
-                </CardTitle>
-                <CardDescription>
-                  Choose how you want to receive updates and alerts
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Communication Channels */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Communication Channels</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-5 h-5 text-gray-600" />
-                        <div>
-                          <p className="font-medium">Email Notifications</p>
-                          <p className="text-sm text-gray-500">
-                            Receive updates via email
-                          </p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.emailNotifications ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("emailNotifications", checked)
-                        }
-                        data-testid="email-notifications-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Phone className="w-5 h-5 text-gray-600" />
-                        <div>
-                          <p className="font-medium">SMS Notifications</p>
-                          <p className="text-sm text-gray-500">
-                            Receive updates via SMS
-                          </p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.smsNotifications ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("smsNotifications", checked)
-                        }
-                        data-testid="sms-notifications-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Bell className="w-5 h-5 text-gray-600" />
-                        <div>
-                          <p className="font-medium">Push Notifications</p>
-                          <p className="text-sm text-gray-500">
-                            Receive real-time push notifications
-                          </p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.pushNotifications ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("pushNotifications", checked)
-                        }
-                        data-testid="push-notifications-switch"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Notification Types */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Notification Types</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Order Updates</p>
-                        <p className="text-sm text-gray-500">
-                          Get notified about your order status
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.orderUpdates ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("orderUpdates", checked)
-                        }
-                        data-testid="order-updates-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Promotional Emails</p>
-                        <p className="text-sm text-gray-500">
-                          Discounts, offers, and special deals
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.promotionalEmails ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("promotionalEmails", checked)
-                        }
-                        data-testid="promotional-emails-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Restaurant Updates</p>
-                        <p className="text-sm text-gray-500">
-                          New menus and updates from favorites
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.restaurantUpdates ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("restaurantUpdates", checked)
-                        }
-                        data-testid="restaurant-updates-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Loyalty & Rewards</p>
-                        <p className="text-sm text-gray-500">
-                          Points earned and reward updates
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.loyaltyRewards ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("loyaltyRewards", checked)
-                        }
-                        data-testid="loyalty-rewards-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Security Alerts</p>
-                        <p className="text-sm text-gray-500">
-                          Login alerts and security updates
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.securityAlerts ?? true}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("securityAlerts", checked)
-                        }
-                        data-testid="security-alerts-switch"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Weekly Digest</p>
-                        <p className="text-sm text-gray-500">
-                          Weekly summary of your activity
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationPrefs?.weeklyDigest ?? false}
-                        onCheckedChange={(checked) =>
-                          handleNotificationToggle("weeklyDigest", checked)
-                        }
-                        data-testid="weekly-digest-switch"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <NotificationPreferences
+              preferences={notificationPrefs}
+              isLoading={prefsLoading}
+            />
           </TabsContent>
 
           {/* Preferences Tab */}
@@ -895,6 +689,30 @@ export default function ProfileSettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Haptic Feedback - only show on mobile devices */}
+                {isMobile && (
+                  <>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Haptic Feedback</p>
+                        <p className="text-sm text-gray-500">
+                          {hapticSupported
+                            ? "Vibration feedback for button presses and actions"
+                            : "Vibration not supported on this device"}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={hapticEnabled}
+                        onCheckedChange={setHapticEnabled}
+                        disabled={!hapticSupported}
+                        data-testid="haptic-toggle"
+                        aria-label="Toggle haptic feedback"
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

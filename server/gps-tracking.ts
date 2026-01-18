@@ -2,6 +2,8 @@ import { db } from "./db";
 import { riderLocationHistory, orders, riders, deliveryRoutes, deliveryTrackingEvents } from "@shared/schema";
 import { eq, and, desc, gte } from "drizzle-orm";
 import type { InsertRiderLocationHistory, InsertDeliveryRoute, InsertDeliveryTrackingEvent } from "@shared/schema";
+import { geofenceService } from "./services/geofence-service";
+import { wsManager } from "./services/websocket-manager";
 
 export interface LocationData {
   latitude: number;
@@ -26,11 +28,14 @@ export interface OptimizedRoute {
 }
 
 export class GPSTrackingService {
-  
+
   /**
-   * Update rider's current location
+   * Update rider's current location and check geofences for automatic status updates
    */
-  async updateRiderLocation(riderId: string, location: LocationData, orderId?: string): Promise<void> {
+  async updateRiderLocation(riderId: string, location: LocationData, orderId?: string): Promise<{
+    geofenceResults: any[];
+    locationSaved: boolean;
+  }> {
     const locationData: InsertRiderLocationHistory = {
       riderId,
       location: {
@@ -47,7 +52,7 @@ export class GPSTrackingService {
     };
 
     await db.insert(riderLocationHistory).values(locationData);
-    
+
     // Also update rider's current location
     await db.update(riders)
       .set({
@@ -60,6 +65,32 @@ export class GPSTrackingService {
         lastActivityAt: new Date()
       })
       .where(eq(riders.id, riderId));
+
+    // Check geofences for all active orders assigned to this rider
+    // This triggers automatic pickup detection, arrival notifications, etc.
+    const geofenceResults = await geofenceService.onRiderLocationUpdate(
+      riderId,
+      location.latitude,
+      location.longitude,
+      location.accuracy
+    );
+
+    // Broadcast rider location update via WebSocket
+    wsManager.broadcastRiderLocation({
+      riderId,
+      lat: location.latitude,
+      lng: location.longitude,
+      heading: location.heading,
+      speed: location.speed,
+      accuracy: location.accuracy,
+      orderId,
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      geofenceResults,
+      locationSaved: true
+    };
   }
 
   /**

@@ -4,51 +4,8 @@ import { Request, Response, NextFunction } from 'express';
 
 // Security headers configuration
 export const securityHeaders = helmet({
-  // Content Security Policy
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'", // Required for Vite in development
-        "'unsafe-eval'", // Required for Vite in development
-        "https://maps.googleapis.com",
-        "https://www.google.com",
-        "https://www.gstatic.com"
-      ],
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'", // Required for styled components
-        "https://fonts.googleapis.com"
-      ],
-      fontSrc: [
-        "'self'",
-        "https://fonts.gstatic.com"
-      ],
-      imgSrc: [
-        "'self'",
-        "data:",
-        "blob:",
-        "https:",
-        "http:", // For development
-        "*.googleapis.com",
-        "*.gstatic.com"
-      ],
-      connectSrc: [
-        "'self'",
-        "https://maps.googleapis.com",
-        "wss://localhost:*", // For WebSocket in development
-        "ws://localhost:*"   // For WebSocket in development
-      ],
-      frameSrc: [
-        "'self'"
-      ],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      manifestSrc: ["'self'"],
-      workerSrc: ["'self'", "blob:"]
-    },
-  },
+  // Content Security Policy - disabled for now to debug blank page issue
+  contentSecurityPolicy: false,
   
   // HTTP Strict Transport Security
   hsts: {
@@ -82,32 +39,9 @@ export const securityHeaders = helmet({
   // }
 });
 
-// CORS configuration
+// CORS configuration - allow all origins for now during VPS setup
 export const corsConfig = cors({
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (mobile apps, etc.)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:5000',
-      'http://localhost:3000',
-      'https://localhost:5000',
-      process.env.FRONTEND_URL,
-      process.env.DOMAIN_URL
-    ].filter(Boolean);
-    
-    // Allow all Replit domains in development
-    const isReplitDomain = origin.includes('.replit.dev') || 
-                          origin.includes('.replit.app') ||
-                          origin.includes('.repl.co');
-    
-    if (allowedOrigins.includes(origin) || (process.env.NODE_ENV === 'development' && isReplitDomain)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS: Origin ${origin} not allowed`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins temporarily
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [

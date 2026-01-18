@@ -24,12 +24,20 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGPSTracking } from "@/hooks/use-gps-tracking";
+import { DeliveryTypeBadge } from "@/components/delivery-options";
+import DeliveryProofCapture from "@/components/rider/delivery-proof-capture";
+import { DELIVERY_TYPES, type DeliveryType } from "@shared/schema";
 
 interface DeliveryOrder {
   id: string;
   orderNumber: string;
   status: 'assigned' | 'en_route_pickup' | 'at_restaurant' | 'picked_up' | 'en_route_delivery' | 'at_customer' | 'delivered' | 'completed';
-  
+
+  // Contactless delivery options
+  deliveryType?: DeliveryType;
+  contactlessInstructions?: string;
+  deliveryProofPhoto?: string;
+
   customer: {
     id: string;
     name: string;
@@ -468,9 +476,15 @@ export default function DeliveryWorkflowManager({
           {(order.status === 'picked_up' || order.status === 'en_route_delivery' || order.status === 'at_customer') && (
             <Card className="border-blue-200">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <User className="w-4 h-4 text-blue-600" />
-                  Delivery Location
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Delivery Location
+                  </div>
+                  {/* Show delivery type badge */}
+                  {order.deliveryType && (
+                    <DeliveryTypeBadge deliveryType={order.deliveryType} size="sm" />
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -494,7 +508,31 @@ export default function DeliveryWorkflowManager({
                     </Button>
                   </div>
                 </div>
-                
+
+                {/* Prominent delivery type alert for contactless */}
+                {order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && (
+                  <Alert className="border-blue-300 bg-blue-100">
+                    <AlertTriangle className="h-4 w-4 text-blue-700" />
+                    <AlertDescription className="text-blue-800">
+                      <strong>Contactless Delivery - Leave at Door</strong>
+                      {order.contactlessInstructions && (
+                        <p className="mt-1 text-sm">{order.contactlessInstructions}</p>
+                      )}
+                      <p className="mt-1 text-xs">Photo proof required before completing.</p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {order.deliveryType === DELIVERY_TYPES.MEET_OUTSIDE && (
+                  <Alert className="border-green-300 bg-green-100">
+                    <Info className="h-4 w-4 text-green-700" />
+                    <AlertDescription className="text-green-800">
+                      <strong>Meet Outside</strong>
+                      <p className="mt-1 text-sm">Customer will meet you outside their location.</p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {order.customer.deliveryInstructions && (
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <p className="text-xs text-blue-700 font-medium mb-1">Delivery Instructions:</p>
@@ -616,6 +654,25 @@ export default function DeliveryWorkflowManager({
             </Card>
           )}
 
+          {/* Contactless Delivery Photo Proof - Required for "Leave at Door" */}
+          {order.status === 'at_customer' && order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && !order.deliveryProofPhoto && (
+            <DeliveryProofCapture
+              orderId={order.id}
+              deliveryType={order.deliveryType}
+              contactlessInstructions={order.contactlessInstructions}
+              onPhotoUploaded={(photoUrl) => {
+                // Update the order with the proof photo
+                if (selectedOrder) {
+                  setSelectedOrder({
+                    ...selectedOrder,
+                    deliveryProofPhoto: photoUrl
+                  });
+                }
+              }}
+              isRequired={true}
+            />
+          )}
+
           {/* Delivery Completion */}
           {order.status === 'at_customer' && (
             <Card className="border-green-200">
@@ -626,33 +683,52 @@ export default function DeliveryWorkflowManager({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Delivery Photo */}
-                <div className="space-y-2">
-                  <Label>Delivery Proof</Label>
-                  {order.verification.deliveryPhotos?.length ? (
-                    <div className="flex gap-2">
-                      {order.verification.deliveryPhotos.map((photo, index) => (
-                        <img
-                          key={index}
-                          src={photo}
-                          alt={`Delivery photo ${index + 1}`}
-                          className="w-16 h-16 object-cover rounded border"
-                        />
-                      ))}
+                {/* Show uploaded delivery proof for contactless */}
+                {order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && order.deliveryProofPhoto && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="w-4 h-4" />
+                      Delivery Proof Photo Captured
+                    </Label>
+                    <div className="relative rounded-lg overflow-hidden border border-green-200">
+                      <img
+                        src={order.deliveryProofPhoto}
+                        alt="Delivery proof"
+                        className="w-full h-32 object-cover"
+                      />
                     </div>
-                  ) : (
-                    <Button
-                      onClick={() => handlePhotoUpload('delivery_proof')}
-                      disabled={uploadingPhoto}
-                      variant="outline"
-                      className="w-full"
-                      data-testid="take-delivery-photo"
-                    >
-                      <Camera className="w-4 h-4 mr-2" />
-                      {uploadingPhoto ? "Uploading..." : "Take Delivery Photo"}
-                    </Button>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {/* Standard Delivery Photo for non-contactless */}
+                {order.deliveryType !== DELIVERY_TYPES.LEAVE_AT_DOOR && (
+                  <div className="space-y-2">
+                    <Label>Delivery Proof</Label>
+                    {order.verification.deliveryPhotos?.length ? (
+                      <div className="flex gap-2">
+                        {order.verification.deliveryPhotos.map((photo, index) => (
+                          <img
+                            key={index}
+                            src={photo}
+                            alt={`Delivery photo ${index + 1}`}
+                            className="w-16 h-16 object-cover rounded border"
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handlePhotoUpload('delivery_proof')}
+                        disabled={uploadingPhoto}
+                        variant="outline"
+                        className="w-full"
+                        data-testid="take-delivery-photo"
+                      >
+                        <Camera className="w-4 h-4 mr-2" />
+                        {uploadingPhoto ? "Uploading..." : "Take Delivery Photo"}
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 {/* Customer Rating */}
                 <div className="space-y-2">
@@ -765,13 +841,28 @@ export default function DeliveryWorkflowManager({
 
             {order.status === 'at_customer' && (
               <Button
-                onClick={handleCompleteDelivery}
-                disabled={completeDeliveryMutation.isPending}
-                className="w-full bg-green-700 hover:bg-green-800 text-white"
+                onClick={() => {
+                  // Require photo for contactless deliveries
+                  if (order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && !order.deliveryProofPhoto) {
+                    toast({
+                      title: "Photo Required",
+                      description: "Please take a delivery proof photo for contactless deliveries before completing.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  handleCompleteDelivery();
+                }}
+                disabled={completeDeliveryMutation.isPending || (order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && !order.deliveryProofPhoto)}
+                className="w-full bg-green-700 hover:bg-green-800 text-white disabled:opacity-50"
                 data-testid="complete-delivery-button"
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
-                {completeDeliveryMutation.isPending ? "Completing..." : "Complete Delivery"}
+                {completeDeliveryMutation.isPending
+                  ? "Completing..."
+                  : order.deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR && !order.deliveryProofPhoto
+                    ? "Photo Required to Complete"
+                    : "Complete Delivery"}
               </Button>
             )}
 

@@ -42,6 +42,15 @@ export const PAYMENT_STATUSES = {
   CANCELLED: 'cancelled'
 } as const;
 
+// Delivery Type Options for Contactless Delivery
+export const DELIVERY_TYPES = {
+  HAND_TO_CUSTOMER: 'hand_to_customer',
+  LEAVE_AT_DOOR: 'leave_at_door',
+  MEET_OUTSIDE: 'meet_outside'
+} as const;
+
+export type DeliveryType = typeof DELIVERY_TYPES[keyof typeof DELIVERY_TYPES];
+
 export const NOTIFICATION_TYPES = {
   EMAIL: 'email',
   SMS: 'sms',
@@ -169,17 +178,39 @@ export const userDietaryPreferences = pgTable("user_dietary_preferences", {
 export const userNotificationPreferences = pgTable("user_notification_preferences", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+
+  // Channel preferences
   emailNotifications: boolean("email_notifications").default(true),
   smsNotifications: boolean("sms_notifications").default(true),
   pushNotifications: boolean("push_notifications").default(true),
+
+  // Order notification preferences (granular)
   orderUpdates: boolean("order_updates").default(true),
+  orderPlaced: boolean("order_placed").default(true),
+  orderConfirmed: boolean("order_confirmed").default(true),
+  orderPreparing: boolean("order_preparing").default(true),
+  orderReady: boolean("order_ready").default(true),
+  orderDelivered: boolean("order_delivered").default(true),
+
+  // Rider notification preferences
+  riderUpdates: boolean("rider_updates").default(true),
+  riderAssigned: boolean("rider_assigned").default(true),
+  riderArriving: boolean("rider_arriving").default(true),
+
+  // Marketing/Promotional preferences
   promotionalEmails: boolean("promotional_emails").default(true),
   restaurantUpdates: boolean("restaurant_updates").default(true),
   loyaltyRewards: boolean("loyalty_rewards").default(true),
+
+  // System preferences
   securityAlerts: boolean("security_alerts").default(true),
   weeklyDigest: boolean("weekly_digest").default(false),
+
+  // Quiet hours settings
+  quietHoursEnabled: boolean("quiet_hours_enabled").default(false),
   quietHoursStart: varchar("quiet_hours_start", { length: 5 }), // "22:00"
   quietHoursEnd: varchar("quiet_hours_end", { length: 5 }), // "08:00"
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -633,8 +664,12 @@ export const orders = pgTable("orders", {
   
   // Order Type and Status
   orderType: varchar("order_type", { length: 20 }).notNull().default("food"), // food, pabili, pabayad, parcel
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, confirmed, preparing, ready, picked_up, in_transit, delivered, completed, cancelled
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // payment_pending, pending, confirmed, preparing, ready, picked_up, in_transit, delivered, completed, cancelled
   previousStatus: varchar("previous_status", { length: 20 }), // For rollback purposes
+
+  // Payment-Order Race Condition Prevention
+  paymentPendingAt: timestamp("payment_pending_at"), // When order was created waiting for payment
+  paymentConfirmedAt: timestamp("payment_confirmed_at"), // When payment was confirmed
   
   // Items and Pricing
   items: jsonb("items").notNull(), // Array of {itemId, name, price, quantity, specialInstructions, modifiers}
@@ -651,6 +686,8 @@ export const orders = pgTable("orders", {
   paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"), // pending, processing, paid, failed, refunded, cancelled
   paymentTransactionId: varchar("payment_transaction_id", { length: 100 }),
   paymentProvider: varchar("payment_provider", { length: 50 }), // nexuspay, cash
+  paidAt: timestamp("paid_at"), // When payment was confirmed/received
+  paymentFailureReason: text("payment_failure_reason"), // Reason for payment failure
   
   // Delivery Information
   deliveryAddress: jsonb("delivery_address").notNull(), // Enhanced with coordinates, landmarks, etc.
@@ -658,8 +695,14 @@ export const orders = pgTable("orders", {
   specialInstructions: text("special_instructions"),
   customerNotes: text("customer_notes"), // Customer-specific notes
   internalNotes: text("internal_notes"), // Admin/vendor internal notes
+
+  // Contactless Delivery Options
+  deliveryType: varchar("delivery_type", { length: 30 }).default("hand_to_customer"), // hand_to_customer, leave_at_door, meet_outside
+  contactlessInstructions: text("contactless_instructions"), // Specific instructions for leave_at_door (e.g., "Leave by the gate")
+  deliveryProofPhoto: text("delivery_proof_photo"), // URL of proof photo for contactless delivery
   
   // Timing and SLA Management
+  scheduledFor: timestamp("scheduled_for"), // Pre-order scheduling: when customer wants delivery (nullable = deliver now)
   estimatedPreparationTime: integer("estimated_preparation_time"), // minutes
   actualPreparationTime: integer("actual_preparation_time"), // minutes
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
@@ -884,7 +927,19 @@ export const orderDisputeMessages = pgTable("order_dispute_messages", {
   isInternal: boolean("is_internal").default(false), // Internal admin notes
   
   readBy: jsonb("read_by"), // Array of user IDs who read the message
-  
+
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Order Messages - In-app chat between customers and riders during active deliveries
+export const orderMessages = pgTable("order_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  senderId: uuid("sender_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  senderRole: varchar("sender_role", { length: 20 }).notNull(), // 'customer' or 'rider'
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1474,7 +1529,8 @@ export const customerPaymentMethods = pgTable("customer_payment_methods", {
   expiryMonth: integer("expiry_month"), // For cards
   expiryYear: integer("expiry_year"), // For cards
   brand: varchar("brand", { length: 50 }), // visa, mastercard, gcash, maya
-  
+  nickname: varchar("nickname", { length: 100 }), // User-defined nickname like "My GCash", "Work Card"
+
   isDefault: boolean("is_default").default(false),
   isActive: boolean("is_active").default(true),
   metadata: jsonb("metadata"), // Provider-specific metadata
@@ -1594,6 +1650,12 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   review: many(reviews),
   riderLocationHistory: many(riderLocationHistory),
   assignmentQueue: many(riderAssignmentQueue),
+  messages: many(orderMessages),
+}));
+
+export const orderMessagesRelations = relations(orderMessages, ({ one }) => ({
+  order: one(orders, { fields: [orderMessages.orderId], references: [orders.id] }),
+  sender: one(users, { fields: [orderMessages.senderId], references: [users.id] }),
 }));
 
 export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
@@ -1716,6 +1778,9 @@ export const insertOrderNotificationSchema = createInsertSchema(orderNotificatio
 export const insertOrderBusinessRuleSchema = createInsertSchema(orderBusinessRules);
 export const insertOrderDisputeSchema = createInsertSchema(orderDisputes);
 export const insertOrderDisputeMessageSchema = createInsertSchema(orderDisputeMessages);
+export const insertOrderMessageSchema = createInsertSchema(orderMessages, {
+  senderRole: z.enum(['customer', 'rider']),
+});
 export const insertRiderSchema = createInsertSchema(riders);
 export const insertReviewSchema = createInsertSchema(reviews);
 export const insertRiderLocationHistorySchema = createInsertSchema(riderLocationHistory);
@@ -1787,6 +1852,8 @@ export type OrderDispute = typeof orderDisputes.$inferSelect;
 export type InsertOrderDispute = z.infer<typeof insertOrderDisputeSchema>;
 export type OrderDisputeMessage = typeof orderDisputeMessages.$inferSelect;
 export type InsertOrderDisputeMessage = z.infer<typeof insertOrderDisputeMessageSchema>;
+export type OrderMessage = typeof orderMessages.$inferSelect;
+export type InsertOrderMessage = z.infer<typeof insertOrderMessageSchema>;
 export type Rider = typeof riders.$inferSelect;
 export type InsertRider = z.infer<typeof insertRiderSchema>;
 export type Review = typeof reviews.$inferSelect;

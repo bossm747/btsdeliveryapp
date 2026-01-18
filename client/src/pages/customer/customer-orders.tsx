@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,17 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Package, Clock, MapPin, Star, Filter, Search, 
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Package, Clock, MapPin, Star, Filter, Search,
   ArrowLeft, Eye, Phone, MessageCircle, CheckCircle,
-  Truck, Store, Navigation, Calendar, Receipt, 
+  Truck, Store, Navigation, Calendar, Receipt,
   AlertTriangle, RefreshCw, Bell, X, Heart,
   ChevronRight, CreditCard, MapPin as LocationPin,
   Timer, User, Utensils, DollarSign
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OrderCardSkeleton } from "@/components/skeletons";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { OfflineIndicator, useOnlineStatus } from "@/components/OfflineIndicator";
+import { getOrders as getCachedOrders, saveOrders } from "@/lib/offline-storage";
 
 interface Order {
   id: string;
@@ -47,6 +51,7 @@ interface Order {
   };
   estimatedDeliveryTime?: string;
   actualDeliveryTime?: string;
+  scheduledFor?: string; // Pre-order scheduling
   createdAt: string;
   riderId?: string;
   riderName?: string;
@@ -60,10 +65,40 @@ export default function CustomerOrders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
   const [realTimeUpdates, setRealTimeUpdates] = useState<{[orderId: string]: any}>({});
-  
+  const [isFromCache, setIsFromCache] = useState(false);
+  const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(null);
+  const [cachedOrders, setCachedOrders] = useState<Order[] | null>(null);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
+  const isOnline = useOnlineStatus();
+
+  // Load cached orders when offline
+  useEffect(() => {
+    const loadCachedOrders = async () => {
+      if (!isOnline) {
+        try {
+          const cached = await getCachedOrders();
+          if (cached) {
+            setCachedOrders(cached.orders as Order[]);
+            setIsFromCache(true);
+            // Get cache timestamp from the cache metadata
+            const { getCacheTimestamp } = await import("@/lib/offline-storage");
+            const timestamp = await getCacheTimestamp();
+            setCacheTimestamp(timestamp);
+          }
+        } catch (error) {
+          console.error("Failed to load cached orders:", error);
+        }
+      } else {
+        setIsFromCache(false);
+        setCachedOrders(null);
+      }
+    };
+
+    loadCachedOrders();
+  }, [isOnline]);
 
   // Real-time WebSocket connection for order updates
   useEffect(() => {
@@ -134,33 +169,88 @@ export default function CustomerOrders() {
     };
   }, [toast, queryClient]);
 
-  const { data: orders, isLoading, error } = useQuery<Order[]>({
+  const { data: orders, isLoading, error, refetch, isFetching } = useQuery<Order[]>({
     queryKey: ["/api/customer/orders", { status: statusFilter, dateRange }],
     queryFn: async () => {
+      // If offline, return cached data
+      if (!navigator.onLine) {
+        const cached = await getCachedOrders();
+        if (cached) {
+          setIsFromCache(true);
+          const { getCacheTimestamp } = await import("@/lib/offline-storage");
+          const timestamp = await getCacheTimestamp();
+          setCacheTimestamp(timestamp);
+          return cached.orders as Order[];
+        }
+        throw new Error('No cached data available while offline');
+      }
+
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (dateRange !== "all") params.set("dateRange", dateRange);
-      
+
       const response = await fetch(`/api/customer/orders?${params}`);
+
+      // Check if response is from cache (service worker header)
+      const fromCache = response.headers.get('X-From-Cache') === 'true';
+      const cacheStale = response.headers.get('X-Cache-Stale') === 'true';
+      const cacheTime = response.headers.get('X-Cache-Timestamp');
+
+      if (fromCache) {
+        setIsFromCache(true);
+        setCacheTimestamp(cacheTime ? parseInt(cacheTime, 10) : null);
+      } else {
+        setIsFromCache(false);
+        setCacheTimestamp(null);
+      }
+
       if (!response.ok) {
         throw new Error('Failed to fetch orders');
       }
-      return response.json();
-    }
+
+      const data = await response.json();
+
+      // Persist to IndexedDB cache for offline access
+      if (Array.isArray(data) && !fromCache) {
+        try {
+          await saveOrders(data);
+          console.log('[CustomerOrders] Orders saved to IndexedDB cache');
+        } catch (cacheError) {
+          console.error('[CustomerOrders] Failed to cache orders:', cacheError);
+        }
+      }
+
+      return data;
+    },
+    // Use cached data as initial data when available
+    initialData: cachedOrders || undefined,
+    // Don't refetch on window focus when offline
+    refetchOnWindowFocus: isOnline,
+    // Don't retry when offline
+    retry: isOnline ? 1 : false,
   });
+
+  // Handle refresh when back online
+  const handleRefresh = useCallback(() => {
+    if (isOnline) {
+      refetch();
+      toast({
+        title: "Refreshing",
+        description: "Fetching latest order data...",
+      });
+    }
+  }, [isOnline, refetch, toast]);
 
   // Order cancellation mutation
   const cancelOrderMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
-      return await apiRequest(`/api/orders/${orderId}/cancel-with-refund`, {
-        method: 'POST',
-        body: JSON.stringify({ reason, requestRefund: true })
-      });
+      const response = await apiRequest('POST', `/api/orders/${orderId}/cancel-with-refund`, { reason, requestRefund: true });
+      return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({
         title: "Order Cancelled",
-        description: data.refund ? 
+        description: data?.refund ?
           `Order cancelled. Refund of ₱${data.refund.amount?.toFixed(2)} is being processed.` :
           "Order cancelled successfully.",
         duration: 5000,
@@ -229,11 +319,32 @@ export default function CustomerOrders() {
     return (
       <div className="min-h-screen bg-background py-8" data-testid="customer-orders-loading">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-48 mb-6" />
+          {/* Header skeleton */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center space-x-4">
+              <Skeleton className="h-10 w-32 rounded-md" />
+              <div>
+                <Skeleton className="h-9 w-32 mb-2" />
+                <Skeleton className="h-5 w-48" />
+              </div>
+            </div>
+          </div>
+
+          {/* Filters skeleton */}
+          <div className="mb-6 rounded-xl border bg-card p-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <Skeleton className="h-10 flex-1 rounded-md" />
+              <Skeleton className="h-10 w-[180px] rounded-md" />
+              <Skeleton className="h-10 w-[160px] rounded-md" />
+            </div>
+          </div>
+
+          {/* Tabs skeleton */}
+          <Skeleton className="h-10 w-80 mb-6 rounded-md" />
+
+          {/* Order cards skeleton */}
           <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-32 w-full rounded-xl" />
-            ))}
+            <OrderCardSkeleton count={3} showProgress={true} />
           </div>
         </div>
       </div>
@@ -264,6 +375,14 @@ export default function CustomerOrders() {
   return (
     <div className="min-h-screen bg-background py-8" data-testid="customer-orders-page">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Offline Indicator */}
+        <OfflineIndicator
+          isFromCache={isFromCache}
+          cacheTimestamp={cacheTimestamp}
+          onRefresh={handleRefresh}
+          isRefreshing={isFetching}
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
@@ -277,7 +396,10 @@ export default function CustomerOrders() {
               <h1 className="text-3xl font-bold text-[#004225]" data-testid="page-title">
                 My Orders
               </h1>
-              <p className="text-gray-600">Track and manage your orders</p>
+              <p className="text-gray-600">
+                Track and manage your orders
+                {!isOnline && " (Offline mode)"}
+              </p>
             </div>
           </div>
         </div>
@@ -343,17 +465,19 @@ export default function CustomerOrders() {
           <TabsContent value="active" className="space-y-4">
             {activeOrders.length === 0 ? (
               <Card>
-                <CardContent className="p-12 text-center">
-                  <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold mb-2">No active orders</h3>
-                  <p className="text-gray-600 mb-4">
-                    You don't have any active orders right now
-                  </p>
-                  <Link href="/restaurants">
-                    <Button className="bg-[#FF6B35] hover:bg-[#FF6B35]/90">
-                      Browse Restaurants
-                    </Button>
-                  </Link>
+                <CardContent className="p-6">
+                  <EmptyState
+                    icon={Package}
+                    title="No active orders"
+                    description="You don't have any active orders right now. Browse restaurants to place your first order."
+                    size="lg"
+                  >
+                    <Link href="/restaurants">
+                      <Button className="bg-[#FF6B35] hover:bg-[#FF6B35]/90 mt-4">
+                        Browse Restaurants
+                      </Button>
+                    </Link>
+                  </EmptyState>
                 </CardContent>
               </Card>
             ) : (
@@ -372,12 +496,13 @@ export default function CustomerOrders() {
           <TabsContent value="past" className="space-y-4">
             {pastOrders.length === 0 ? (
               <Card>
-                <CardContent className="p-12 text-center">
-                  <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold mb-2">No order history</h3>
-                  <p className="text-gray-600">
-                    Your completed orders will appear here
-                  </p>
+                <CardContent className="p-6">
+                  <EmptyState
+                    icon={Receipt}
+                    title="No order history"
+                    description="Your completed orders will appear here once you've made some purchases."
+                    size="lg"
+                  />
                 </CardContent>
               </Card>
             ) : (
@@ -530,6 +655,20 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
                   })}
                 </span>
               </div>
+              {order.scheduledFor && (
+                <div className="flex items-center text-blue-600 text-sm mb-2 font-medium" data-testid="scheduled-for">
+                  <Clock className="w-4 h-4 mr-2" />
+                  <span>
+                    Scheduled for: {new Date(order.scheduledFor).toLocaleDateString('en-PH', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              )}
               {realtimeData?.estimatedArrival && currentStatus === 'in_transit' && (
                 <div className="flex items-center text-green-600 text-sm font-medium">
                   <Timer className="w-4 h-4 mr-2" />
@@ -707,6 +846,29 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
               </div>
             )}
 
+            {/* Scheduled Delivery Notice */}
+            {order.scheduledFor && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-2 flex items-center">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Scheduled Pre-Order
+                </h3>
+                <p className="text-blue-700">
+                  This order is scheduled for delivery on{' '}
+                  <strong>
+                    {new Date(order.scheduledFor).toLocaleDateString('en-PH', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </strong>
+                </p>
+              </div>
+            )}
+
             {/* Restaurant Info */}
             <div className="border rounded-lg p-4">
               <h3 className="font-semibold mb-3 flex items-center">
@@ -716,6 +878,9 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
               <div className="space-y-2">
                 <p><strong>Name:</strong> {order.restaurantName}</p>
                 <p><strong>Order Date:</strong> {new Date(order.createdAt).toLocaleString()}</p>
+                {order.scheduledFor && (
+                  <p><strong>Scheduled For:</strong> {new Date(order.scheduledFor).toLocaleString()}</p>
+                )}
                 {order.estimatedDeliveryTime && (
                   <p><strong>Estimated Delivery:</strong> {new Date(order.estimatedDeliveryTime).toLocaleString()}</p>
                 )}

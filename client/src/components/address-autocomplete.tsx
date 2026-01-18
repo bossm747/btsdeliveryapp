@@ -106,6 +106,7 @@ export function AddressAutocomplete({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const suggestionsListId = "address-suggestions-list";
 
   const debouncedInput = useDebounce(inputValue, 300);
 
@@ -302,6 +303,12 @@ export function AddressAutocomplete({
               validationResult?.valid && 'border-green-500 focus-visible:ring-green-500',
               validationResult && !validationResult.valid && 'border-amber-500 focus-visible:ring-amber-500'
             )}
+            aria-label="Search for an address"
+            aria-expanded={isDropdownOpen}
+            aria-controls={suggestionsListId}
+            aria-autocomplete="list"
+            aria-activedescendant={selectedIndex >= 0 && suggestions[selectedIndex] ? `suggestion-${suggestions[selectedIndex].placeId}` : undefined}
+            role="combobox"
           />
 
           <div className="absolute right-2 flex items-center gap-1">
@@ -343,19 +350,27 @@ export function AddressAutocomplete({
             className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg"
           >
             {suggestions.length > 0 ? (
-              <ul className="max-h-60 overflow-auto py-1">
+              <ul
+                id={suggestionsListId}
+                className="max-h-60 overflow-auto py-1"
+                role="listbox"
+                aria-label="Address suggestions"
+              >
                 {suggestions.map((suggestion, index) => (
                   <li
                     key={suggestion.placeId}
+                    id={`suggestion-${suggestion.placeId}`}
                     className={cn(
                       'cursor-pointer px-3 py-2 hover:bg-accent transition-colors',
                       index === selectedIndex && 'bg-accent'
                     )}
                     onClick={() => handleSuggestionClick(suggestion)}
                     onMouseEnter={() => setSelectedIndex(index)}
+                    role="option"
+                    aria-selected={index === selectedIndex}
                   >
                     <div className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
                           {suggestion.mainText}

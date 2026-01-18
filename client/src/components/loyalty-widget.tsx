@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { AnimatedPoints, CountUpNumber } from "@/components/animated";
 
 // Types for loyalty data
 interface LoyaltyAccount {
@@ -101,15 +103,16 @@ export function LoyaltyWidget({
   if (variant === "compact") {
     return (
       <Link href="/loyalty">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`flex items-center gap-2 hover:bg-orange-50 ${className}`}
-        >
-          {getTierIcon(account.tier)}
-          <span className="font-semibold text-[#004225]">{account.points.toLocaleString()}</span>
-          <span className="text-xs text-gray-500">pts</span>
-        </Button>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`flex items-center gap-2 hover:bg-orange-50 ${className}`}
+          >
+            {getTierIcon(account.tier)}
+            <AnimatedPoints value={account.points} label="pts" className="text-[#004225]" />
+          </Button>
+        </motion.div>
       </Link>
     );
   }
@@ -118,17 +121,16 @@ export function LoyaltyWidget({
   if (variant === "inline") {
     return (
       <Link href="/loyalty">
-        <div
+        <motion.div
           className={`flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-orange-50 to-yellow-50 hover:from-orange-100 hover:to-yellow-100 cursor-pointer transition-colors ${className}`}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
           <div className="flex items-center gap-3">
             {getTierIcon(account.tier, "h-6 w-6")}
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-[#004225]">
-                  {account.points.toLocaleString()}
-                </span>
-                <span className="text-sm text-gray-600">points</span>
+                <AnimatedPoints value={account.points} label="points" className="text-[#004225] text-lg" />
               </div>
               <Badge className={`${getTierColor(account.tier)} text-xs`}>
                 {account.tierDisplayName}
@@ -136,7 +138,7 @@ export function LoyaltyWidget({
             </div>
           </div>
           <ChevronRight className="h-5 w-5 text-gray-400" />
-        </div>
+        </motion.div>
       </Link>
     );
   }
@@ -144,20 +146,23 @@ export function LoyaltyWidget({
   // Card variant - for dashboard
   return (
     <Link href="/loyalty">
-      <Card
-        className={`hover:shadow-md transition-shadow cursor-pointer bg-gradient-to-br from-orange-50 to-yellow-50 ${className}`}
-      >
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              {getTierIcon(account.tier, "h-6 w-6")}
-              <Badge className={getTierColor(account.tier)}>{account.tierDisplayName}</Badge>
+      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+        <Card
+          className={`hover:shadow-md transition-shadow cursor-pointer bg-gradient-to-br from-orange-50 to-yellow-50 ${className}`}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                {getTierIcon(account.tier, "h-6 w-6")}
+                <Badge className={getTierColor(account.tier)}>{account.tierDisplayName}</Badge>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-[#004225]">
+                  <CountUpNumber value={account.points} duration={800} />
+                </p>
+                <p className="text-xs text-gray-600">Available Points</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-[#004225]">{account.points.toLocaleString()}</p>
-              <p className="text-xs text-gray-600">Available Points</p>
-            </div>
-          </div>
 
           {showProgress && account.nextTier && (
             <div className="mb-3">
@@ -191,6 +196,7 @@ export function LoyaltyWidget({
           </div>
         </CardContent>
       </Card>
+      </motion.div>
     </Link>
   );
 }
@@ -211,13 +217,15 @@ export function LoyaltyPointsBadge({ className = "" }: { className?: string }) {
 
   return (
     <Link href="/loyalty">
-      <Badge
-        variant="outline"
-        className={`cursor-pointer hover:bg-orange-50 border-orange-200 ${className}`}
-      >
-        <Coins className="h-3 w-3 mr-1 text-orange-600" />
-        <span className="font-semibold">{account.points.toLocaleString()}</span>
-      </Badge>
+      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+        <Badge
+          variant="outline"
+          className={`cursor-pointer hover:bg-orange-50 border-orange-200 ${className}`}
+        >
+          <Coins className="h-3 w-3 mr-1 text-orange-600" />
+          <span className="font-semibold">{account.points.toLocaleString()}</span>
+        </Badge>
+      </motion.div>
     </Link>
   );
 }
@@ -324,12 +332,24 @@ export function LoyaltyEarnPreview({
   }
 
   return (
-    <div className={`flex items-center justify-between p-3 rounded-lg bg-green-50 ${className}`}>
+    <motion.div
+      className={`flex items-center justify-between p-3 rounded-lg bg-green-50 ${className}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       <div className="flex items-center gap-2">
-        <TrendingUp className="h-5 w-5 text-green-600" />
+        <motion.div
+          animate={{ rotate: [0, 10, -10, 0] }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <TrendingUp className="h-5 w-5 text-green-600" />
+        </motion.div>
         <div>
           <p className="text-sm font-medium text-green-800">
-            Earn <span className="font-bold">{earnCalc.pointsToEarn}</span> points
+            Earn <span className="font-bold">
+              <CountUpNumber value={earnCalc.pointsToEarn} duration={600} delay={200} />
+            </span> points
           </p>
           {earnCalc.multiplier > 1 && (
             <p className="text-xs text-green-600">
@@ -338,8 +358,13 @@ export function LoyaltyEarnPreview({
           )}
         </div>
       </div>
-      <Coins className="h-5 w-5 text-green-600" />
-    </div>
+      <motion.div
+        animate={{ scale: [1, 1.1, 1] }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+      >
+        <Coins className="h-5 w-5 text-green-600" />
+      </motion.div>
+    </motion.div>
   );
 }
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { VendorOrderCardSkeleton } from "@/components/skeletons";
 import { 
   ShoppingBag, 
   Search,
@@ -180,13 +181,43 @@ export default function VendorOrders() {
 
   if (ordersLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Skeleton className="h-10 flex-1" />
-          <Skeleton className="h-10 w-32" />
+      <div className="space-y-6" data-testid="vendor-orders-loading">
+        {/* Header skeleton */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <div className="flex items-center gap-4 mt-2">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-8 w-24 rounded-md" />
+            </div>
+          </div>
         </div>
+
+        {/* Stats grid skeleton */}
+        <div className="grid md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Search and filters skeleton */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Skeleton className="h-10 flex-1 rounded-md" />
+          <Skeleton className="h-10 w-32 rounded-lg" />
+        </div>
+
+        {/* Order cards skeleton */}
         <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-24" />)}
+          <VendorOrderCardSkeleton count={5} />
         </div>
       </div>
     );
@@ -359,6 +390,12 @@ export default function VendorOrders() {
                       <p className="text-xs text-gray-400">
                         {new Date(order.createdAt!).toLocaleDateString()} at {new Date(order.createdAt!).toLocaleTimeString()}
                       </p>
+                      {order.scheduledFor && (
+                        <p className="text-xs text-blue-600 font-medium flex items-center gap-1 mt-1">
+                          <Clock className="w-3 h-3" />
+                          Scheduled: {new Date(order.scheduledFor).toLocaleDateString()} at {new Date(order.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">

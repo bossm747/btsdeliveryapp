@@ -28,11 +28,15 @@ import {
   Bike,
   Timer,
   ArrowLeft,
-  Package
+  Package,
+  Route,
+  Layers,
+  Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import BatchRoutePreview from "@/components/rider/batch-route-preview";
 
 // Types
 interface AvailableOrder {
@@ -57,6 +61,30 @@ interface OrderCardProps {
   order: AvailableOrder;
   onAccept: (orderId: string) => void;
   onReject: (orderId: string) => void;
+  isAccepting: boolean;
+}
+
+// Batch offer types
+interface BatchOffer {
+  batchId: string;
+  batchNumber: string;
+  orderCount: number;
+  totalEarnings: number;
+  totalDistance: number;
+  estimatedTime: number;
+  expiresAt: string;
+  orders: {
+    id: string;
+    orderNumber: string;
+    restaurantName: string;
+  }[];
+}
+
+interface BatchOfferCardProps {
+  batch: BatchOffer;
+  onViewRoute: (batchId: string) => void;
+  onAccept: (batchId: string) => void;
+  onDecline: (batchId: string) => void;
   isAccepting: boolean;
 }
 
@@ -281,6 +309,105 @@ const OrderCard = ({ order, onAccept, onReject, isAccepting }: OrderCardProps) =
   );
 };
 
+// Batch Offer Card Component
+const BatchOfferCard = ({ batch, onViewRoute, onAccept, onDecline, isAccepting }: BatchOfferCardProps) => {
+  return (
+    <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-r from-blue-50 to-white">
+      <CardContent className="p-4">
+        {/* Header with batch badge and earnings */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex flex-wrap gap-1.5">
+            <Badge className="bg-blue-100 text-blue-700">
+              <Layers className="w-3 h-3 mr-1" />
+              Batch Delivery
+            </Badge>
+            <Badge variant="outline" className="text-blue-600 border-blue-200">
+              {batch.orderCount} Orders
+            </Badge>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-bold text-green-600">
+              +{batch.totalEarnings.toFixed(2)}
+            </div>
+            <div className="text-xs text-gray-500">
+              Total Earnings
+            </div>
+          </div>
+        </div>
+
+        {/* Orders list preview */}
+        <div className="mb-3 space-y-1">
+          {batch.orders.slice(0, 3).map((order, idx) => (
+            <div key={order.id} className="flex items-center text-sm text-gray-600">
+              <Store className="w-3 h-3 mr-2 text-[#FF6B35]" />
+              <span className="font-medium mr-1">{idx + 1}.</span>
+              <span className="truncate">{order.restaurantName}</span>
+              <span className="text-gray-400 ml-1">({order.orderNumber})</span>
+            </div>
+          ))}
+          {batch.orders.length > 3 && (
+            <div className="text-xs text-gray-500 ml-5">
+              +{batch.orders.length - 3} more orders
+            </div>
+          )}
+        </div>
+
+        {/* Route details */}
+        <div className="flex items-center justify-between text-sm text-gray-600 mb-3 py-2 px-3 bg-blue-50 rounded-lg">
+          <div className="flex items-center">
+            <Bike className="w-4 h-4 mr-1" />
+            <span>{formatDistance(batch.totalDistance)}</span>
+          </div>
+          <div className="flex items-center">
+            <Clock className="w-4 h-4 mr-1" />
+            <span>{formatTime(batch.estimatedTime)}</span>
+          </div>
+          <div className="flex items-center">
+            <Package className="w-4 h-4 mr-1" />
+            <span>{batch.orderCount} stops</span>
+          </div>
+        </div>
+
+        {/* Timer */}
+        <div className="mb-4">
+          <CountdownTimer expiresAt={batch.expiresAt} />
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-col space-y-2">
+          {/* View Route button - primary action for batch */}
+          <Button
+            onClick={() => onViewRoute(batch.batchId)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Eye className="w-4 h-4 mr-2" />
+            View Route Preview
+          </Button>
+
+          {/* Accept/Decline row */}
+          <div className="flex space-x-2">
+            <Button
+              onClick={() => onAccept(batch.batchId)}
+              disabled={isAccepting}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Accept All
+            </Button>
+            <Button
+              onClick={() => onDecline(batch.batchId)}
+              variant="outline"
+              className="px-4 border-red-200 text-red-600 hover:bg-red-50"
+            >
+              <XCircle className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 // Loading Skeleton
 const OrderCardSkeleton = () => (
   <Card className="shadow-sm">
@@ -306,12 +433,32 @@ export default function PendingOrders() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
+  const [acceptingBatchId, setAcceptingBatchId] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [showBatchPreview, setShowBatchPreview] = useState(false);
 
   // Fetch available orders with polling
   const { data: availableOrders = [], isLoading, error, refetch, isFetching } = useQuery<AvailableOrder[]>({
     queryKey: ["/api/rider/available-orders"],
     refetchInterval: 10000, // Poll every 10 seconds
   });
+
+  // Mock batch offers - In production, this would come from the API
+  const [batchOffers] = useState<BatchOffer[]>([
+    {
+      batchId: 'batch-001',
+      batchNumber: 'BATCH-ABC123',
+      orderCount: 2,
+      totalEarnings: 180,
+      totalDistance: 4.5,
+      estimatedTime: 25,
+      expiresAt: new Date(Date.now() + 120000).toISOString(),
+      orders: [
+        { id: 'order-1', orderNumber: 'ORD-1001', restaurantName: 'Lomi King' },
+        { id: 'order-2', orderNumber: 'ORD-1002', restaurantName: 'Bulalo Express' },
+      ],
+    },
+  ]);
 
   // Accept order mutation
   const acceptOrderMutation = useMutation({
@@ -374,6 +521,53 @@ export default function PendingOrders() {
       description: "Checking for new available orders.",
     });
   };
+
+  // Batch handlers
+  const handleViewBatchRoute = useCallback((batchId: string) => {
+    setSelectedBatchId(batchId);
+    setShowBatchPreview(true);
+  }, []);
+
+  const handleAcceptBatch = useCallback(async (batchId: string) => {
+    setAcceptingBatchId(batchId);
+    try {
+      await apiRequest("POST", `/api/rider/batch/${batchId}/accept`, {
+        orderIds: batchOffers.find(b => b.batchId === batchId)?.orders.map(o => o.id) || [],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/rider/available-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries/active"] });
+      toast({
+        title: "Batch Accepted!",
+        description: "Navigate to the first pickup location.",
+      });
+      setShowBatchPreview(false);
+    } catch (error: any) {
+      toast({
+        title: "Failed to accept batch",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setAcceptingBatchId(null);
+    }
+  }, [batchOffers, toast]);
+
+  const handleDeclineBatch = useCallback(async (batchId: string) => {
+    try {
+      await apiRequest("POST", `/api/rider/batch/${batchId}/decline`);
+      toast({
+        title: "Batch Declined",
+        description: "The batch offer has been removed.",
+      });
+      setShowBatchPreview(false);
+    } catch (error: any) {
+      toast({
+        title: "Failed to decline batch",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-gray-50" data-testid="pending-orders-page">
@@ -485,9 +679,37 @@ export default function PendingOrders() {
           </Card>
         )}
 
-        {/* Orders List */}
+        {/* Batch Offers Section */}
+        {batchOffers.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Route className="w-4 h-4 text-blue-600" />
+              <h3 className="font-semibold text-gray-800">Batch Offers</h3>
+              <Badge className="bg-blue-100 text-blue-700">{batchOffers.length}</Badge>
+            </div>
+            {batchOffers.map((batch) => (
+              <BatchOfferCard
+                key={batch.batchId}
+                batch={batch}
+                onViewRoute={handleViewBatchRoute}
+                onAccept={handleAcceptBatch}
+                onDecline={handleDeclineBatch}
+                isAccepting={acceptingBatchId === batch.batchId}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Individual Orders List */}
         {!isLoading && !error && availableOrders.length > 0 && (
           <div className="space-y-4">
+            {batchOffers.length > 0 && (
+              <div className="flex items-center gap-2 pt-2">
+                <Package className="w-4 h-4 text-[#FF6B35]" />
+                <h3 className="font-semibold text-gray-800">Single Orders</h3>
+                <Badge variant="outline">{availableOrders.length}</Badge>
+              </div>
+            )}
             {availableOrders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -506,6 +728,21 @@ export default function PendingOrders() {
           Auto-refreshes every 10 seconds
         </div>
       </div>
+
+      {/* Batch Route Preview Sheet */}
+      {selectedBatchId && (
+        <BatchRoutePreview
+          batchId={selectedBatchId}
+          isOpen={showBatchPreview}
+          onClose={() => {
+            setShowBatchPreview(false);
+            setSelectedBatchId(null);
+          }}
+          onAccept={handleAcceptBatch}
+          onDecline={handleDeclineBatch}
+          isAccepting={acceptingBatchId === selectedBatchId}
+        />
+      )}
     </div>
   );
 }

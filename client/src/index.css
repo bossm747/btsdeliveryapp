@@ -219,16 +219,102 @@
   }
 }
 
+/* Reduced Motion Support for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all animations globally */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable Tailwind animation utilities */
+  .animate-spin {
+    animation: none !important;
+  }
+
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  .animate-bounce {
+    animation: none !important;
+  }
+
+  .animate-ping {
+    animation: none !important;
+  }
+
+  .animate-glow {
+    animation: none !important;
+  }
+
+  .animate-float {
+    animation: none !important;
+  }
+
+  .animate-fade-in-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Disable shimmer and glow effects */
+  .bts-shimmer {
+    animation: none !important;
+  }
+
+  .logo-glow {
+    animation: none !important;
+  }
+
+  /* Remove transition-based animations but keep instant state changes */
+  .transition-all,
+  .transition-colors,
+  .transition-opacity,
+  .transition-transform {
+    transition-property: none !important;
+  }
+
+  /* Keep essential focus transitions for accessibility */
+  *:focus,
+  *:focus-visible {
+    transition: outline 0.01ms !important;
+  }
+
+  /* Disable hover transforms */
+  .service-card:hover,
+  .restaurant-card:hover,
+  .bts-hover-lift:hover {
+    transform: none !important;
+  }
+
+  /* Fade-in content should be visible immediately */
+  .fade-in-content {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Route animations disabled */
+  .route-animation {
+    animation: none !important;
+  }
+}
+
 @layer components {
   .hero-gradient {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
   }
-  
+
   .service-card:hover {
     transform: translateY(-2px);
     transition: transform 0.2s ease;
   }
-  
+
   .restaurant-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);

@@ -31,7 +31,7 @@ export default function AIAssistant() {
   const [activeTab, setActiveTab] = useState("content");
 
   // Get vendor restaurant for context - MUST come first
-  const { data: restaurant } = useQuery({
+  const { data: restaurant } = useQuery<any>({
     queryKey: ["/api/vendor/restaurant"],
   });
 
@@ -88,12 +88,12 @@ export default function AIAssistant() {
   // AI API Mutations
   const generateMenuDescription = useMutation({
     mutationFn: async (data: typeof menuForm) => {
-      const response = await apiRequest("/api/ai/menu-description", "POST", {
+      const response = await apiRequest("POST", "/api/ai/menu-description", {
         itemName: data.itemName,
         category: data.category,
         ingredients: data.ingredients ? data.ingredients.split(",").map(i => i.trim()) : undefined
       });
-      return response as { description: string };
+      return await response.json() as { description: string };
     },
     onSuccess: (data) => {
       toast({
@@ -112,12 +112,12 @@ export default function AIAssistant() {
 
   const generateBusinessDescription = useMutation({
     mutationFn: async (data: typeof businessForm) => {
-      const response = await apiRequest("/api/ai/business-description", "POST", {
+      const response = await apiRequest("POST", "/api/ai/business-description", {
         businessName: data.businessName,
         cuisineType: data.cuisineType,
         specialties: data.specialties.split(",").map(s => s.trim())
       });
-      return response as { description: string };
+      return await response.json() as { description: string };
     },
     onSuccess: (data) => {
       toast({
@@ -129,8 +129,8 @@ export default function AIAssistant() {
 
   const generateMenuImage = useMutation({
     mutationFn: async (data: typeof imageForm) => {
-      const response = await apiRequest("/api/ai/menu-image", "POST", data);
-      return response as { imageUrl: string };
+      const response = await apiRequest("POST", "/api/ai/menu-image", data);
+      return await response.json() as { imageUrl: string };
     },
     onSuccess: () => {
       toast({
@@ -142,11 +142,11 @@ export default function AIAssistant() {
 
   const generatePromoBanner = useMutation({
     mutationFn: async (data: typeof bannerForm) => {
-      const response = await apiRequest("/api/ai/promotional-banner", "POST", {
+      const response = await apiRequest("POST", "/api/ai/promotional-banner", {
         ...data,
         colors: data.colors.split(",").map(c => c.trim())
       });
-      return response as { imageUrl: string };
+      return await response.json() as { imageUrl: string };
     },
     onSuccess: () => {
       toast({
@@ -158,8 +158,8 @@ export default function AIAssistant() {
 
   const generateSocialPost = useMutation({
     mutationFn: async (data: typeof socialForm) => {
-      const response = await apiRequest("/api/ai/social-media-post", "POST", data);
-      return response as { caption: string; hashtags: string[]; callToAction: string };
+      const response = await apiRequest("POST", "/api/ai/social-media-post", data);
+      return await response.json() as { caption: string; hashtags: string[]; callToAction: string };
     },
     onSuccess: () => {
       toast({
@@ -171,8 +171,8 @@ export default function AIAssistant() {
 
   const generateReviewResponse = useMutation({
     mutationFn: async (data: typeof reviewForm) => {
-      const response = await apiRequest("/api/ai/review-response", "POST", data);
-      return response as { response: string };
+      const response = await apiRequest("POST", "/api/ai/review-response", data);
+      return await response.json() as { response: string };
     },
     onSuccess: () => {
       toast({
@@ -184,8 +184,8 @@ export default function AIAssistant() {
 
   const analyzeSales = useMutation({
     mutationFn: async (data: typeof analyticsForm) => {
-      const response = await apiRequest("/api/ai/sales-analysis", "POST", data);
-      return response as { insights: string; recommendations: string[]; trends: string };
+      const response = await apiRequest("POST", "/api/ai/sales-analysis", data);
+      return await response.json() as { insights: string; recommendations: string[]; trends: string };
     },
     onSuccess: () => {
       toast({

@@ -9,17 +9,18 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Eye, 
-  EyeOff, 
-  Mail, 
-  Lock, 
-  Truck, 
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  Truck,
   AlertCircle,
   ArrowLeft,
   Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
 const loginSchema = z.object({
@@ -35,6 +36,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { login } = useAuth();
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -49,34 +51,15 @@ export default function Login() {
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result.message || "Login failed. Please try again.");
-        return;
-      }
-
-      // Store session and redirect based on role
-      localStorage.setItem("authToken", result.token);
-      localStorage.setItem("userRole", result.user.role);
-      localStorage.setItem("userId", result.user.id);
+      // Use AuthContext login which handles redirect
+      await login(email, password);
 
       toast({
         title: "Login Successful",
-        description: `Welcome back, ${result.user.firstName || result.user.email}!`,
+        description: "Redirecting to your dashboard...",
       });
-
-      // Navigation is now handled by AuthContext after setting user state
-    } catch (err) {
-      setError("Network error. Please check your connection and try again.");
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +238,7 @@ export default function Login() {
                     variant="outline"
                     size="sm"
                     className="text-xs p-3 border-blue-200 text-blue-700 hover:bg-blue-50"
-                    onClick={() => handleDemoLogin("maria.santos@gmail.com", "password123")}
+                    onClick={() => handleDemoLogin("maria@example.com", "password123")}
                     disabled={isLoading}
                     data-testid="button-demo-customer"
                   >
@@ -268,39 +251,39 @@ export default function Login() {
                     variant="outline"
                     size="sm"
                     className="text-xs p-3 border-green-200 text-green-700 hover:bg-green-50"
-                    onClick={() => handleDemoLogin("chef.mang.tomas@gmail.com", "password123")}
+                    onClick={() => handleDemoLogin("jollibee@example.com", "password123")}
                     disabled={isLoading}
                     data-testid="button-demo-vendor"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <span className="font-medium">Vendor</span>
-                      <span className="text-xs opacity-70">Chef Tomas</span>
+                      <span className="text-xs opacity-70">Jollibee Owner</span>
                     </div>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     className="text-xs p-3 border-orange-200 text-orange-700 hover:bg-orange-50"
-                    onClick={() => handleDemoLogin("rider.mark.santos@gmail.com", "password123")}
+                    onClick={() => handleDemoLogin("rider1@example.com", "password123")}
                     disabled={isLoading}
                     data-testid="button-demo-rider"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <span className="font-medium">Rider</span>
-                      <span className="text-xs opacity-70">Mark Santos</span>
+                      <span className="text-xs opacity-70">Carlo Reyes</span>
                     </div>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     className="text-xs p-3 border-purple-200 text-purple-700 hover:bg-purple-50"
-                    onClick={() => handleDemoLogin("admin.supervisor@btsdelivery.com", "password123")}
+                    onClick={() => handleDemoLogin("admin@btsdelivery.com", "password123")}
                     disabled={isLoading}
                     data-testid="button-demo-admin"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <span className="font-medium">Admin</span>
-                      <span className="text-xs opacity-70">Patrick Santiago</span>
+                      <span className="text-xs opacity-70">Admin User</span>
                     </div>
                   </Button>
                 </div>

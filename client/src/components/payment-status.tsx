@@ -11,14 +11,20 @@ interface PaymentStatusProps {
   onRefresh?: () => void;
 }
 
-export default function PaymentStatus({ 
-  transactionId, 
+interface PaymentStatusData {
+  status?: 'pending' | 'success' | 'failed';
+  data?: any;
+  message?: string;
+}
+
+export default function PaymentStatus({
+  transactionId,
   paymentMethod,
   amount,
-  onRefresh 
+  onRefresh
 }: PaymentStatusProps) {
-  
-  const { data: paymentStatus, isLoading, refetch } = useQuery({
+
+  const { data: paymentStatus = {} as PaymentStatusData, isLoading, refetch } = useQuery<PaymentStatusData>({
     queryKey: [`/api/payment/status/${transactionId}`],
     enabled: !!transactionId && paymentMethod !== "cash",
     refetchInterval: paymentMethod !== "cash" ? 5000 : false, // Auto-refresh every 5 seconds for digital payments

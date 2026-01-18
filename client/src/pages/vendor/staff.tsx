@@ -358,20 +358,20 @@ export default function VendorStaff() {
                 </div>
                 
                 {/* Staff Permissions */}
-                {member.permissions && typeof member.permissions === 'object' && (
+                {member.permissions && typeof member.permissions === 'object' ? (
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Permissions:</h4>
                     <div className="flex flex-wrap gap-2">
-                      {Object.entries(member.permissions as Record<string, boolean>).map(([key, value]) => (
-                        value && (
+                      {Object.entries(member.permissions as Record<string, boolean>)
+                        .filter(([_, value]) => value)
+                        .map(([key]) => (
                           <Badge key={key} variant="outline" className="text-xs">
                             {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
                           </Badge>
-                        )
-                      ))}
+                        ))}
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 {/* Work Schedule */}
                 <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">

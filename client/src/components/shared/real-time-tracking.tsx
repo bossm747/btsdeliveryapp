@@ -296,8 +296,11 @@ export default function RealTimeTracking({
 
   // Mutation to refresh tracking data
   const refreshMutation = useMutation({
-    mutationFn: () => apiRequest("GET", `/api/orders/${orderId}/tracking`),
-    onSuccess: (data) => {
+    mutationFn: async () => {
+      const response = await apiRequest("GET", `/api/orders/${orderId}/tracking`);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
       setTrackingData(data);
       setLastUpdate(new Date());
       toast({

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { PageTransition } from "@/components/PageTransition";
 import {
   BarChart3,
   ShoppingBag,
@@ -206,7 +207,9 @@ export default function VendorLayout({ children }: VendorLayoutProps) {
           {/* Page Content */}
           <main className="flex-1 overflow-auto">
             <div className="p-6">
-              {children}
+              <PageTransition>
+                {children}
+              </PageTransition>
             </div>
           </main>
         </div>

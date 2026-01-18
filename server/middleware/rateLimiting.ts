@@ -2,10 +2,11 @@ import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response, NextFunction } from 'express';
 
-// General API rate limiting
+// General API rate limiting - disabled in development
+const isDev = process.env.NODE_ENV === 'development';
 export const generalRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: isDev ? 10000 : 100, // Much higher limit in development
   message: {
     error: 'Too many requests from this IP',
     message: 'Please try again after 15 minutes',
@@ -14,10 +15,12 @@ export const generalRateLimit = rateLimit({
   standardHeaders: true, // Return rate limit info in headers
   legacyHeaders: false, // Disable X-RateLimit-* headers
   handler: (req: Request, res: Response) => {
+    const resetTime = (req as any).rateLimit?.resetTime;
+    const retryAfter = resetTime ? Math.round((resetTime - Date.now()) / 1000) : 900;
     res.status(429).json({
       error: 'Rate limit exceeded',
       message: 'Too many requests from this IP, please try again later.',
-      retryAfter: Math.round(((req as any).rateLimit?.resetTime) / 1000) || 900
+      retryAfter: Math.max(retryAfter, 1)
     });
   }
 });
@@ -35,10 +38,12 @@ export const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req: Request, res: Response) => {
+    const resetTime = (req as any).rateLimit?.resetTime;
+    const retryAfter = resetTime ? Math.round((resetTime - Date.now()) / 1000) : 900;
     res.status(429).json({
       error: 'Authentication rate limit exceeded',
       message: 'Too many failed login attempts. Please try again after 15 minutes.',
-      retryAfter: Math.round(((req as any).rateLimit?.resetTime) / 1000) || 900
+      retryAfter: Math.max(retryAfter, 1)
     });
   }
 });
@@ -86,7 +91,7 @@ export const uploadRateLimit = rateLimit({
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: 50, // Allow 50 requests per windowMs without delay
-  delayMs: 500, // Add 500ms delay per request after delayAfter
+  delayMs: () => 500, // Add 500ms delay per request after delayAfter
   maxDelayMs: 20000, // Max delay of 20 seconds
 });
 

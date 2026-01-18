@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -18,14 +19,13 @@ import {
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { StarRating, SuccessCheckmark } from "@/components/animated";
 import {
   Star,
-  Camera,
   X,
   Loader2,
   Send,
   ImagePlus,
-  CheckCircle2,
   AlertCircle,
 } from "lucide-react";
 
@@ -54,24 +54,6 @@ export interface ReviewFormProps {
   className?: string;
 }
 
-const RATING_LABELS = [
-  "", // 0 index placeholder
-  "Poor",
-  "Fair",
-  "Good",
-  "Very Good",
-  "Excellent",
-];
-
-const RATING_COLORS = [
-  "",
-  "text-red-500",
-  "text-orange-500",
-  "text-amber-500",
-  "text-lime-500",
-  "text-green-500",
-];
-
 export default function ReviewForm({
   orderId,
   restaurantName,
@@ -84,7 +66,6 @@ export default function ReviewForm({
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [hoveredRating, setHoveredRating] = useState(0);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -98,7 +79,6 @@ export default function ReviewForm({
   });
 
   const currentRating = form.watch("rating");
-  const displayRating = hoveredRating || currentRating;
 
   // Submit review mutation
   const submitReviewMutation = useMutation({
@@ -149,7 +129,7 @@ export default function ReviewForm({
     },
   });
 
-  const handleStarClick = (rating: number) => {
+  const handleRatingChange = (rating: number) => {
     form.setValue("rating", rating, { shouldValidate: true });
   };
 
@@ -212,28 +192,32 @@ export default function ReviewForm({
     submitReviewMutation.mutate(data);
   };
 
-  // Success State
+  // Success State with animated checkmark
   if (isSubmitted) {
     return (
       <Card className={cn("border-green-200 bg-green-50", className)} data-testid="review-success">
-        <CardContent className="p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-            <CheckCircle2 className="w-8 h-8 text-green-600" />
-          </div>
-          <h3 className="text-xl font-semibold text-green-800 mb-2">
-            Thank You for Your Review!
-          </h3>
-          <p className="text-green-600 mb-4">
-            Your feedback helps us improve our service and helps others make informed decisions.
-          </p>
+        <CardContent className="p-8">
+          <SuccessCheckmark
+            size="lg"
+            variant="success"
+            title="Thank You for Your Review!"
+            description="Your feedback helps us improve our service and helps others make informed decisions."
+          />
           {onCancel && (
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              className="border-green-300 text-green-700 hover:bg-green-100"
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              className="flex justify-center mt-6"
             >
-              Close
-            </Button>
+              <Button
+                variant="outline"
+                onClick={onCancel}
+                className="border-green-300 text-green-700 hover:bg-green-100"
+              >
+                Close
+              </Button>
+            </motion.div>
           )}
         </CardContent>
       </Card>
@@ -256,7 +240,7 @@ export default function ReviewForm({
       <CardContent className={isDialog ? "pt-2" : undefined}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            {/* Star Rating */}
+            {/* Animated Star Rating */}
             <FormField
               control={form.control}
               name="rating"
@@ -264,47 +248,12 @@ export default function ReviewForm({
                 <FormItem>
                   <FormLabel>Rating</FormLabel>
                   <FormControl>
-                    <div className="space-y-2">
-                      <div
-                        className="flex items-center gap-1"
-                        data-testid="star-rating"
-                        onMouseLeave={() => setHoveredRating(0)}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            className={cn(
-                              "p-1 transition-all duration-150 transform hover:scale-110",
-                              "focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-2 rounded"
-                            )}
-                            onMouseEnter={() => setHoveredRating(star)}
-                            onClick={() => handleStarClick(star)}
-                            data-testid={`star-${star}`}
-                          >
-                            <Star
-                              className={cn(
-                                "w-10 h-10 transition-colors",
-                                star <= displayRating
-                                  ? "fill-[#FFD23F] text-[#FFD23F]"
-                                  : "text-gray-300"
-                              )}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                      {displayRating > 0 && (
-                        <p
-                          className={cn(
-                            "text-sm font-medium transition-colors",
-                            RATING_COLORS[displayRating]
-                          )}
-                          data-testid="rating-label"
-                        >
-                          {RATING_LABELS[displayRating]}
-                        </p>
-                      )}
-                    </div>
+                    <StarRating
+                      value={currentRating}
+                      onChange={handleRatingChange}
+                      size="md"
+                      showLabel={true}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -335,36 +284,44 @@ export default function ReviewForm({
               )}
             />
 
-            {/* Photo Upload */}
+            {/* Photo Upload with animations */}
             <div className="space-y-2">
               <Label>Add Photos (Optional)</Label>
               <div className="flex flex-wrap gap-3">
-                {/* Photo Previews */}
-                {photoPreviewUrls.map((url, index) => (
-                  <div
-                    key={index}
-                    className="relative group"
-                    data-testid={`photo-preview-${index}`}
-                  >
-                    <img
-                      src={url}
-                      alt={`Review photo ${index + 1}`}
-                      className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
-                    />
-                    <button
-                      type="button"
-                      className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleRemovePhoto(index)}
-                      data-testid={`remove-photo-${index}`}
+                {/* Photo Previews with animation */}
+                <AnimatePresence mode="popLayout">
+                  {photoPreviewUrls.map((url, index) => (
+                    <motion.div
+                      key={url}
+                      layout
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      className="relative group"
+                      data-testid={`photo-preview-${index}`}
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                      <img
+                        src={url}
+                        alt={`Review photo ${index + 1}`}
+                        className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      <motion.button
+                        type="button"
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleRemovePhoto(index)}
+                        whileTap={{ scale: 0.9 }}
+                        data-testid={`remove-photo-${index}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </motion.button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
 
                 {/* Add Photo Button */}
                 {photos.length < 3 && (
-                  <button
+                  <motion.button
                     type="button"
                     className={cn(
                       "w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg",
@@ -373,11 +330,13 @@ export default function ReviewForm({
                       "transition-colors cursor-pointer"
                     )}
                     onClick={() => fileInputRef.current?.click()}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     data-testid="add-photo-button"
                   >
                     <ImagePlus className="w-6 h-6" />
                     <span className="text-xs">Add</span>
-                  </button>
+                  </motion.button>
                 )}
 
                 <input
@@ -408,38 +367,49 @@ export default function ReviewForm({
                   Cancel
                 </Button>
               )}
-              <Button
-                type="submit"
-                className={cn(
-                  "bg-[#FF6B35] hover:bg-[#FF6B35]/90",
-                  onCancel ? "flex-1" : "w-full"
-                )}
-                disabled={submitReviewMutation.isPending || currentRating === 0}
-                data-testid="submit-review-button"
+              <motion.div
+                className={onCancel ? "flex-1" : "w-full"}
+                whileTap={{ scale: 0.98 }}
               >
-                {submitReviewMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Submit Review
-                  </>
-                )}
-              </Button>
+                <Button
+                  type="submit"
+                  className={cn(
+                    "w-full bg-[#FF6B35] hover:bg-[#FF6B35]/90"
+                  )}
+                  disabled={submitReviewMutation.isPending || currentRating === 0}
+                  data-testid="submit-review-button"
+                >
+                  {submitReviewMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Submit Review
+                    </>
+                  )}
+                </Button>
+              </motion.div>
             </div>
 
-            {/* Error Message */}
-            {submitReviewMutation.isError && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                <span className="text-sm text-red-700">
-                  {submitReviewMutation.error?.message || "Failed to submit review. Please try again."}
-                </span>
-              </div>
-            )}
+            {/* Error Message with animation */}
+            <AnimatePresence>
+              {submitReviewMutation.isError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <span className="text-sm text-red-700">
+                    {submitReviewMutation.error?.message || "Failed to submit review. Please try again."}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
       </CardContent>

@@ -2,7 +2,7 @@
 // Handles document upload, verification status, and admin verification workflows
 
 import { Router } from 'express';
-import { authenticateToken, requireAdmin, requireRole, auditLog } from '../routes.js';
+import { authenticateToken, requireAdmin, requireRole, auditLog } from '../middleware/auth';
 import { storage } from '../storage.js';
 import { db } from '../db.js';
 import { z } from 'zod';

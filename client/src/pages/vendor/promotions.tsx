@@ -340,9 +340,9 @@ export default function VendorPromotions() {
                   )}
                   
                   <div className="flex justify-between text-xs text-gray-500 mt-3">
-                    <span>Uses: {promotion.currentRedemptions || 0}</span>
-                    {promotion.maxRedemptions && (
-                      <span>Max: {promotion.maxRedemptions}</span>
+                    <span>Uses: {(promotion as any).currentRedemptions || 0}</span>
+                    {(promotion as any).maxRedemptions && (
+                      <span>Max: {(promotion as any).maxRedemptions}</span>
                     )}
                   </div>
                 </div>

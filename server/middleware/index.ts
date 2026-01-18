@@ -6,12 +6,13 @@
 // Import all middleware functions
 import {
   authenticateToken,
+  optionalAuthenticateToken,
   requireRole,
   requireAdmin,
   requireAdminOrVendor,
   requireAdminOrRider,
   auditLog
-} from '../routes';
+} from './auth';
 
 import {
   generalRateLimit,
@@ -89,6 +90,7 @@ import {
 export {
   // Authentication and Authorization
   authenticateToken,
+  optionalAuthenticateToken,
   requireRole,
   requireAdmin,
   requireAdminOrVendor,

@@ -1,21 +1,376 @@
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowLeft, RefreshCw, Clock, Edit2, Plus, Minus, Lock, AlertTriangle, Camera, MessageCircle, CreditCard, Loader2 } from "lucide-react";
 import { Link } from "wouter";
-import DeliveryLiveTracking from "@/components/shared/delivery-live-tracking";
 import RealTimeTracking from "@/components/shared/real-time-tracking";
-import type { Order } from "@shared/schema";
+import { canModifyOrder, formatTime, MODIFIABLE_ORDER_STATUSES } from "@/lib/utils";
+import { DeliveryTypeDisplay, DeliveryTypeBadge } from "@/components/delivery-options";
+import type { Order, DeliveryType } from "@shared/schema";
+import { DELIVERY_TYPES } from "@shared/schema";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import OrderChat, { ChatButton } from "@/components/order-chat";
+
+// Countdown Timer Component
+function ModificationCountdown({
+  order,
+  onExpire
+}: {
+  order: Order;
+  onExpire: () => void;
+}) {
+  const [remainingSeconds, setRemainingSeconds] = useState(() => {
+    const { remainingSeconds } = canModifyOrder(order);
+    return remainingSeconds;
+  });
+
+  useEffect(() => {
+    if (remainingSeconds <= 0) {
+      onExpire();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRemainingSeconds(prev => {
+        const newValue = prev - 1;
+        if (newValue <= 0) {
+          onExpire();
+          return 0;
+        }
+        return newValue;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [remainingSeconds, onExpire]);
+
+  if (remainingSeconds <= 0) {
+    return null;
+  }
+
+  const isUrgent = remainingSeconds <= 30;
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+      isUrgent ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
+    }`}>
+      <Clock className="h-4 w-4" />
+      <span className="text-sm font-medium">
+        Modify within: {formatTime(remainingSeconds)}
+      </span>
+    </div>
+  );
+}
+
+// Order Modification Modal
+interface OrderItem {
+  itemId?: string;
+  name: string;
+  price: number;
+  quantity: number;
+  specialInstructions?: string;
+}
+
+interface ModificationModalProps {
+  open: boolean;
+  onClose: () => void;
+  order: Order;
+  onSave: (modifications: {
+    items?: OrderItem[];
+    specialInstructions?: string;
+    deliveryAddress?: any;
+  }) => void;
+  isSaving: boolean;
+}
+
+function OrderModificationModal({ open, onClose, order, onSave, isSaving }: ModificationModalProps) {
+  const [items, setItems] = useState<OrderItem[]>([]);
+  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState<any>(null);
+  const { remainingSeconds } = canModifyOrder(order);
+
+  // Initialize state from order
+  useEffect(() => {
+    if (open && order) {
+      const orderItems = (order.items as any[]) || [];
+      setItems(orderItems.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        price: parseFloat(item.price) || 0,
+        quantity: item.quantity || 1,
+        specialInstructions: item.specialInstructions
+      })));
+      setSpecialInstructions(order.specialInstructions || '');
+      setDeliveryAddress(order.deliveryAddress);
+    }
+  }, [open, order]);
+
+  const handleQuantityChange = (index: number, delta: number) => {
+    setItems(prev => {
+      const newItems = [...prev];
+      const newQuantity = Math.max(0, newItems[index].quantity + delta);
+
+      if (newQuantity === 0) {
+        // Remove item if quantity becomes 0
+        return newItems.filter((_, i) => i !== index);
+      }
+
+      newItems[index] = { ...newItems[index], quantity: newQuantity };
+      return newItems;
+    });
+  };
+
+  const handleSave = () => {
+    if (items.length === 0) {
+      return; // Don't allow empty orders
+    }
+
+    onSave({
+      items,
+      specialInstructions,
+      deliveryAddress
+    });
+  };
+
+  const calculateNewTotal = () => {
+    const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const deliveryFee = parseFloat(order.deliveryFee) || 0;
+    const serviceFee = parseFloat(order.serviceFee || '0') || 0;
+    const tax = parseFloat(order.tax || '0') || 0;
+    const tip = parseFloat(order.tip || '0') || 0;
+    const discount = parseFloat(order.discount || '0') || 0;
+    return subtotal + deliveryFee + serviceFee + tax + tip - discount;
+  };
+
+  const newSubtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const newTotal = calculateNewTotal();
+  const originalTotal = parseFloat(order.totalAmount);
+  const difference = newTotal - originalTotal;
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Edit2 className="h-5 w-5" />
+            Modify Order
+          </DialogTitle>
+          <DialogDescription>
+            Make changes to your order within the modification window.
+            {remainingSeconds > 0 && (
+              <span className={`ml-2 font-medium ${remainingSeconds <= 30 ? 'text-destructive' : 'text-primary'}`}>
+                ({formatTime(remainingSeconds)} remaining)
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Order Items */}
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Order Items</Label>
+            {items.length === 0 ? (
+              <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg text-destructive text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Order must have at least one item</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        P{item.price.toFixed(2)} each
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleQuantityChange(index, -1)}
+                        data-testid={`decrease-quantity-${index}`}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-8 text-center font-medium" data-testid={`item-quantity-edit-${index}`}>
+                        {item.quantity}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleQuantityChange(index, 1)}
+                        data-testid={`increase-quantity-${index}`}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-20 text-right font-semibold text-sm">
+                        P{(item.price * item.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Special Instructions */}
+          <div className="space-y-2">
+            <Label htmlFor="specialInstructions">Special Instructions</Label>
+            <Textarea
+              id="specialInstructions"
+              value={specialInstructions}
+              onChange={(e) => setSpecialInstructions(e.target.value)}
+              placeholder="Add any special instructions for your order..."
+              className="min-h-[80px]"
+              data-testid="special-instructions-input"
+            />
+          </div>
+
+          {/* Delivery Address (editable only if not picked up) */}
+          {!['picked_up', 'in_transit', 'delivered', 'completed'].includes(order.status) && deliveryAddress && (
+            <div className="space-y-2">
+              <Label>Delivery Address</Label>
+              <div className="space-y-2">
+                <Input
+                  value={deliveryAddress.street || ''}
+                  onChange={(e) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
+                  placeholder="Street address"
+                  data-testid="address-street-input"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={deliveryAddress.barangay || ''}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, barangay: e.target.value })}
+                    placeholder="Barangay"
+                    data-testid="address-barangay-input"
+                  />
+                  <Input
+                    value={deliveryAddress.city || ''}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, city: e.target.value })}
+                    placeholder="City"
+                    data-testid="address-city-input"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Price Summary */}
+          <div className="border-t pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">New Subtotal:</span>
+              <span>P{newSubtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Delivery Fee:</span>
+              <span>P{parseFloat(order.deliveryFee).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span>New Total:</span>
+              <span className="text-primary">P{newTotal.toFixed(2)}</span>
+            </div>
+            {difference !== 0 && (
+              <div className={`flex justify-between text-sm ${difference > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <span>Difference:</span>
+                <span>{difference > 0 ? '+' : ''}P{difference.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || items.length === 0}
+            data-testid="save-modifications-button"
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function OrderTracking() {
   const { id } = useParams();
+  const queryClient = useQueryClient();
+  const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
+  const [canModify, setCanModify] = useState(false);
+  const [windowExpired, setWindowExpired] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const { data: order, isLoading, refetch } = useQuery<Order>({
     queryKey: ["/api/orders", id],
     enabled: !!id,
+    // Poll more frequently when payment is pending (every 3 seconds)
+    // Regular polling every 10 seconds for other statuses
+    refetchInterval: (query) => {
+      const orderData = query.state.data;
+      return orderData?.status === 'payment_pending' ? 3000 : 10000;
+    },
+  });
+
+  // Check modification status when order changes
+  useEffect(() => {
+    if (order) {
+      const status = canModifyOrder(order);
+      setCanModify(status.canModify);
+      setWindowExpired(!status.canModify && status.remainingSeconds <= 0);
+    }
+  }, [order]);
+
+  const handleWindowExpire = useCallback(() => {
+    setCanModify(false);
+    setWindowExpired(true);
+    setIsModifyModalOpen(false);
+  }, []);
+
+  // Mutation for modifying order
+  const modifyOrderMutation = useMutation({
+    mutationFn: async (modifications: { items?: any[]; specialInstructions?: string; deliveryAddress?: any }) => {
+      const response = await fetch(`/api/orders/${id}/modify`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(modifications),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to modify order');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", id] });
+      setIsModifyModalOpen(false);
+    },
   });
 
   if (isLoading) {
@@ -38,9 +393,9 @@ export default function OrderTracking() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Card>
             <CardContent className="p-12 text-center">
-              <img 
-                src={btsLogo} 
-                alt="BTS Delivery Logo" 
+              <img
+                src={btsLogo}
+                alt="BTS Delivery Logo"
                 className="w-20 h-20 object-contain mx-auto mb-6 opacity-50"
               />
               <h1 className="text-2xl font-bold text-foreground mb-4">Order not found</h1>
@@ -97,11 +452,81 @@ export default function OrderTracking() {
 
           {/* Order Details */}
           <div className="lg:col-span-1 space-y-6">
+            {/* Payment Pending Banner - Shows when order awaiting payment confirmation */}
+            {order.status === 'payment_pending' && (
+              <Card className="border-yellow-500 bg-yellow-50" data-testid="payment-pending-card">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <CreditCard className="h-6 w-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-yellow-800">Payment Pending</h3>
+                      <p className="text-sm text-yellow-600">Your payment is being processed</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-yellow-700 text-sm mb-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Waiting for payment confirmation...</span>
+                  </div>
+                  <p className="text-xs text-yellow-600">
+                    Your order will be sent to the restaurant once payment is confirmed.
+                    This usually takes a few seconds after completing payment.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full mt-4 border-yellow-500 text-yellow-700 hover:bg-yellow-100"
+                    onClick={() => refetch()}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Check Payment Status
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Order Modification Window Banner */}
+            {canModify && order.status !== 'payment_pending' && (
+              <Card className="border-primary" data-testid="modification-window-card">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <ModificationCountdown order={order} onExpire={handleWindowExpire} />
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => setIsModifyModalOpen(true)}
+                    data-testid="modify-order-button"
+                  >
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    Modify Order
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    You can still modify your order
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Order Locked Banner */}
+            {windowExpired && MODIFIABLE_ORDER_STATUSES.includes(order.status as any) && (
+              <Card className="border-muted bg-muted/30" data-testid="order-locked-card">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                    <span className="text-sm font-medium">Order Locked</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The modification window has expired. Your order is being processed.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Order Summary */}
             <Card data-testid="order-summary-tracking">
               <CardContent className="p-6">
                 <h3 className="text-lg font-bold text-foreground mb-4">Order Details</h3>
-                
+
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Order #:</span>
@@ -109,25 +534,25 @@ export default function OrderTracking() {
                       {order.orderNumber}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Total Amount:</span>
                     <span className="font-semibold text-primary" data-testid="order-total-display">
-                      ₱{parseFloat(order.totalAmount).toFixed(2)}
+                      P{parseFloat(order.totalAmount).toFixed(2)}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Payment Method:</span>
                     <span className="font-semibold capitalize" data-testid="payment-method-display">
                       {order.paymentMethod.replace('_', ' ')}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Payment Status:</span>
                     <span className={`font-semibold capitalize ${
-                      order.paymentStatus === 'paid' ? 'text-success' : 
+                      order.paymentStatus === 'paid' ? 'text-success' :
                       order.paymentStatus === 'failed' ? 'text-destructive' : 'text-accent'
                     }`} data-testid="payment-status-display">
                       {order.paymentStatus}
@@ -136,6 +561,29 @@ export default function OrderTracking() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Chat with Rider Button - Only when rider is assigned */}
+            {order.riderId && !['delivered', 'completed', 'cancelled'].includes(order.status) && (
+              <Card className="border-primary/50 bg-primary/5" data-testid="chat-with-rider-card">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <MessageCircle className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">Chat with Rider</p>
+                        <p className="text-xs text-muted-foreground">Send delivery instructions</p>
+                      </div>
+                    </div>
+                    <ChatButton
+                      orderId={order.id}
+                      onClick={() => setIsChatOpen(true)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Delivery Address */}
             <Card data-testid="delivery-address-tracking">
@@ -153,6 +601,50 @@ export default function OrderTracking() {
               </CardContent>
             </Card>
 
+            {/* Delivery Type - Contactless Option */}
+            {(order as any).deliveryType && (
+              <Card data-testid="delivery-type-tracking">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-foreground">Delivery Method</h3>
+                    <DeliveryTypeBadge
+                      deliveryType={(order as any).deliveryType as DeliveryType}
+                    />
+                  </div>
+                  <DeliveryTypeDisplay
+                    deliveryType={(order as any).deliveryType as DeliveryType}
+                    contactlessInstructions={(order as any).contactlessInstructions}
+                    deliveryProofPhoto={(order as any).deliveryProofPhoto}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Delivery Proof Photo - Show after delivery is completed */}
+            {(order.status === 'delivered' || order.status === 'completed') &&
+             (order as any).deliveryProofPhoto &&
+             !(order as any).deliveryType && (
+              <Card data-testid="delivery-proof-tracking">
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                    <Camera className="h-5 w-5" />
+                    Delivery Proof
+                  </h3>
+                  <div className="rounded-lg overflow-hidden border">
+                    <img
+                      src={(order as any).deliveryProofPhoto}
+                      alt="Delivery proof"
+                      className="w-full h-48 object-cover"
+                      data-testid="delivery-proof-image"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Photo taken at delivery location
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Order Items */}
             <Card data-testid="order-items-tracking">
               <CardContent className="p-6">
@@ -169,7 +661,7 @@ export default function OrderTracking() {
                         </span>
                       </div>
                       <span className="font-semibold" data-testid={`item-price-${index}`}>
-                        ₱{(item.price * item.quantity).toFixed(2)}
+                        P{(item.price * item.quantity).toFixed(2)}
                       </span>
                     </div>
                   ))}
@@ -191,6 +683,24 @@ export default function OrderTracking() {
           </div>
         </div>
       </div>
+
+      {/* Order Modification Modal */}
+      <OrderModificationModal
+        open={isModifyModalOpen}
+        onClose={() => setIsModifyModalOpen(false)}
+        order={order}
+        onSave={(modifications) => modifyOrderMutation.mutate(modifications)}
+        isSaving={modifyOrderMutation.isPending}
+      />
+
+      {/* Chat with Rider - Only shown when rider is assigned */}
+      {order.riderId && (
+        <OrderChat
+          orderId={order.id}
+          open={isChatOpen}
+          onOpenChange={setIsChatOpen}
+        />
+      )}
     </div>
   );
 }

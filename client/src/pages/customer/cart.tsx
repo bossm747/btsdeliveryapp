@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,21 +14,33 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet } from "lucide-react";
+import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet, Loader2 } from "lucide-react";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { AddressSelector, SelectedDeliveryAddress } from "@/components/address-selector";
 import { DeliveryZoneBadge } from "@/components/delivery-zone-map";
 import { LoyaltyEarnPreview } from "@/components/loyalty-widget";
 import { WalletBalance, useWallet } from "@/components/wallet-balance";
+import { PaymentMethodSelector } from "@/components/payment-method-selector";
 import { TaxBreakdown, TaxSummaryLine } from "@/components/tax-breakdown";
+import { SchedulePicker } from "@/components/schedule-picker";
+import { DeliveryOptions } from "@/components/delivery-options";
 import { Slider } from "@/components/ui/slider";
 import { Link, useLocation } from "wouter";
-import { useCartStore } from "@/stores/cart-store";
+import { DELIVERY_TYPES, type DeliveryType } from "@shared/schema";
+import { useCartStore, CartItem, CartSnapshot } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
 import btsLogo from "@assets/bts-logo-transparent.png";
+
+// Types for optimistic update context
+interface OptimisticUpdateContext {
+  previousItems: CartItem[];
+  previousPricing: any;
+  operationId: string;
+}
 
 // Enhanced validation schemas for comprehensive payment system
 const deliveryAddressSchema = z.object({
@@ -49,6 +61,7 @@ const orderSchema = z.object({
   promoCode: z.string().optional(),
   isInsured: z.boolean().default(false),
   savePaymentMethod: z.boolean().default(false),
+  scheduledFor: z.date().nullable().optional(), // Pre-order scheduling
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
@@ -96,15 +109,33 @@ interface DynamicPricing {
 }
 
 export default function Cart() {
-  const { items, updateQuantity, removeItem, clearCart, getTotalPrice, getCurrentRestaurantId } = useCartStore();
+  const {
+    items,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    getTotalPrice,
+    getCurrentRestaurantId,
+    beginOptimisticUpdate,
+    commitOperation,
+    rollbackOperation,
+    hasPendingOperations
+  } = useCartStore();
   const { toast } = useToast();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
+  // Track items being updated for loading states
+  const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
+  // Debounce timer ref for pricing recalculation
+  const pricingDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // Enhanced state management for comprehensive payment system
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'nexuspay' | 'cod'>('nexuspay');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | undefined>();
+  const [savePaymentForFuture, setSavePaymentForFuture] = useState(false);
   const [pricingCalculation, setPricingCalculation] = useState<any>(null);
   const [isCalculatingPricing, setIsCalculatingPricing] = useState(false);
   const [appliedPromoCode, setAppliedPromoCode] = useState<string>('');
@@ -119,10 +150,19 @@ export default function Cart() {
   const [walletPaymentAmount, setWalletPaymentAmount] = useState(0);
   const { wallet, hasWallet, balance: walletBalance, isLoading: walletLoading } = useWallet();
 
-  // Address autocomplete state
+  // Address selection state
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [deliveryZone, setDeliveryZone] = useState<{ zone: string; deliveryFee: number } | null>(null);
   const [useAddressAutocomplete, setUseAddressAutocomplete] = useState(true);
+  const [addressSelectionMode, setAddressSelectionMode] = useState<'saved' | 'autocomplete' | 'manual'>('saved');
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState<SelectedDeliveryAddress | null>(null);
+
+  // Pre-order scheduling state
+  const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
+
+  // Delivery type state for contactless delivery
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>(DELIVERY_TYPES.HAND_TO_CUSTOMER);
+  const [contactlessInstructions, setContactlessInstructions] = useState("");
 
   // Pricing derived from delivery zone or defaults
   const deliveryFee = deliveryZone?.deliveryFee ?? 49; // Default delivery fee
@@ -155,6 +195,29 @@ export default function Cart() {
     enabled: !!user?.id
   });
 
+  // Fetch saved addresses for the address selector
+  interface SavedAddress {
+    id: string;
+    title: string;
+    streetAddress: string;
+    barangay?: string;
+    city: string;
+    province: string;
+    zipCode?: string;
+    landmark?: string;
+    deliveryInstructions?: string;
+    coordinates?: { lat: number; lng: number };
+    isDefault: boolean;
+  }
+
+  const { data: savedAddresses = [], isLoading: isLoadingAddresses } = useQuery<SavedAddress[]>({
+    queryKey: ["/api/customer/addresses"],
+    enabled: !!user?.id
+  });
+
+  // Check if user has saved addresses
+  const hasSavedAddresses = savedAddresses.length > 0;
+
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
@@ -173,6 +236,7 @@ export default function Cart() {
       promoCode: "",
       isInsured: false,
       savePaymentMethod: false,
+      scheduledFor: null,
     },
   });
 
@@ -209,6 +273,208 @@ export default function Cart() {
       });
     }
   }, [getTotalPrice(), currentCity, distance, isInsured, tipAmount, loyaltyPointsToUse, appliedPromoCode]);
+
+  // Optimistic update mutation for quantity changes
+  const updateQuantityMutation = useMutation<
+    { success: boolean; item: CartItem },
+    Error,
+    { itemId: string; quantity: number; previousQuantity: number },
+    OptimisticUpdateContext
+  >({
+    mutationFn: async ({ itemId, quantity }) => {
+      // Simulate API call - in a real app, this would sync with backend
+      // For now, we'll just return success since cart is local-first
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const item = items.find(i => i.id === itemId);
+      if (!item) throw new Error('Item not found');
+      return { success: true, item: { ...item, quantity } };
+    },
+    onMutate: async ({ itemId, quantity, previousQuantity }) => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+      await queryClient.cancelQueries({ queryKey: ['/api/pricing/calculate'] });
+
+      // Start tracking this operation
+      const operationId = beginOptimisticUpdate('update', itemId);
+
+      // Store previous state for rollback
+      const previousItems = [...items];
+      const previousPricing = pricingCalculation;
+
+      // Mark item as updating
+      setUpdatingItems(prev => new Set(prev).add(itemId));
+
+      // Optimistically update the cart
+      updateQuantity(itemId, quantity);
+
+      return { previousItems, previousPricing, operationId };
+    },
+    onError: (error, { itemId, previousQuantity }, context) => {
+      // Rollback to previous state
+      if (context) {
+        rollbackOperation(context.operationId);
+      }
+
+      // Show error toast
+      toast({
+        title: 'Failed to update quantity',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+
+      // Remove from updating set
+      setUpdatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    },
+    onSuccess: (data, { itemId }, context) => {
+      // Commit the operation
+      if (context) {
+        commitOperation(context.operationId);
+      }
+
+      // Remove from updating set
+      setUpdatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    },
+    onSettled: () => {
+      // Trigger pricing recalculation with debounce
+      if (pricingDebounceRef.current) {
+        clearTimeout(pricingDebounceRef.current);
+      }
+      pricingDebounceRef.current = setTimeout(() => {
+        const subtotal = getTotalPrice();
+        if (subtotal > 0) {
+          setIsCalculatingPricing(true);
+          calculatePricingMutation.mutate({
+            orderType: 'food',
+            baseAmount: subtotal,
+            city: currentCity,
+            distance: distance,
+            isInsured: isInsured,
+            tip: tipAmount,
+            loyaltyPoints: loyaltyPointsToUse,
+            promoCode: appliedPromoCode
+          });
+        }
+      }, 300);
+    },
+  });
+
+  // Optimistic update mutation for removing items
+  const removeItemMutation = useMutation<
+    { success: boolean },
+    Error,
+    { itemId: string; itemName: string },
+    OptimisticUpdateContext
+  >({
+    mutationFn: async ({ itemId }) => {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return { success: true };
+    },
+    onMutate: async ({ itemId }) => {
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+
+      const operationId = beginOptimisticUpdate('remove', itemId);
+      const previousItems = [...items];
+      const previousPricing = pricingCalculation;
+
+      setUpdatingItems(prev => new Set(prev).add(itemId));
+
+      // Optimistically remove the item
+      removeItem(itemId);
+
+      return { previousItems, previousPricing, operationId };
+    },
+    onError: (error, { itemId, itemName }, context) => {
+      if (context) {
+        rollbackOperation(context.operationId);
+      }
+
+      toast({
+        title: 'Failed to remove item',
+        description: `Could not remove ${itemName}. Please try again.`,
+        variant: 'destructive',
+      });
+
+      setUpdatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    },
+    onSuccess: (data, { itemId, itemName }, context) => {
+      if (context) {
+        commitOperation(context.operationId);
+      }
+
+      toast({
+        title: 'Item removed',
+        description: `${itemName} has been removed from your cart`,
+      });
+
+      setUpdatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    },
+    onSettled: () => {
+      // Trigger pricing recalculation
+      if (pricingDebounceRef.current) {
+        clearTimeout(pricingDebounceRef.current);
+      }
+      pricingDebounceRef.current = setTimeout(() => {
+        const subtotal = getTotalPrice();
+        if (subtotal > 0) {
+          setIsCalculatingPricing(true);
+          calculatePricingMutation.mutate({
+            orderType: 'food',
+            baseAmount: subtotal,
+            city: currentCity,
+            distance: distance,
+            isInsured: isInsured,
+            tip: tipAmount,
+            loyaltyPoints: loyaltyPointsToUse,
+            promoCode: appliedPromoCode
+          });
+        }
+      }, 300);
+    },
+  });
+
+  // Handlers for optimistic cart operations
+  const handleQuantityChange = useCallback((itemId: string, newQuantity: number, currentQuantity: number) => {
+    if (newQuantity <= 0) {
+      // Trigger remove instead
+      const item = items.find(i => i.id === itemId);
+      if (item) {
+        handleRemoveItem(itemId, item.name);
+      }
+      return;
+    }
+
+    updateQuantityMutation.mutate({
+      itemId,
+      quantity: newQuantity,
+      previousQuantity: currentQuantity,
+    });
+  }, [items, updateQuantityMutation]);
+
+  const handleRemoveItem = useCallback((itemId: string, itemName: string) => {
+    removeItemMutation.mutate({ itemId, itemName });
+  }, [removeItemMutation]);
+
+  // Check if a specific item is being updated
+  const isItemUpdating = useCallback((itemId: string) => {
+    return updatingItems.has(itemId);
+  }, [updatingItems]);
 
   // Check delivery zone based on coordinates
   const checkDeliveryZone = async (lat: number, lng: number) => {
@@ -361,11 +627,18 @@ export default function Cart() {
       paymentMethod: data.paymentProvider,
       paymentProvider: data.paymentProvider,
       paymentMethodType: data.paymentMethodType,
+      // Saved payment method support
+      savedPaymentMethodId: savedPaymentMethodId, // Use saved payment method if selected
+      savePaymentMethod: savePaymentForFuture, // Option to save new payment method
       deliveryAddress: data.deliveryAddress,
       specialInstructions: data.specialInstructions,
       paymentStatus: "pending",
       loyaltyPointsUsed: loyaltyPointsToUse,
       loyaltyDiscount: (loyaltyPointsToUse / 100) * 10,
+      scheduledFor: scheduledFor ? scheduledFor.toISOString() : null, // Pre-order scheduling
+      // Contactless delivery options
+      deliveryType: deliveryType,
+      contactlessInstructions: deliveryType === DELIVERY_TYPES.LEAVE_AT_DOOR ? contactlessInstructions : null,
     };
 
     createOrderMutation.mutate(orderData);
@@ -434,71 +707,104 @@ export default function Cart() {
                 <CardTitle>Order Items</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {items.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-4 p-4 border border-border rounded-lg" data-testid={`cart-item-${item.id}`}>
-                    <img 
-                      src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"
-                      alt={item.name}
-                      className="w-16 h-16 object-cover rounded-lg"
-                      data-testid={`cart-item-image-${item.id}`}
-                    />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-foreground" data-testid={`cart-item-name-${item.id}`}>
-                        {item.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">₱{item.price.toFixed(2)} each</p>
-                      {item.specialInstructions && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Note: {item.specialInstructions}
-                        </p>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2 bg-muted rounded-lg px-3 py-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          data-testid={`decrease-quantity-${item.id}`}
+                {items.map((item) => {
+                  const itemIsUpdating = isItemUpdating(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center space-x-4 p-4 border border-border rounded-lg transition-all duration-200 ${
+                        itemIsUpdating ? 'opacity-70 bg-muted/50' : ''
+                      }`}
+                      data-testid={`cart-item-${item.id}`}
+                    >
+                      <img
+                        src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"
+                        alt={item.name}
+                        className="w-16 h-16 object-cover rounded-lg"
+                        data-testid={`cart-item-image-${item.id}`}
+                      />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-foreground" data-testid={`cart-item-name-${item.id}`}>
+                          {item.name}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">PHP{item.price.toFixed(2)} each</p>
+                        {item.specialInstructions && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Note: {item.specialInstructions}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2 bg-muted rounded-lg px-3 py-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleQuantityChange(item.id, item.quantity - 1, item.quantity)}
+                            disabled={itemIsUpdating}
+                            data-testid={`decrease-quantity-${item.id}`}
+                            aria-label={`Decrease quantity of ${item.name}`}
+                          >
+                            {itemIsUpdating && item.quantity === 1 ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Minus className="h-3 w-3" />
+                            )}
+                          </Button>
+                          <span
+                            className={`font-semibold min-w-[1.5rem] text-center ${
+                              itemIsUpdating ? 'text-muted-foreground' : ''
+                            }`}
+                            data-testid={`item-quantity-${item.id}`}
+                          >
+                            {item.quantity}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleQuantityChange(item.id, item.quantity + 1, item.quantity)}
+                            disabled={itemIsUpdating}
+                            data-testid={`increase-quantity-${item.id}`}
+                            aria-label={`Increase quantity of ${item.name}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+
+                        <span
+                          className={`font-bold w-20 text-right transition-colors ${
+                            itemIsUpdating ? 'text-muted-foreground' : 'text-primary'
+                          }`}
+                          data-testid={`item-total-${item.id}`}
                         >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="font-semibold" data-testid={`item-quantity-${item.id}`}>
-                          {item.quantity}
+                          PHP{(item.price * item.quantity).toFixed(2)}
                         </span>
+
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          data-testid={`increase-quantity-${item.id}`}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveItem(item.id, item.name)}
+                          disabled={itemIsUpdating}
+                          data-testid={`remove-item-${item.id}`}
+                          aria-label={`Remove ${item.name} from cart`}
                         >
-                          <Plus className="h-3 w-3" />
+                          {itemIsUpdating ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </div>
-                      
-                      <span className="font-bold text-primary w-20 text-right" data-testid={`item-total-${item.id}`}>
-                        ₱{(item.price * item.quantity).toFixed(2)}
-                      </span>
-                      
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => removeItem(item.id)}
-                        data-testid={`remove-item-${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
 
-            {/* Delivery Address Form */}
+            {/* Delivery Address Section - Enhanced with saved addresses */}
             <Card data-testid="delivery-address-section">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -512,51 +818,114 @@ export default function Cart() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Address Entry Toggle */}
-                <div className="flex items-center justify-between mb-4 pb-4 border-b">
-                  <div className="text-sm text-muted-foreground">
-                    {useAddressAutocomplete ? 'Search for your address' : 'Enter address manually'}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setUseAddressAutocomplete(!useAddressAutocomplete)}
+                {/* Address Selection Mode Tabs - for users with saved addresses */}
+                {user && hasSavedAddresses && (
+                  <Tabs
+                    value={addressSelectionMode}
+                    onValueChange={(value) => setAddressSelectionMode(value as 'saved' | 'autocomplete' | 'manual')}
+                    className="mb-4"
                   >
-                    {useAddressAutocomplete ? (
-                      <>Enter Manually</>
-                    ) : (
-                      <><Search className="h-4 w-4 mr-1" /> Search Address</>
-                    )}
-                  </Button>
-                </div>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="saved" className="text-xs sm:text-sm">
+                        <Star className="h-3 w-3 mr-1 hidden sm:inline" />
+                        Saved
+                      </TabsTrigger>
+                      <TabsTrigger value="autocomplete" className="text-xs sm:text-sm">
+                        <Search className="h-3 w-3 mr-1 hidden sm:inline" />
+                        Search
+                      </TabsTrigger>
+                      <TabsTrigger value="manual" className="text-xs sm:text-sm">
+                        <MapPin className="h-3 w-3 mr-1 hidden sm:inline" />
+                        Manual
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
+
+                {/* Mode Toggle for users without saved addresses */}
+                {(!user || !hasSavedAddresses) && (
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b">
+                    <div className="text-sm text-muted-foreground">
+                      {addressSelectionMode === 'autocomplete' ? 'Search for your address' : 'Enter address manually'}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAddressSelectionMode(
+                        addressSelectionMode === 'autocomplete' ? 'manual' : 'autocomplete'
+                      )}
+                    >
+                      {addressSelectionMode === 'autocomplete' ? (
+                        <>Enter Manually</>
+                      ) : (
+                        <><Search className="h-4 w-4 mr-1" /> Search Address</>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Saved Addresses Mode */}
+                {addressSelectionMode === 'saved' && hasSavedAddresses && (
+                  <AddressSelector
+                    onAddressSelect={(address) => {
+                      setSelectedSavedAddress(address);
+                      setSelectedAddress(null);
+                      // Update form values
+                      form.setValue('deliveryAddress.street', address.street || '');
+                      form.setValue('deliveryAddress.barangay', address.barangay || '');
+                      form.setValue('deliveryAddress.city', address.city || '');
+                      form.setValue('deliveryAddress.province', address.province || 'Batangas');
+                      form.setValue('deliveryAddress.zipCode', address.zipCode || '');
+
+                      // Update current city for pricing
+                      if (address.city) {
+                        setCurrentCity(address.city);
+                      }
+
+                      // Check delivery zone if coordinates available
+                      if (address.coordinates) {
+                        checkDeliveryZone(address.coordinates.lat, address.coordinates.lng);
+                      }
+                    }}
+                    selectedAddressId={selectedSavedAddress?.id}
+                    showAddNewOption={true}
+                    allowNewAddressEntry={true}
+                  />
+                )}
 
                 {/* Address Autocomplete Mode */}
-                {useAddressAutocomplete && (
+                {addressSelectionMode === 'autocomplete' && (
                   <div className="space-y-4">
                     <AddressAutocomplete
                       placeholder="Search for your delivery address..."
                       showValidation={true}
                       manualEntryAllowed={true}
                       onAddressSelect={(address) => {
+                        if (!address) return;
                         setSelectedAddress(address);
+                        setSelectedSavedAddress(null);
                         // Update form values
-                        if ('street' in address) {
-                          form.setValue('deliveryAddress.street', address.street || '');
-                          form.setValue('deliveryAddress.barangay', address.barangay || '');
-                          form.setValue('deliveryAddress.city', address.city || '');
-                          form.setValue('deliveryAddress.province', address.province || 'Batangas');
-                          form.setValue('deliveryAddress.zipCode', address.zipCode || '');
+                        if (address && 'street' in address) {
+                          const addr = address as { street?: string; barangay?: string; city?: string; province?: string; zipCode?: string };
+                          form.setValue('deliveryAddress.street', addr.street || '');
+                          form.setValue('deliveryAddress.barangay', addr.barangay || '');
+                          form.setValue('deliveryAddress.city', addr.city || '');
+                          form.setValue('deliveryAddress.province', addr.province || 'Batangas');
+                          form.setValue('deliveryAddress.zipCode', addr.zipCode || '');
 
                           // Update current city for pricing
-                          if (address.city) {
-                            setCurrentCity(address.city);
+                          if (addr.city) {
+                            setCurrentCity(addr.city);
                           }
                         }
 
                         // Check delivery zone if coordinates available
-                        if ('coordinates' in address && address.coordinates) {
-                          checkDeliveryZone(address.coordinates.lat, address.coordinates.lng);
+                        if (address && 'coordinates' in address) {
+                          const addrWithCoords = address as { coordinates?: { lat: number; lng: number } };
+                          if (addrWithCoords.coordinates) {
+                            checkDeliveryZone(addrWithCoords.coordinates.lat, addrWithCoords.coordinates.lng);
+                          }
                         }
                       }}
                     />
@@ -585,7 +954,7 @@ export default function Cart() {
                 )}
 
                 {/* Manual Entry Mode */}
-                {!useAddressAutocomplete && (
+                {addressSelectionMode === 'manual' && (
                   <Form {...form}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
@@ -660,8 +1029,36 @@ export default function Cart() {
                     </div>
                   </Form>
                 )}
+
+                {/* Link to manage addresses */}
+                {user && (
+                  <div className="mt-4 pt-4 border-t">
+                    <Link href="/customer/addresses">
+                      <Button variant="link" size="sm" className="p-0 h-auto text-xs text-muted-foreground hover:text-primary">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        Manage saved addresses
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Delivery Options - Contactless Delivery */}
+            <DeliveryOptions
+              value={deliveryType}
+              onChange={setDeliveryType}
+              contactlessInstructions={contactlessInstructions}
+              onContactlessInstructionsChange={setContactlessInstructions}
+              className="mt-6"
+            />
+
+            {/* Pre-Order Scheduling */}
+            <SchedulePicker
+              value={scheduledFor}
+              onChange={setScheduledFor}
+              className="mt-6"
+            />
           </div>
 
           {/* Order Summary & Payment */}
@@ -812,38 +1209,37 @@ export default function Cart() {
 
               {/* Payment Method - only show if there's remaining amount after wallet */}
               {(!useWalletPayment || (Math.max(0, total - (loyaltyPointsToUse / 100) * 10) - walletPaymentAmount > 0)) && (
-                <Card data-testid="payment-method-section">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <CreditCard className="h-5 w-5" />
-                      <span>{useWalletPayment ? "Pay Remaining With" : "Payment Method"}</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Form {...form}>
-                      <FormField
-                        control={form.control}
-                        name="paymentProvider"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <SelectTrigger data-testid="payment-method-select">
-                                  <SelectValue placeholder="Select payment method" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="cod">Cash on Delivery</SelectItem>
-                                  <SelectItem value="nexuspay">Online Payment (GCash, Maya, Card)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </Form>
-                  </CardContent>
-                </Card>
+                <PaymentMethodSelector
+                  selectedMethodId={savedPaymentMethodId}
+                  showSaveOption={true}
+                  onSelectPaymentMethod={(method) => {
+                    if (method.type === 'cod') {
+                      setSelectedPaymentProvider('cod');
+                      setSelectedPaymentMethod('cash');
+                      setSavedPaymentMethodId(undefined);
+                      setSavePaymentForFuture(false);
+                      form.setValue('paymentProvider', 'cod');
+                      form.setValue('paymentMethodType', '');
+                      form.setValue('savePaymentMethod', false);
+                    } else if (method.type === 'saved') {
+                      setSelectedPaymentProvider('nexuspay');
+                      setSelectedPaymentMethod(method.paymentMethodType || '');
+                      setSavedPaymentMethodId(method.savedMethodId);
+                      setSavePaymentForFuture(false);
+                      form.setValue('paymentProvider', 'nexuspay');
+                      form.setValue('paymentMethodType', method.paymentMethodType || '');
+                      form.setValue('savePaymentMethod', false);
+                    } else if (method.type === 'new') {
+                      setSelectedPaymentProvider('nexuspay');
+                      setSelectedPaymentMethod(method.paymentMethodType || '');
+                      setSavedPaymentMethodId(undefined);
+                      setSavePaymentForFuture(method.saveForFuture || false);
+                      form.setValue('paymentProvider', 'nexuspay');
+                      form.setValue('paymentMethodType', method.paymentMethodType || '');
+                      form.setValue('savePaymentMethod', method.saveForFuture || false);
+                    }
+                  }}
+                />
               )}
 
               {/* Special Instructions */}

@@ -149,11 +149,11 @@ export class SendGridProvider implements EmailProvider {
   async sendEmailVerification(to: string, name: string, verificationToken: string, lang: 'en' | 'tl' = 'tl'): Promise<boolean> {
     if (!this.apiKeyAvailable) {
       console.log(`Email verification would be sent to ${to} for ${name}`);
-      console.log(`Verification URL: ${process.env.BASE_URL || 'https://bts-delivery.replit.app'}/verify-email?token=${verificationToken}`);
+      console.log(`Verification URL: ${process.env.BASE_URL || 'https://btsdelivery.com'}/verify-email?token=${verificationToken}`);
       return true; // Return success in development mode
     }
     
-    const verificationUrl = `${process.env.BASE_URL || 'https://bts-delivery.replit.app'}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.BASE_URL || 'https://btsdelivery.com'}/verify-email?token=${verificationToken}`;
     
     const html = `
       <!DOCTYPE html>
@@ -255,11 +255,11 @@ export class SendGridProvider implements EmailProvider {
   async sendPasswordReset(to: string, name: string, resetToken: string): Promise<boolean> {
     if (!this.apiKeyAvailable) {
       console.log(`Password reset email would be sent to ${to} for ${name}`);
-      console.log(`Reset URL: ${process.env.BASE_URL || 'https://bts-delivery.replit.app'}/reset-password?token=${resetToken}`);
+      console.log(`Reset URL: ${process.env.BASE_URL || 'https://btsdelivery.com'}/reset-password?token=${resetToken}`);
       return true; // Return success in development mode
     }
     
-    const resetUrl = `${process.env.BASE_URL || 'https://bts-delivery.replit.app'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.BASE_URL || 'https://btsdelivery.com'}/reset-password?token=${resetToken}`;
     
     const html = `
       <!DOCTYPE html>

@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, Search, Star, Clock, AlertCircle, Zap, Flame, Leaf } from "lucide-react";
-import { useCart } from "@/hooks/use-cart";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Minus, Search, Star, Clock, AlertCircle, Zap, Flame, Leaf, UtensilsCrossed } from "lucide-react";
+import { useCartStore } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import MenuItemDialog from "./menu-item-dialog";
 import type { MenuItem, MenuCategory } from "@shared/schema";
@@ -21,7 +22,7 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showCustomization, setShowCustomization] = useState(false);
-  const { addItem, items } = useCart();
+  const { addItem, items } = useCartStore();
   const { toast } = useToast();
 
   const filteredItems = menuItems.filter(item => {
@@ -52,9 +53,7 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
       id: `${item.id}_${Date.now()}`,
       name: item.name,
       price: parseFloat(item.price),
-      quantity: 1,
       restaurantId: restaurantId,
-      originalItemId: item.id
     });
     
     toast({
@@ -97,7 +96,7 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
             
             {/* Menu Search */}
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
               <Input
                 type="text"
                 placeholder="Search menu..."
@@ -105,53 +104,58 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
                 data-testid="menu-search-input"
+                aria-label="Search menu items"
               />
             </div>
 
             <Separator className="my-4" />
             
-            <div className="space-y-2">
+            <div className="space-y-2" role="group" aria-label="Menu category filters">
             <button
               className={`w-full flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
-                !selectedCategory 
-                  ? "bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border-2 border-[#FF6B35]/20 shadow-sm" 
+                !selectedCategory
+                  ? "bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border-2 border-[#FF6B35]/20 shadow-sm"
                   : "hover:bg-gray-50 border border-gray-200"
               }`}
               onClick={() => setSelectedCategory(null)}
               data-testid="category-all"
+              aria-pressed={selectedCategory === null}
+              aria-label={`All Items - ${filteredItems.length} items`}
             >
               <span className={`flex items-center space-x-2 ${
                 selectedCategory === null ? "font-semibold text-[#FF6B35]" : "text-gray-700"
               }`}>
-                <span>🍽️</span>
+                <span aria-hidden="true">🍽️</span>
                 <span>All Items</span>
               </span>
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs" aria-hidden="true">
                 {filteredItems.length}
               </Badge>
             </button>
-            
+
             {categories.map((category) => {
               const categoryItems = menuItems.filter(item => item.categoryId === category.id);
               const isSelected = selectedCategory === category.id;
-              
+
               return (
                 <button
                   key={category.id}
                   className={`w-full flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
-                    isSelected 
-                      ? "bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border-2 border-[#FF6B35]/20 shadow-sm" 
+                    isSelected
+                      ? "bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border-2 border-[#FF6B35]/20 shadow-sm"
                       : "hover:bg-gray-50 border border-gray-200"
                   }`}
                   onClick={() => setSelectedCategory(category.id)}
                   data-testid={`category-${category.id}`}
+                  aria-pressed={isSelected}
+                  aria-label={`${category.name} - ${categoryItems.length} items`}
                 >
                   <span className={`flex items-center space-x-2 ${
                     isSelected ? "font-semibold text-[#FF6B35]" : "text-gray-700"
                   }`}>
                     <span>{category.name}</span>
                   </span>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs" aria-hidden="true">
                     {categoryItems.length}
                   </Badge>
                 </button>
@@ -199,10 +203,10 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
                             <span className="text-primary font-bold" data-testid={`menu-item-price-${item.id}`}>
                               ₱{item.price}
                             </span>
-                            {item.isSpicy && (
+                            {(item as any).isSpicy && (
                               <Badge variant="destructive" className="text-xs">🌶️ Spicy</Badge>
                             )}
-                            {item.isVegetarian && (
+                            {(item as any).isVegetarian && (
                               <Badge variant="secondary" className="text-xs">🥬 Vegetarian</Badge>
                             )}
                           </div>
@@ -236,7 +240,7 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
                           <Button
                             size="sm"
                             className="bg-primary text-white hover:bg-primary/90"
-                            onClick={() => handleAddToCart(item)}
+                            onClick={() => handleQuickAddToCart(item)}
                             disabled={!item.isAvailable}
                             data-testid={`add-to-cart-${item.id}`}
                           >
@@ -258,9 +262,31 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
           })}
           
           {filteredItems.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No items found in this category.</p>
-            </div>
+            <EmptyState
+              icon={UtensilsCrossed}
+              title="No items found"
+              description={
+                searchTerm
+                  ? `No menu items match "${searchTerm}". Try a different search term.`
+                  : "No items available in this category."
+              }
+              size="md"
+              action={
+                searchTerm
+                  ? {
+                      label: "Clear Search",
+                      onClick: () => setSearchTerm(""),
+                      variant: "outline",
+                    }
+                  : selectedCategory
+                  ? {
+                      label: "View All Items",
+                      onClick: () => setSelectedCategory(null),
+                      variant: "outline",
+                    }
+                  : undefined
+              }
+            />
           )}
         </div>
       </div>
@@ -269,16 +295,9 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
     {/* Menu Item Customization Dialog */}
     <MenuItemDialog
       item={selectedItem}
-      open={showCustomization}
-      onOpenChange={setShowCustomization}
-      onAddToCart={(customizedItem) => {
-        addItem(customizedItem);
-        setShowCustomization(false);
-        toast({
-          title: "Added to cart",
-          description: `${customizedItem.name} has been added to your cart`,
-        });
-      }}
+      isOpen={showCustomization}
+      onClose={() => setShowCustomization(false)}
+      restaurantId={restaurantId}
     />
     </>
   );

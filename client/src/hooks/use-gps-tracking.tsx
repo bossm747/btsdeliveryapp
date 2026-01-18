@@ -184,10 +184,11 @@ export function useDeliveryTracking(orderId: string) {
   // Fetch tracking events
   const fetchTrackingEvents = async () => {
     try {
-      const events = await apiRequest("GET", `/api/gps/order/${orderId}/tracking`);
+      const response = await apiRequest("GET", `/api/gps/order/${orderId}/tracking`);
+      const events = await response.json();
       setTrackingEvents(events);
-      
-      if (events.length > 0) {
+
+      if (events && events.length > 0) {
         setCurrentStatus(events[0].eventType);
       }
     } catch (error) {
@@ -225,7 +226,8 @@ export function useDeliveryTracking(orderId: string) {
         riderId,
         destination,
       });
-      setEstimatedArrival(response.estimatedMinutes);
+      const data = await response.json();
+      setEstimatedArrival(data.estimatedMinutes);
     } catch (error) {
       console.error("Failed to get ETA:", error);
     }

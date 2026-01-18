@@ -57,23 +57,36 @@ export class OrderNotificationService {
   
   async notifyOrderPlaced(notificationData: OrderNotificationData) {
     const { orderId, orderNumber, customerName, customerEmail, customerPhone, restaurantName, totalAmount, estimatedDeliveryTime } = notificationData;
-    
+
     // Get user and check preferences
     const user = await storage.getUserByEmail(customerEmail);
     if (!user) return;
-    
+
     const preferences = await storage.getUserNotificationPreferences(user.id) || {
       emailNotifications: true,
       smsNotifications: true,
       pushNotifications: true,
-      orderUpdates: true
+      orderUpdates: true,
+      orderPlaced: true,
+      orderConfirmed: true,
+      orderPreparing: true,
+      orderReady: true,
+      orderDelivered: true,
+      riderUpdates: true,
+      riderAssigned: true,
+      riderArriving: true,
+      quietHoursEnabled: false
     };
+
+    // Check if this specific order status notification should be sent
+    const shouldSendOrderNotification = this.shouldSendOrderStatusNotification(preferences, 'placed');
+    if (!shouldSendOrderNotification) return;
 
     // Check if we should send notifications (quiet hours, preferences)
     const shouldSendNow = this.shouldSendNotification(preferences, 'medium');
-    
+
     // Email notification
-    if (preferences.emailNotifications && preferences.orderUpdates && shouldSendNow.email) {
+    if (preferences.emailNotifications && shouldSendNow.email) {
       const emailHtml = this.generateOrderPlacedEmail(notificationData);
       const emailSent = await this.emailProvider.sendEmail(
         customerEmail,
@@ -97,10 +110,10 @@ export class OrderNotificationService {
     }
 
     // SMS notification for high-value orders or customer preference
-    if (preferences.smsNotifications && preferences.orderUpdates && (totalAmount > 500 || shouldSendNow.sms)) {
+    if (preferences.smsNotifications && (totalAmount > 500 || shouldSendNow.sms)) {
       const smsMessage = `Hi ${customerName}! Your order #${orderNumber} from ${restaurantName} has been confirmed. Track it at btdelivery.com/track/${orderId}`;
       const smsSent = await this.smsProvider.sendSMS(customerPhone, smsMessage);
-      
+
       // Log SMS notification
       await storage.createOrderNotification({
         orderId,
@@ -118,9 +131,9 @@ export class OrderNotificationService {
 
     // Real-time notification (always send if user is online)
     this.broadcastOrderUpdate(orderId, 'order_placed', `Your order has been confirmed and sent to ${restaurantName}`);
-    
+
     // Push notification
-    if (preferences.pushNotifications && preferences.orderUpdates) {
+    if (preferences.pushNotifications && shouldSendNow.push) {
       await this.sendPushNotification({
         title: 'Order Confirmed!',
         body: `Your order from ${restaurantName} has been confirmed`,
@@ -131,7 +144,39 @@ export class OrderNotificationService {
 
   async notifyOrderStatusChange(notificationData: OrderNotificationData) {
     const { orderId, orderNumber, status, previousStatus, customerName, customerEmail, customerPhone, restaurantName } = notificationData;
-    
+
+    // Get user and check preferences
+    const user = await storage.getUserByEmail(customerEmail);
+    if (!user) return;
+
+    const preferences = await storage.getUserNotificationPreferences(user.id) || {
+      emailNotifications: true,
+      smsNotifications: true,
+      pushNotifications: true,
+      orderUpdates: true,
+      orderPlaced: true,
+      orderConfirmed: true,
+      orderPreparing: true,
+      orderReady: true,
+      orderDelivered: true,
+      riderUpdates: true,
+      riderAssigned: true,
+      riderArriving: true,
+      quietHoursEnabled: false
+    };
+
+    // Check if this specific order status notification should be sent
+    const shouldSendOrderNotification = this.shouldSendOrderStatusNotification(preferences, status);
+
+    // Cancelled orders always get notified (override preference for cancelled status)
+    const isCriticalStatus = status === 'cancelled';
+
+    if (!shouldSendOrderNotification && !isCriticalStatus) return;
+
+    // Check if we should send notifications (quiet hours, preferences)
+    const urgency = isCriticalStatus ? 'high' : 'medium';
+    const shouldSendNow = this.shouldSendNotification(preferences, urgency);
+
     const statusMessages = {
       confirmed: `Great news! ${restaurantName} has confirmed your order and is now preparing it.`,
       preparing: `Your delicious food is being prepared by ${restaurantName}. Estimated completion in 15-20 minutes.`,
@@ -146,54 +191,85 @@ export class OrderNotificationService {
 
     // Email for important status changes
     if (['confirmed', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
-      const emailHtml = this.generateStatusUpdateEmail(notificationData, message);
-      await this.emailProvider.sendEmail(
-        customerEmail,
-        `Order Update - ${restaurantName} #${orderNumber}`,
-        emailHtml
-      );
+      if (preferences.emailNotifications && shouldSendNow.email) {
+        const emailHtml = this.generateStatusUpdateEmail(notificationData, message);
+        await this.emailProvider.sendEmail(
+          customerEmail,
+          `Order Update - ${restaurantName} #${orderNumber}`,
+          emailHtml
+        );
+      }
     }
 
     // SMS for critical updates
     if (['in_transit', 'delivered', 'cancelled'].includes(status)) {
-      const smsMessage = `Order #${orderNumber}: ${message}`;
-      await this.smsProvider.sendSMS(customerPhone, smsMessage);
+      if (preferences.smsNotifications && shouldSendNow.sms) {
+        const smsMessage = `Order #${orderNumber}: ${message}`;
+        await this.smsProvider.sendSMS(customerPhone, smsMessage);
+      }
     }
 
-    // Real-time update (always)
+    // Real-time update (always send - WebSocket doesn't disturb users)
     this.broadcastOrderUpdate(orderId, status, message);
 
     // Push notification for mobile users
-    await this.sendPushNotification({
-      title: `Order ${status.replace('_', ' ').toUpperCase()}`,
-      body: message,
-      data: { orderId, status, type: 'status_update' }
-    }, [customerEmail]);
+    if (preferences.pushNotifications && shouldSendNow.push) {
+      await this.sendPushNotification({
+        title: `Order ${status.replace('_', ' ').toUpperCase()}`,
+        body: message,
+        data: { orderId, status, type: 'status_update' }
+      }, [customerEmail]);
+    }
   }
 
   async notifyDeliveryUpdate(notificationData: OrderNotificationData & { estimatedArrival?: Date; riderLocation?: any }) {
     const { orderId, customerEmail, customerPhone, riderName, estimatedArrival, riderLocation } = notificationData;
-    
+
+    // Get user and check preferences
+    const user = await storage.getUserByEmail(customerEmail);
+    if (!user) return;
+
+    const preferences = await storage.getUserNotificationPreferences(user.id) || {
+      emailNotifications: true,
+      smsNotifications: true,
+      pushNotifications: true,
+      riderUpdates: true,
+      riderAssigned: true,
+      riderArriving: true,
+      quietHoursEnabled: false
+    };
+
+    // Check if rider arriving notifications are enabled
+    const shouldSendRiderNotification = this.shouldSendRiderNotification(preferences, 'arriving');
+    if (!shouldSendRiderNotification) return;
+
+    // Check if we should send notifications (quiet hours) - rider arriving is high urgency
+    const shouldSendNow = this.shouldSendNotification(preferences, 'high');
+
     if (estimatedArrival) {
       const eta = new Date(estimatedArrival).toLocaleTimeString('en-PH', {
         hour: '2-digit',
         minute: '2-digit'
       });
-      
+
       const message = `Your rider ${riderName} is nearby! ETA: ${eta}`;
-      
+
       // SMS for final delivery update
-      await this.smsProvider.sendSMS(customerPhone, `Order #${notificationData.orderNumber}: ${message}`);
-      
-      // Real-time location update
+      if (preferences.smsNotifications && shouldSendNow.sms) {
+        await this.smsProvider.sendSMS(customerPhone, `Order #${notificationData.orderNumber}: ${message}`);
+      }
+
+      // Real-time location update (always send - WebSocket doesn't disturb users)
       this.broadcastRiderLocation(orderId, riderLocation);
-      
+
       // Push notification
-      await this.sendPushNotification({
-        title: 'Rider Nearby!',
-        body: message,
-        data: { orderId, type: 'delivery_update' }
-      }, [customerEmail]);
+      if (preferences.pushNotifications && shouldSendNow.push) {
+        await this.sendPushNotification({
+          title: 'Rider Nearby!',
+          body: message,
+          data: { orderId, type: 'delivery_update' }
+        }, [customerEmail]);
+      }
     }
   }
 
@@ -589,34 +665,101 @@ export class OrderNotificationService {
   private shouldSendNotification(preferences: any, urgency: 'low' | 'medium' | 'high' | 'critical') {
     const now = new Date();
     const currentHour = now.getHours();
-    
-    // Parse quiet hours
-    const quietStart = preferences.quietHoursStart ? parseInt(preferences.quietHoursStart.split(':')[0]) : 22;
-    const quietEnd = preferences.quietHoursEnd ? parseInt(preferences.quietHoursEnd.split(':')[0]) : 8;
-    
-    // Check if we're in quiet hours
-    const isQuietHours = (currentHour >= quietStart || currentHour < quietEnd);
-    
-    // Emergency/critical notifications override quiet hours
+    const currentMinute = now.getMinutes();
+
+    // Check if quiet hours are enabled
+    const quietHoursEnabled = preferences.quietHoursEnabled ?? false;
+
+    // Parse quiet hours (default 22:00 to 08:00)
+    const quietStart = preferences.quietHoursStart ? preferences.quietHoursStart : '22:00';
+    const quietEnd = preferences.quietHoursEnd ? preferences.quietHoursEnd : '08:00';
+
+    const [startHour, startMinute] = quietStart.split(':').map(Number);
+    const [endHour, endMinute] = quietEnd.split(':').map(Number);
+
+    // Check if we're in quiet hours (only if enabled)
+    let isQuietHours = false;
+    if (quietHoursEnabled) {
+      const currentTime = currentHour * 60 + currentMinute;
+      const startTime = startHour * 60 + startMinute;
+      const endTime = endHour * 60 + endMinute;
+
+      // Handle overnight quiet hours (e.g., 22:00 to 08:00)
+      if (startTime > endTime) {
+        isQuietHours = currentTime >= startTime || currentTime < endTime;
+      } else {
+        isQuietHours = currentTime >= startTime && currentTime < endTime;
+      }
+    }
+
+    // Emergency/critical notifications (security alerts) override quiet hours
     if (urgency === 'critical') {
       return { email: true, sms: true, push: true };
     }
-    
+
     // High urgency notifications are limited during quiet hours
     if (urgency === 'high') {
-      return { 
-        email: !isQuietHours, 
+      return {
+        email: !isQuietHours,
         sms: true, // SMS allowed for high urgency
-        push: true 
+        push: true
       };
     }
-    
+
     // Medium and low urgency respect quiet hours
     return {
       email: !isQuietHours,
       sms: !isQuietHours,
       push: !isQuietHours
     };
+  }
+
+  // Check if a specific order status notification should be sent based on granular preferences
+  private shouldSendOrderStatusNotification(preferences: any, status: string): boolean {
+    // If orderUpdates master switch is off, don't send any order notifications
+    if (!preferences.orderUpdates) {
+      return false;
+    }
+
+    // Map order statuses to preference keys
+    const statusPreferenceMap: Record<string, string> = {
+      'placed': 'orderPlaced',
+      'confirmed': 'orderConfirmed',
+      'preparing': 'orderPreparing',
+      'ready': 'orderReady',
+      'ready_for_pickup': 'orderReady',
+      'delivered': 'orderDelivered',
+      'completed': 'orderDelivered'
+    };
+
+    const preferenceKey = statusPreferenceMap[status.toLowerCase()];
+
+    // If no specific preference exists for this status, default to true
+    if (!preferenceKey) {
+      return true;
+    }
+
+    // Check the specific preference (default to true if not set)
+    return preferences[preferenceKey] ?? true;
+  }
+
+  // Check if rider update notifications should be sent
+  private shouldSendRiderNotification(preferences: any, updateType: 'assigned' | 'arriving'): boolean {
+    // If riderUpdates master switch is off, don't send any rider notifications
+    if (!preferences.riderUpdates) {
+      return false;
+    }
+
+    // Map rider update types to preference keys
+    const preferenceMap: Record<string, string> = {
+      'assigned': 'riderAssigned',
+      'arriving': 'riderArriving'
+    };
+
+    const preferenceKey = preferenceMap[updateType];
+
+    // Check the specific preference (default to true if not set)
+    return preferences[preferenceKey] ?? true;
   }
   
   // Bulk notification method for platform announcements

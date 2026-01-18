@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,9 +8,11 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, Star, Clock, Users, AlertCircle } from "lucide-react";
-import { useCart } from "@/hooks/use-cart";
+import { Plus, Minus, Star, Clock, AlertCircle } from "lucide-react";
+import { useCartStore } from "@/stores/cart-store";
 import { useToast } from "@/hooks/use-toast";
+import { haptic } from "@/hooks/use-haptic";
+import { AnimatedPrice, AnimatedQuantity, AddToCartButton } from "@/components/animated";
 import type { MenuItem } from "@shared/schema";
 
 interface MenuItemDialogProps {
@@ -40,7 +43,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
   const [quantity, setQuantity] = useState(1);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
   const [specialInstructions, setSpecialInstructions] = useState("");
-  const { addItem } = useCart();
+  const { addItem } = useCartStore();
   const { toast } = useToast();
 
   if (!item) return null;
@@ -63,7 +66,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
     {
       id: "addons",
       name: "Add-ons",
-      type: "multiple", 
+      type: "multiple",
       isRequired: false,
       minSelections: 0,
       maxSelections: 5,
@@ -112,19 +115,19 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
 
     setSelectedModifiers(prev => {
       const current = prev[modifierId] || [];
-      
+
       if (modifier.type === "single") {
         return { ...prev, [modifierId]: checked ? [optionId] : [] };
       } else {
-        const updated = checked 
+        const updated = checked
           ? [...current, optionId]
           : current.filter(id => id !== optionId);
-        
+
         // Enforce max selections
         if (updated.length > modifier.maxSelections) {
           updated.splice(0, updated.length - modifier.maxSelections);
         }
-        
+
         return { ...prev, [modifierId]: updated };
       }
     });
@@ -132,7 +135,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
 
   const calculateItemPrice = () => {
     let totalPrice = parseFloat(item.price);
-    
+
     mockModifiers.forEach(modifier => {
       const selectedOptions = selectedModifiers[modifier.id] || [];
       selectedOptions.forEach(optionId => {
@@ -142,7 +145,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
         }
       });
     });
-    
+
     return totalPrice;
   };
 
@@ -172,7 +175,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
         const optionNames = selectedOptions
           .map(optionId => modifier.options.find(o => o.id === optionId)?.name)
           .filter(Boolean);
-        
+
         if (optionNames.length > 0) {
           return `${modifier.name}: ${optionNames.join(", ")}`;
         }
@@ -194,7 +197,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
 
     toast({
       title: "Added to cart",
-      description: `${quantity} × ${item.name} added to your cart`,
+      description: `${quantity} x ${item.name} added to your cart`,
     });
 
     onClose();
@@ -214,19 +217,24 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
         <div className="space-y-6">
           {/* Item Header */}
           <div className="flex items-start space-x-4">
-            <img 
-              src={item.imageUrl || "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150"} 
+            <motion.img
+              src={item.imageUrl || "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150"}
               alt={item.name}
               className="w-20 h-20 object-cover rounded-lg"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
             />
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">{item.name}</h3>
               {item.description && (
                 <p className="text-sm text-gray-600 mt-1">{item.description}</p>
               )}
-              
+
               <div className="flex items-center space-x-3 mt-2">
-                <span className="text-lg font-bold text-[#FF6B35]">₱{item.price}</span>
+                <span className="text-lg font-bold text-[#FF6B35]">
+                  <AnimatedPrice value={parseFloat(item.price)} />
+                </span>
                 {item.rating && (
                   <div className="flex items-center space-x-1">
                     <Star className="w-4 h-4 text-yellow-500 fill-current" />
@@ -243,11 +251,15 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mt-3">
-                {item.tags && (item.tags as string[]).map((tag: string) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
+                {(() => {
+                  const tags = item.tags as string[] | null;
+                  if (!tags || !Array.isArray(tags)) return null;
+                  return tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ));
+                })()}
                 {!item.isAvailable && (
                   <Badge variant="destructive" className="text-xs">
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -261,8 +273,14 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
           <Separator />
 
           {/* Modifiers */}
-          {mockModifiers.map((modifier) => (
-            <div key={modifier.id} className="space-y-3">
+          {mockModifiers.map((modifier, index) => (
+            <motion.div
+              key={modifier.id}
+              className="space-y-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-gray-900">{modifier.name}</h4>
                 <div className="flex items-center space-x-2">
@@ -279,12 +297,17 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
 
               <div className="space-y-2">
                 {modifier.type === "single" ? (
-                  <RadioGroup 
+                  <RadioGroup
                     value={selectedModifiers[modifier.id]?.[0] || ""}
                     onValueChange={(value) => handleModifierChange(modifier.id, value, true)}
                   >
                     {modifier.options.map((option) => (
-                      <div key={option.id} className="flex items-center justify-between p-2 rounded border hover:bg-gray-50">
+                      <motion.div
+                        key={option.id}
+                        className="flex items-center justify-between p-2 rounded border hover:bg-gray-50"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value={option.id} id={option.id} />
                           <Label htmlFor={option.id} className="cursor-pointer">
@@ -294,18 +317,23 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
                         {option.price > 0 && (
                           <span className="text-sm font-medium text-green-600">+₱{option.price}</span>
                         )}
-                      </div>
+                      </motion.div>
                     ))}
                   </RadioGroup>
                 ) : (
                   <div className="space-y-2">
                     {modifier.options.map((option) => (
-                      <div key={option.id} className="flex items-center justify-between p-2 rounded border hover:bg-gray-50">
+                      <motion.div
+                        key={option.id}
+                        className="flex items-center justify-between p-2 rounded border hover:bg-gray-50"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
                         <div className="flex items-center space-x-2">
-                          <Checkbox 
+                          <Checkbox
                             id={option.id}
                             checked={selectedModifiers[modifier.id]?.includes(option.id) || false}
-                            onCheckedChange={(checked) => 
+                            onCheckedChange={(checked) =>
                               handleModifierChange(modifier.id, option.id, !!checked)
                             }
                           />
@@ -316,12 +344,12 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
                         {option.price > 0 && (
                           <span className="text-sm font-medium text-green-600">+₱{option.price}</span>
                         )}
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           ))}
 
           <Separator />
@@ -348,44 +376,63 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
             <div className="flex items-center space-x-4">
               <Label className="font-semibold text-gray-900">Quantity:</Label>
               <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Minus className="w-4 h-4" />
-                </Button>
-                <span className="font-semibold text-lg w-8 text-center">{quantity}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity(quantity + 1)}
-                  disabled={quantity >= 10}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
+                <motion.div whileTap={{ scale: 0.9 }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      haptic.selection();
+                      setQuantity(Math.max(1, quantity - 1));
+                    }}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                </motion.div>
+                <span className="font-semibold text-lg w-8 text-center">
+                  <AnimatedQuantity value={quantity} />
+                </span>
+                <motion.div whileTap={{ scale: 0.9 }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      haptic.selection();
+                      setQuantity(quantity + 1);
+                    }}
+                    disabled={quantity >= 10}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </motion.div>
               </div>
             </div>
 
             <div className="text-right">
               <p className="text-sm text-gray-600">Total</p>
-              <p className="text-2xl font-bold text-[#FF6B35]">₱{getTotalPrice().toFixed(2)}</p>
+              <p className="text-2xl font-bold text-[#FF6B35]">
+                <AnimatedPrice value={getTotalPrice()} />
+              </p>
             </div>
           </div>
 
           {/* Add to Cart Button */}
-          <Button 
-            className="w-full bg-[#FF6B35] hover:bg-[#FF6B35]/90 text-white py-3 text-lg font-semibold"
-            onClick={handleAddToCart}
-            disabled={!item.isAvailable || !isValidSelection()}
-          >
-            {!item.isAvailable ? (
-              "Out of Stock"
-            ) : (
-              `Add ${quantity} to Cart - ₱${getTotalPrice().toFixed(2)}`
-            )}
-          </Button>
+          {!item.isAvailable ? (
+            <Button
+              className="w-full bg-gray-400 text-white py-3 text-lg font-semibold cursor-not-allowed"
+              disabled
+            >
+              Out of Stock
+            </Button>
+          ) : (
+            <AddToCartButton
+              onClick={handleAddToCart}
+              text={`Add ${quantity} to Cart`}
+              price={getTotalPrice()}
+              disabled={!isValidSelection()}
+              className="w-full py-3 text-lg"
+            />
+          )}
         </div>
       </DialogContent>
     </Dialog>

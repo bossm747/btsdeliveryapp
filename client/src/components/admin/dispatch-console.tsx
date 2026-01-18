@@ -76,20 +76,20 @@ export default function DispatchConsole() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [selectedRider, setSelectedRider] = useState<string | null>(null);
 
-  // Fetch live orders
-  const { data: liveOrders = [], refetch: refetchOrders } = useQuery({
+  // Fetch live orders with proper typing
+  const { data: liveOrders = [], refetch: refetchOrders } = useQuery<LiveOrder[]>({
     queryKey: ['/api/admin/dispatch/orders'],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  // Fetch live riders
-  const { data: liveRiders = [], refetch: refetchRiders } = useQuery({
+  // Fetch live riders with proper typing
+  const { data: liveRiders = [], refetch: refetchRiders } = useQuery<LiveRider[]>({
     queryKey: ['/api/admin/dispatch/riders'],
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
-  // Fetch system alerts
-  const { data: systemAlerts = [], refetch: refetchAlerts } = useQuery({
+  // Fetch system alerts with proper typing
+  const { data: systemAlerts = [], refetch: refetchAlerts } = useQuery<SystemAlert[]>({
     queryKey: ['/api/admin/dispatch/alerts'],
     refetchInterval: 15000, // Refresh every 15 seconds
   });

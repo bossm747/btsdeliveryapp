@@ -103,10 +103,8 @@ export function registerNexusPayRoutes(app: Express) {
 
       console.log(`[NexusPay] === Starting Cash-In Request for ₱${amount} ===`);
 
-      // Build URLs
-      const baseUrl = process.env.PUBLIC_APP_URL
-        || (process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : null)
-        || `https://${req.get('host')}`;
+      // Build URLs - use PUBLIC_APP_URL for production, fallback to request host
+      const baseUrl = process.env.PUBLIC_APP_URL || `https://${req.get('host')}`;
 
       const webhookUrl = `${baseUrl}/api/nexuspay/webhook`;
       const redirectUrl = orderId
@@ -185,7 +183,7 @@ export function registerNexusPayRoutes(app: Express) {
         if (order && order.paymentStatus !== 'paid') {
           await storage.updateOrder(order.id, {
             paymentStatus: 'paid',
-            paidAt: new Date().toISOString()
+            paidAt: new Date()
           });
           console.log(`[NexusPay] Order ${order.id} marked as paid`);
         }
@@ -342,19 +340,30 @@ export function registerNexusPayRoutes(app: Express) {
         const order = orders.find(o => o.paymentTransactionId === parsed.transactionId);
 
         if (order) {
-          // Check if already processed
+          // Check if already processed (idempotent)
           if (order.paymentStatus === 'paid') {
             console.log(`[NexusPay] Order ${order.id} already paid`);
             return res.json({ received: true, status: 'ok', note: 'already processed' });
           }
 
-          // Update order payment status
+          // PAYMENT-ORDER RACE CONDITION FIX:
+          // If order was payment_pending, transition to pending and notify vendor
+          const wasPaymentPending = order.status === 'payment_pending';
+          const newStatus = wasPaymentPending ? 'pending' : order.status;
+
+          // Update order payment status AND order status
           await storage.updateOrder(order.id, {
             paymentStatus: 'paid',
-            paidAt: new Date().toISOString()
+            paidAt: new Date(),
+            paymentConfirmedAt: new Date(),
+            status: newStatus,
           });
 
-          console.log(`[NexusPay] Order ${order.id} marked as paid via webhook`);
+          console.log(`[NexusPay] Order ${order.id} marked as paid via webhook${wasPaymentPending ? ' (order now active)' : ''}`);
+
+          // Note: Vendor notification and SLA tracking creation is handled
+          // in the main payment webhook handler in routes.ts
+          // This webhook is a backup/alternative route
         } else {
           console.log(`[NexusPay] No order found for transaction ${parsed.transactionId}`);
         }
@@ -522,18 +531,29 @@ export function registerNexusPayRoutes(app: Express) {
 
       // Update order if payment was successful
       if (status.success && order.paymentStatus !== 'paid') {
+        // PAYMENT-ORDER RACE CONDITION FIX:
+        // If order was payment_pending, transition to pending
+        const wasPaymentPending = order.status === 'payment_pending';
+        const newStatus = wasPaymentPending ? 'pending' : order.status;
+
         await storage.updateOrder(order.id, {
           paymentStatus: 'paid',
-          paidAt: new Date().toISOString()
+          paidAt: new Date(),
+          paymentConfirmedAt: new Date(),
+          status: newStatus,
         });
 
-        console.log(`[NexusPay Admin] Manually marked order ${order.id} as paid`);
+        console.log(`[NexusPay Admin] Manually marked order ${order.id} as paid${wasPaymentPending ? ' (order now active)' : ''}`);
 
         return res.json({
           success: true,
-          message: 'Payment verified and order updated',
+          message: wasPaymentPending
+            ? 'Payment verified, order is now active and vendor will be notified'
+            : 'Payment verified and order updated',
           orderId: order.id,
-          paymentStatus: 'paid'
+          paymentStatus: 'paid',
+          orderStatus: newStatus,
+          orderActivated: wasPaymentPending
         });
       }
 

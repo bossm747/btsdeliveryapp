@@ -41,13 +41,28 @@ export function stopSlaMonitor(): void {
 }
 
 /**
- * Run a single SLA check
+ * Run a single SLA check with timeout protection
  */
 async function runSlaCheck(): Promise<void> {
+  const SLA_CHECK_TIMEOUT_MS = 30000; // 30 second timeout
+
   try {
-    await dispatchService.monitorSLABreaches();
+    // Add timeout protection to prevent indefinite hangs
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('SLA check timed out after 30 seconds')), SLA_CHECK_TIMEOUT_MS);
+    });
+
+    await Promise.race([
+      dispatchService.monitorSLABreaches(),
+      timeoutPromise
+    ]);
   } catch (error) {
-    console.error('[SlaMonitorJob] Error during SLA check:', error);
+    if (error instanceof Error && error.message.includes('timed out')) {
+      console.error('[SlaMonitorJob] SLA check timed out - consider optimizing queries');
+    } else {
+      console.error('[SlaMonitorJob] Error during SLA check:', error);
+    }
+    // Don't rethrow - let the next interval try again
   }
 }
 

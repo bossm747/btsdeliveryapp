@@ -8,15 +8,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { 
-  DollarSign, 
-  TrendingUp, 
+import {
+  DollarSign,
+  TrendingUp,
   Activity,
   BarChart3,
   CheckCircle,
   Calendar,
   Download,
-  DateRange,
+  CalendarRange,
   TrendingDown,
   FileText,
   Sparkles,
@@ -77,7 +77,7 @@ export default function VendorEarnings() {
     if (!earningsData.length) return [];
     
     // Group earnings by date for trend analysis
-    const groupedData = earningsData.reduce((acc: any, item) => {
+    const groupedData = earningsData.reduce((acc: any, item: any) => {
       const date = new Date(item.recordDate || item.createdAt).toLocaleDateString();
       if (!acc[date]) {
         acc[date] = {
@@ -123,7 +123,7 @@ export default function VendorEarnings() {
     
     const csvData = [
       ['Date', 'Gross Amount', 'Commission', 'Net Amount', 'Commission Rate'],
-      ...earningsData.map(item => [
+      ...earningsData.map((item: any) => [
         new Date(item.recordDate || item.createdAt).toLocaleDateString(),
         parseFloat(item.grossAmount).toFixed(2),
         parseFloat(item.commissionAmount || '0').toFixed(2),
