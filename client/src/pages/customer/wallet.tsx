@@ -12,16 +12,20 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Wallet, Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, Gift,
   Settings, History, Calendar, Filter, CreditCard, Smartphone,
-  Building2, ChevronRight, AlertCircle, CheckCircle2, Clock, TrendingUp
+  Building2, ChevronRight, AlertCircle, CheckCircle2, Clock, TrendingUp,
+  Menu, User, MapPin, Heart, LogOut, ArrowLeft
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import MobileBottomNav from "@/components/mobile-bottom-nav";
 
 // Quick top-up amount options
 const TOPUP_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -102,9 +106,10 @@ interface SummaryData {
 }
 
 export default function WalletPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const [topupAmount, setTopupAmount] = useState<number>(500);
   const [customAmount, setCustomAmount] = useState("");
@@ -112,6 +117,16 @@ export default function WalletPage() {
   const [transactionFilter, setTransactionFilter] = useState<string>("all");
   const [showTopupDialog, setShowTopupDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    toast({
+      title: "Logged out",
+      description: "Successfully logged out from your account",
+    });
+  };
 
   // Fetch wallet data
   const { data: walletData, isLoading: walletLoading, error: walletError } = useQuery<WalletData>({
@@ -336,26 +351,112 @@ export default function WalletPage() {
   const wallet = walletData.wallet!;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#004225] to-green-700 text-white p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
-              <img src={btsLogo} alt="BTS" className="w-10 h-10" />
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold">BTS Wallet</h1>
-                <p className="text-green-200 text-sm">Your digital wallet</p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Mobile Navigation Header */}
+      <div className="sticky top-0 z-50 bg-[#004225] border-b border-green-800">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center space-x-3">
             <Button
               variant="ghost"
-              size="icon"
-              className="text-white hover:bg-white/10"
+              size="sm"
+              className="p-2 text-white hover:bg-white/10"
+              onClick={() => setLocation("/customer-dashboard")}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center space-x-2">
+              <img src={btsLogo} alt="BTS Delivery" className="w-8 h-8" />
+              <h1 className="text-lg font-bold text-white">Wallet</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2 text-white hover:bg-white/10"
               onClick={() => setShowSettingsDialog(true)}
             >
               <Settings className="w-5 h-5" />
             </Button>
+
+            {/* Menu Trigger */}
+            <Sheet open={showMenu} onOpenChange={setShowMenu}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm" className="p-2 text-white hover:bg-white/10">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80">
+                <SheetHeader>
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="w-12 h-12">
+                      <AvatarImage src={user?.profileImageUrl} />
+                      <AvatarFallback className="bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] text-white">
+                        {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <SheetTitle className="text-left">{user?.firstName} {user?.lastName}</SheetTitle>
+                      <SheetDescription className="text-left">Customer ID: {user?.id?.slice(0, 8)}</SheetDescription>
+                    </div>
+                  </div>
+                </SheetHeader>
+
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-1">
+                    <Link href="/profile-settings" onClick={() => setShowMenu(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <User className="w-4 h-4 mr-3" />
+                        My Profile
+                      </Button>
+                    </Link>
+                    <Link href="/wallet" onClick={() => setShowMenu(false)}>
+                      <Button variant="ghost" className="w-full justify-start bg-gray-100">
+                        <Wallet className="w-4 h-4 mr-3" />
+                        Wallet & Payments
+                      </Button>
+                    </Link>
+                    <Link href="/loyalty" onClick={() => setShowMenu(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <Gift className="w-4 h-4 mr-3" />
+                        Rewards & Points
+                      </Button>
+                    </Link>
+                    <Link href="/favorites" onClick={() => setShowMenu(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <Heart className="w-4 h-4 mr-3" />
+                        Favorites
+                      </Button>
+                    </Link>
+                    <Link href="/addresses" onClick={() => setShowMenu(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <MapPin className="w-4 h-4 mr-3" />
+                        My Addresses
+                      </Button>
+                    </Link>
+                  </div>
+
+                  <Separator />
+
+                  <Button variant="ghost" className="w-full justify-start text-red-600" onClick={handleLogout}>
+                    <LogOut className="w-4 h-4 mr-3" />
+                    Logout
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+      </div>
+
+      {/* Wallet Header with Balance */}
+      <div className="bg-gradient-to-br from-[#004225] to-green-700 text-white p-4 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-green-200 text-sm">Your digital wallet</p>
+            </div>
           </div>
 
           {/* Balance Card */}
@@ -706,6 +807,8 @@ export default function WalletPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MobileBottomNav />
     </div>
   );
 }

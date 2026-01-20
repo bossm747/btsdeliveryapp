@@ -9,6 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShoppingBag, Store, Package, Clock, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import CustomerHeader from "@/components/customer/customer-header";
+
+interface PublicConfig {
+  success: boolean;
+  config: {
+    serviceFees: {
+      pabili: {
+        serviceFee: number;
+        deliveryFee: number;
+        currency: string;
+      };
+    };
+  };
+}
 
 const pabiliStores = [
   { id: "grocery", name: "Grocery Store", icon: "🛒", category: "grocery" },
@@ -19,6 +33,10 @@ const pabiliStores = [
   { id: "other", name: "Iba Pa", icon: "📦", category: "other" }
 ];
 
+// Default fees as fallback
+const DEFAULT_SERVICE_FEE = 50;
+const DEFAULT_DELIVERY_FEE = 49;
+
 export default function Pabili() {
   const { toast } = useToast();
   const [selectedStore, setSelectedStore] = useState("");
@@ -26,6 +44,17 @@ export default function Pabili() {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [estimatedBudget, setEstimatedBudget] = useState("");
+
+  // Fetch service fees from public config
+  const { data: configData } = useQuery<PublicConfig>({
+    queryKey: ["/api/config/public"],
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
+  // Extract fees with fallbacks
+  const serviceFee = configData?.config?.serviceFees?.pabili?.serviceFee ?? DEFAULT_SERVICE_FEE;
+  const deliveryFee = configData?.config?.serviceFees?.pabili?.deliveryFee ?? DEFAULT_DELIVERY_FEE;
+  const totalFees = serviceFee + deliveryFee;
 
   const handleSubmitPabili = async () => {
     if (!selectedStore || !items || !deliveryAddress || !estimatedBudget) {
@@ -44,8 +73,8 @@ export default function Pabili() {
         deliveryAddress,
         specialInstructions,
         estimatedBudget: parseFloat(estimatedBudget),
-        serviceFee: 50,
-        deliveryFee: 49
+        serviceFee,
+        deliveryFee
       });
 
       toast({
@@ -69,18 +98,16 @@ export default function Pabili() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8" data-testid="page-pabili">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-orange-600 mb-2" data-testid="text-title">
-            Pabili Service
-          </h1>
-          <p className="text-gray-600" data-testid="text-subtitle">
+    <div className="min-h-screen bg-background pb-20" data-testid="page-pabili">
+      <CustomerHeader title="Pabili Service" showBack backPath="/customer-dashboard" />
+
+      <div className="container mx-auto px-4 py-6">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-gray-600 text-center mb-6" data-testid="text-subtitle">
             Ipabili mo, dadalhin namin! Anywhere in Batangas Province
           </p>
-        </div>
 
-        <div className="grid gap-6 mb-8">
+          <div className="grid gap-6 mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -162,7 +189,7 @@ export default function Pabili() {
                   data-testid="input-budget"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Hindi kasama ang service fee (₱50) at delivery fee (₱49)
+                  Hindi kasama ang service fee (₱{serviceFee}) at delivery fee (₱{deliveryFee})
                 </p>
               </div>
 
@@ -192,17 +219,17 @@ export default function Pabili() {
                 </div>
                 <div className="flex justify-between">
                   <span>Service Fee:</span>
-                  <span>₱50</span>
+                  <span>₱{serviceFee}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Delivery Fee:</span>
-                  <span>₱49</span>
+                  <span>₱{deliveryFee}</span>
                 </div>
                 <div className="border-t pt-2 font-bold">
                   <div className="flex justify-between">
                     <span>Total:</span>
                     <span data-testid="text-total">
-                      ₱{estimatedBudget ? (parseFloat(estimatedBudget) + 99).toFixed(2) : "99"}
+                      ₱{estimatedBudget ? (parseFloat(estimatedBudget) + totalFees).toFixed(2) : totalFees.toString()}
                     </span>
                   </div>
                 </div>
@@ -210,29 +237,30 @@ export default function Pabili() {
             </CardContent>
           </Card>
 
-          <Button 
-            size="lg" 
-            className="w-full bg-orange-600 hover:bg-orange-700"
-            onClick={handleSubmitPabili}
-            disabled={!selectedStore || !items || !deliveryAddress || !estimatedBudget}
-            data-testid="button-submit"
-          >
-            Submit Pabili Request
-          </Button>
-        </div>
+            <Button
+              size="lg"
+              className="w-full bg-orange-600 hover:bg-orange-700"
+              onClick={handleSubmitPabili}
+              disabled={!selectedStore || !items || !deliveryAddress || !estimatedBudget}
+              data-testid="button-submit"
+            >
+              Submit Pabili Request
+            </Button>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Paano ito gumagana?
-          </h3>
-          <ol className="list-decimal list-inside space-y-1 text-sm">
-            <li>Piliin ang store at isulat ang listahan ng bibilhin</li>
-            <li>Magbayad ng estimated cost + fees</li>
-            <li>Ang aming shopper ay bibili para sa inyo</li>
-            <li>I-deliver namin sa inyong address</li>
-            <li>Bibigyan kayo ng resibo at sukli (kung meron)</li>
-          </ol>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Paano ito gumagana?
+              </h3>
+              <ol className="list-decimal list-inside space-y-1 text-sm">
+                <li>Piliin ang store at isulat ang listahan ng bibilhin</li>
+                <li>Magbayad ng estimated cost + fees</li>
+                <li>Ang aming shopper ay bibili para sa inyo</li>
+                <li>I-deliver namin sa inyong address</li>
+                <li>Bibigyan kayo ng resibo at sukli (kung meron)</li>
+              </ol>
+            </div>
+          </div>
         </div>
       </div>
     </div>

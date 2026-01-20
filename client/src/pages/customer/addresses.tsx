@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import CustomerHeader from "@/components/customer/customer-header";
 import {
   MapPin,
   Plus,
@@ -304,35 +305,31 @@ export default function AddressesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="addresses-page">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <Link href="/customer-dashboard">
-              <Button variant="ghost" data-testid="back-button">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-[#004225]" data-testid="page-title">
-                My Addresses
-              </h1>
-              <p className="text-gray-600">Manage your delivery addresses</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="addresses-page">
+      <CustomerHeader
+        title="My Addresses"
+        showBack
+        backPath="/customer-dashboard"
+        rightContent={
           <Button
             onClick={() => {
               form.reset();
               setIsAddDialogOpen(true);
             }}
+            size="sm"
             className="bg-[#FF6B35] hover:bg-[#FF6B35]/90"
             data-testid="add-address-button"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add Address
+            Add
           </Button>
+        }
+      />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page Description */}
+        <div className="mb-6">
+          <p className="text-gray-600">Manage your delivery addresses</p>
         </div>
 
         {/* Address List */}

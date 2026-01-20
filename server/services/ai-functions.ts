@@ -368,46 +368,51 @@ const vendorFunctions: FunctionDefinition[] = [
   },
   {
     name: "create_menu_item",
-    description: "Create a new menu item for the restaurant. Can auto-generate description and image.",
+    description: `Create a NEW menu item for the restaurant. USE THIS when user says:
+- "add new item called [name]"
+- "create menu item [name] for [price]"
+- "add [name] to the menu"
+- "new product [name] at [price] pesos"
+Can auto-generate description and image with generateDescription:true and generateImage:true.`,
     parameters: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "Name of the menu item"
-        },
-        categoryId: {
-          type: "string",
-          description: "Category ID to add item to"
+          description: "Name of the new menu item"
         },
         price: {
           type: "number",
-          description: "Price in PHP"
+          description: "Price in PHP (required)"
+        },
+        categoryId: {
+          type: "string",
+          description: "Category ID (optional - uses first category if not provided)"
         },
         description: {
           type: "string",
-          description: "Description (optional - can be AI generated)"
+          description: "Item description (optional)"
         },
         generateDescription: {
           type: "boolean",
-          description: "Whether to auto-generate an appetizing description"
+          description: "Set true to AI-generate an appetizing description"
         },
         generateImage: {
           type: "boolean",
-          description: "Whether to auto-generate a food image"
+          description: "Set true to AI-generate a food image"
         },
         ingredients: {
           type: "array",
           items: { type: "string" },
-          description: "List of ingredients (helps with description generation)"
+          description: "Ingredients list (helps AI generate better description)"
         },
         isAvailable: {
           type: "boolean",
-          description: "Whether item is available (default true)"
+          description: "Availability (default: true)"
         },
         stockQuantity: {
           type: "number",
-          description: "Initial stock quantity"
+          description: "Initial stock (default: 100)"
         }
       },
       required: ["name", "price"]
@@ -416,23 +421,58 @@ const vendorFunctions: FunctionDefinition[] = [
   },
   {
     name: "update_menu_item",
-    description: "Update an existing menu item (price, availability, description, etc.).",
+    description: `Update an existing menu item's details. USE THIS when user says:
+- "update price of [item] to [price]"
+- "change [item] price to [price]"
+- "edit [item] description"
+- "rename [item] to [new name]"
+- "set stock of [item] to [number]"
+Finds item by name automatically. Use regenerateImage:true for image updates.`,
     parameters: {
       type: "object",
       properties: {
+        itemName: {
+          type: "string",
+          description: "Menu item name to find and update (e.g., 'Yumburger')"
+        },
         menuItemId: {
           type: "string",
-          description: "The menu item ID to update"
+          description: "Menu item ID (optional, prefer itemName)"
         },
-        name: { type: "string" },
-        price: { type: "number" },
-        description: { type: "string" },
-        isAvailable: { type: "boolean" },
-        stockQuantity: { type: "number" },
-        regenerateDescription: { type: "boolean" },
-        regenerateImage: { type: "boolean" }
+        name: { type: "string", description: "New name for the item" },
+        price: { type: "number", description: "New price in PHP" },
+        description: { type: "string", description: "New description text" },
+        isAvailable: { type: "boolean", description: "true=available, false=unavailable" },
+        stockQuantity: { type: "number", description: "New stock quantity" },
+        regenerateDescription: { type: "boolean", description: "Set true to AI-generate new description" },
+        regenerateImage: { type: "boolean", description: "Set true to AI-generate new image" }
+      }
+    },
+    roles: ["vendor"]
+  },
+  {
+    name: "generate_item_image",
+    description: `Generate/create a new AI image for an existing menu item. USE THIS when user says:
+- "generate image for [item]"
+- "create image for [item]"
+- "make image for [item]"
+- "new photo for [item]"
+- "update image of [item]"
+- "regenerate image for [item]"
+Automatically finds the item by name in vendor's restaurant and updates it with the new image.`,
+    parameters: {
+      type: "object",
+      properties: {
+        itemName: {
+          type: "string",
+          description: "Name of the menu item (e.g., 'Yumburger', 'Chickenjoy'). Extract from user's message."
+        },
+        style: {
+          type: "string",
+          description: "Optional style (e.g., 'appetizing close-up', 'professional')"
+        }
       },
-      required: ["menuItemId"]
+      required: ["itemName"]
     },
     roles: ["vendor"]
   },
@@ -485,24 +525,34 @@ const vendorFunctions: FunctionDefinition[] = [
   },
   {
     name: "update_item_availability",
-    description: "Quickly toggle item availability or update stock.",
+    description: `Toggle menu item availability or stock. USE THIS when user says:
+- "make [item] unavailable"
+- "mark [item] as sold out"
+- "[item] is out of stock"
+- "make [item] available again"
+- "set [item] stock to [number]"
+- "86 the [item]" (restaurant term for unavailable)
+Quick function for availability changes only. Finds item by name.`,
     parameters: {
       type: "object",
       properties: {
+        itemName: {
+          type: "string",
+          description: "Menu item name (e.g., 'Yumburger', 'Chickenjoy')"
+        },
         menuItemId: {
           type: "string",
-          description: "Menu item ID"
+          description: "Menu item ID (optional, prefer itemName)"
         },
         isAvailable: {
           type: "boolean",
-          description: "Whether item is available"
+          description: "true=available, false=unavailable/sold out"
         },
         stockQuantity: {
           type: "number",
-          description: "New stock quantity"
+          description: "New stock count"
         }
-      },
-      required: ["menuItemId"]
+      }
     },
     roles: ["vendor"]
   },
@@ -548,31 +598,36 @@ const vendorFunctions: FunctionDefinition[] = [
   },
   {
     name: "generate_menu_content",
-    description: "Generate AI content for menu items (descriptions, images, promotional text).",
+    description: `Generate AI content WITHOUT updating the menu. USE THIS when user wants:
+- "write a description for [item]" (returns text, doesn't save)
+- "create promo text for [item]"
+- "marketing copy for [item]"
+For generating AND saving images, use generate_item_image instead.
+For generating AND saving descriptions, use update_menu_item with regenerateDescription:true.`,
     parameters: {
       type: "object",
       properties: {
         type: {
           type: "string",
           enum: ["description", "image", "promo_text"],
-          description: "Type of content to generate"
+          description: "description=product description, image=image URL, promo_text=marketing text"
         },
         itemName: {
           type: "string",
-          description: "Name of the menu item"
+          description: "Menu item name"
         },
         category: {
           type: "string",
-          description: "Item category"
+          description: "Food category for context"
         },
         ingredients: {
           type: "array",
           items: { type: "string" },
-          description: "Ingredients list"
+          description: "Ingredients for better description"
         },
         style: {
           type: "string",
-          description: "Style preference for content"
+          description: "Style/tone preference"
         }
       },
       required: ["type", "itemName"]
@@ -1255,9 +1310,35 @@ export async function executeFunction(
       }
 
       case "update_menu_item": {
-        const menuItem = await storage.getMenuItem(args.menuItemId);
+        // Get vendor's restaurant
+        if (!context.restaurantId) {
+          const restaurants = await storage.getRestaurantsByOwner(context.userId);
+          if (!restaurants.length) return { success: false, error: "No restaurant found" };
+          context.restaurantId = restaurants[0].id;
+        }
+
+        let menuItem: any = null;
+        let menuItemId = args.menuItemId;
+
+        // Find by ID if provided
+        if (menuItemId) {
+          menuItem = await storage.getMenuItem(menuItemId);
+        }
+
+        // Find by name if no ID or item not found
+        if (!menuItem && args.itemName) {
+          const items = await storage.getMenuItems(context.restaurantId);
+          menuItem = items.find((item: any) =>
+            item.name.toLowerCase() === args.itemName.toLowerCase() ||
+            item.name.toLowerCase().includes(args.itemName.toLowerCase())
+          );
+          if (menuItem) {
+            menuItemId = menuItem.id;
+          }
+        }
+
         if (!menuItem) {
-          return { success: false, error: "Menu item not found" };
+          return { success: false, error: `Menu item "${args.itemName || args.menuItemId}" not found in your restaurant` };
         }
 
         const updates: any = {};
@@ -1278,20 +1359,67 @@ export async function executeFunction(
         }
 
         if (args.regenerateImage) {
-          updates.image = await generateMenuItemImage(
+          updates.imageUrl = await generateMenuItemImage(
             args.name || menuItem.name,
-            args.description || menuItem.description || ""
+            args.description || menuItem.description || menuItem.name
           );
         }
 
-        await storage.updateMenuItem(args.menuItemId, updates);
+        await storage.updateMenuItem(menuItemId, updates);
 
         return {
           success: true,
           data: {
-            id: args.menuItemId,
+            id: menuItemId,
+            name: menuItem.name,
             updates,
-            message: "Menu item updated successfully!"
+            imageUrl: updates.imageUrl,
+            message: `Menu item "${menuItem.name}" updated successfully!`
+          }
+        };
+      }
+
+      case "generate_item_image": {
+        // Get vendor's restaurant
+        if (!context.restaurantId) {
+          const restaurants = await storage.getRestaurantsByOwner(context.userId);
+          if (!restaurants.length) return { success: false, error: "No restaurant found" };
+          context.restaurantId = restaurants[0].id;
+        }
+
+        // Find the menu item by name
+        const items = await storage.getMenuItems(context.restaurantId);
+        const menuItem = items.find((item: any) =>
+          item.name.toLowerCase() === args.itemName.toLowerCase() ||
+          item.name.toLowerCase().includes(args.itemName.toLowerCase())
+        );
+
+        if (!menuItem) {
+          // List available items to help the user
+          const availableItems = items.slice(0, 10).map((i: any) => i.name).join(", ");
+          return {
+            success: false,
+            error: `Menu item "${args.itemName}" not found. Available items: ${availableItems}`
+          };
+        }
+
+        // Generate the image
+        const imageStyle = args.style || "Professional appetizing food photography, high quality, well-lit";
+        const imageUrl = await generateMenuItemImage(
+          menuItem.name,
+          `${menuItem.description || menuItem.name}. Style: ${imageStyle}`
+        );
+
+        // Update the menu item with the new image
+        await storage.updateMenuItem(menuItem.id, { imageUrl });
+
+        return {
+          success: true,
+          data: {
+            id: menuItem.id,
+            name: menuItem.name,
+            imageUrl,
+            message: `New image generated for "${menuItem.name}"!`
           }
         };
       }
@@ -1369,24 +1497,51 @@ export async function executeFunction(
       }
 
       case "update_item_availability": {
-        const menuItem = await storage.getMenuItem(args.menuItemId);
+        // Get vendor's restaurant
+        if (!context.restaurantId) {
+          const restaurants = await storage.getRestaurantsByOwner(context.userId);
+          if (!restaurants.length) return { success: false, error: "No restaurant found" };
+          context.restaurantId = restaurants[0].id;
+        }
+
+        let menuItem: any = null;
+        let menuItemId = args.menuItemId;
+
+        // Find by ID if provided
+        if (menuItemId) {
+          menuItem = await storage.getMenuItem(menuItemId);
+        }
+
+        // Find by name if no ID or item not found
+        if (!menuItem && args.itemName) {
+          const items = await storage.getMenuItems(context.restaurantId);
+          menuItem = items.find((item: any) =>
+            item.name.toLowerCase() === args.itemName.toLowerCase() ||
+            item.name.toLowerCase().includes(args.itemName.toLowerCase())
+          );
+          if (menuItem) {
+            menuItemId = menuItem.id;
+          }
+        }
+
         if (!menuItem) {
-          return { success: false, error: "Menu item not found" };
+          return { success: false, error: `Menu item "${args.itemName || args.menuItemId}" not found` };
         }
 
         const updates: any = {};
         if (args.isAvailable !== undefined) updates.isAvailable = args.isAvailable;
         if (args.stockQuantity !== undefined) updates.stockQuantity = args.stockQuantity;
 
-        await storage.updateMenuItem(args.menuItemId, updates);
+        await storage.updateMenuItem(menuItemId, updates);
 
         return {
           success: true,
           data: {
-            id: args.menuItemId,
+            id: menuItemId,
+            name: menuItem.name,
             isAvailable: args.isAvailable,
             stockQuantity: args.stockQuantity,
-            message: `Item availability updated`
+            message: `"${menuItem.name}" availability updated`
           }
         };
       }

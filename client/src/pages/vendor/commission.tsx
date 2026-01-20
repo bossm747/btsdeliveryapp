@@ -174,29 +174,61 @@ export default function VendorCommission() {
     queryKey: ["/api/vendor/restaurant"],
   });
 
-  // Fetch settlements
+  // Fetch settlements from API
   const { data: settlements = [], isLoading: settlementsLoading } = useQuery<VendorSettlement[]>({
     queryKey: ["/api/vendor/settlements"],
     enabled: !!restaurant,
-    queryFn: async () => {
-      // Mock data for now
-      return generateMockSettlements();
-    }
   });
 
-  // Fetch earnings summary
+  // Fetch earnings summary from API
   const { data: earningsSummary, isLoading: earningsLoading } = useQuery<EarningsSummary>({
     queryKey: ["/api/vendor/earnings/full-summary"],
     enabled: !!restaurant,
-    queryFn: async () => {
-      return generateMockEarningsSummary();
-    }
   });
 
-  // Commission structure (would come from API)
-  const commissionStructure = generateMockCommissionStructure();
-  const payoutSchedule = generateMockPayoutSchedule();
-  const monthlyData = generateMockMonthlyCommission();
+  // Commission structure - uses API data or falls back to defaults based on restaurant tier
+  const commissionStructure: CommissionStructure = {
+    baseRate: parseFloat((restaurant as any)?.commissionRate || '15'),
+    tierName: (restaurant as any)?.partnerTier || 'Standard Partner',
+    nextTierRate: 12,
+    nextTierThreshold: 500000,
+    currentVolume: settlements.reduce((sum, s) => sum + parseFloat(s.grossAmount || '0'), 0),
+    orderTypes: [
+      { type: 'Delivery', rate: parseFloat((restaurant as any)?.commissionRate || '15'), description: 'Standard delivery orders' },
+      { type: 'Pickup', rate: 10, description: 'Customer pickup orders' },
+      { type: 'Dine-in', rate: 8, description: 'In-restaurant dining' },
+      { type: 'Scheduled', rate: 12, description: 'Pre-scheduled orders' },
+    ]
+  };
+
+  // Payout schedule based on restaurant settings
+  const payoutSchedule: PayoutSchedule = {
+    frequency: (restaurant as any)?.payoutFrequency || 'weekly',
+    nextPayoutDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    minimumPayout: 500,
+    paymentMethod: (restaurant as any)?.paymentMethod || 'Bank Transfer',
+    accountInfo: (restaurant as any)?.bankAccount ? `****${(restaurant as any).bankAccount.slice(-4)}` : 'Not configured'
+  };
+
+  // Calculate monthly data from settlements
+  const monthlyData = settlements.length > 0
+    ? settlements.reduce((acc: { month: string; gross: number; commission: number; net: number }[], settlement) => {
+        const month = format(new Date(settlement.periodEnd || new Date()), 'MMM');
+        const existing = acc.find(d => d.month === month);
+        const gross = parseFloat(settlement.grossAmount || '0');
+        const commission = parseFloat(settlement.commissionAmount || '0');
+        const net = parseFloat(settlement.netAmount || '0');
+
+        if (existing) {
+          existing.gross += gross;
+          existing.commission += commission;
+          existing.net += net;
+        } else {
+          acc.push({ month, gross, commission, net });
+        }
+        return acc;
+      }, []).slice(-6)
+    : generateMockMonthlyCommission(); // Fallback to mock for empty data
 
   const isLoading = restaurantLoading || settlementsLoading || earningsLoading;
 

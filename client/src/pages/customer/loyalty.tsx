@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
+import CustomerHeader from "@/components/customer/customer-header";
 
 // Types for loyalty data
 interface LoyaltyAccount {
@@ -262,33 +263,28 @@ export default function LoyaltyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background" data-testid="loyalty-page">
-      {/* Header */}
+    <div className="min-h-screen bg-background pb-20" data-testid="loyalty-page">
+      <CustomerHeader
+        title="Loyalty Rewards"
+        showBack
+        backPath="/customer-dashboard"
+        variant="green"
+        rightContent={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/10"
+            onClick={() => setShowHowItWorksDialog(true)}
+          >
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+        }
+      />
+
+      {/* Hero Banner */}
       <div className="bg-gradient-to-r from-[#004225] to-green-700 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center mb-4">
-            <Link href="/customer-dashboard">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 -ml-2">
-                <ArrowLeft className="h-5 w-5 mr-1" />
-                Back
-              </Button>
-            </Link>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Loyalty Rewards</h1>
-              <p className="text-green-100 mt-1">Earn points, unlock rewards</p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-white/30 text-white hover:bg-white/10"
-              onClick={() => setShowHowItWorksDialog(true)}
-            >
-              <HelpCircle className="h-4 w-4 mr-2" />
-              How it works
-            </Button>
-          </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p className="text-green-100">Earn points, unlock rewards</p>
         </div>
       </div>
 

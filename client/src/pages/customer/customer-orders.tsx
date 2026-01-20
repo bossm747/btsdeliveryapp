@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { OfflineIndicator, useOnlineStatus } from "@/components/OfflineIndicator";
 import { getOrders as getCachedOrders, saveOrders } from "@/lib/offline-storage";
+import CustomerHeader from "@/components/customer/customer-header";
 
 interface Order {
   id: string;
@@ -373,8 +374,10 @@ export default function CustomerOrders() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="customer-orders-page">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background pb-20" data-testid="customer-orders-page">
+      <CustomerHeader title="My Orders" showBack backPath="/customer-dashboard" />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Offline Indicator */}
         <OfflineIndicator
           isFromCache={isFromCache}
@@ -383,25 +386,12 @@ export default function CustomerOrders() {
           isRefreshing={isFetching}
         />
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <Button variant="ghost" data-testid="back-to-home">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-[#004225]" data-testid="page-title">
-                My Orders
-              </h1>
-              <p className="text-gray-600">
-                Track and manage your orders
-                {!isOnline && " (Offline mode)"}
-              </p>
-            </div>
-          </div>
+        {/* Page Description */}
+        <div className="mb-6">
+          <p className="text-gray-600" data-testid="page-description">
+            Track and manage your orders
+            {!isOnline && " (Offline mode)"}
+          </p>
         </div>
 
         {/* Filters */}

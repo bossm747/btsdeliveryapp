@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   Percent,
   Tag,
-  Layers
+  Layers,
+  Settings
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
@@ -138,6 +139,13 @@ const navigationItems: NavItem[] = [
     icon: Percent,
     description: "Manage commission rates & tiers",
     path: "/admin/commission"
+  },
+  {
+    id: "delivery-settings",
+    label: "Delivery Settings",
+    icon: Settings,
+    description: "Delivery fees, rider pay & rates",
+    path: "/admin/delivery-settings"
   },
   {
     id: "promos",

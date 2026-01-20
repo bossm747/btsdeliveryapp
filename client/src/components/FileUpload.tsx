@@ -71,11 +71,23 @@ export default function FileUpload({
     setIsUploading(true);
 
     try {
-      // Get upload URL
-      const uploadResponse = await apiRequest('POST', '/api/objects/upload');
+      // Map uploadType to category
+      const categoryMap: Record<string, string> = {
+        'restaurant': 'restaurants',
+        'user': 'users',
+        'general': 'ai-uploads',
+        'menu': 'menu'
+      };
+      const category = categoryMap[uploadType] || 'ai-uploads';
+
+      // Get upload URL with category
+      const uploadResponse = await apiRequest('POST', '/api/objects/upload', {
+        category,
+        entityId
+      });
       const { uploadURL } = await uploadResponse.json();
 
-      // Upload file to object storage
+      // Upload file to local storage via the token-based endpoint
       const uploadResult = await fetch(uploadURL, {
         method: 'PUT',
         body: selectedFile,
@@ -85,11 +97,13 @@ export default function FileUpload({
       });
 
       if (!uploadResult.ok) {
-        throw new Error('Failed to upload file');
+        const errorData = await uploadResult.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to upload file');
       }
 
-      // Get the uploaded file path
-      const filePath = new URL(uploadURL).pathname;
+      // Get the uploaded file path from response
+      const resultData = await uploadResult.json();
+      const filePath = resultData.url || resultData.path;
 
       // Notify parent component
       onUploadComplete?.(filePath);
@@ -106,11 +120,11 @@ export default function FileUpload({
         fileInputRef.current.value = '';
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload file. Please try again.',
+        description: error.message || 'Failed to upload file. Please try again.',
         variant: 'destructive'
       });
     } finally {

@@ -1,5 +1,5 @@
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,20 +9,33 @@ import { MenuBrowserSkeleton } from "@/components/skeletons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Star, Clock, Truck, MapPin, Phone, ArrowLeft, Heart, Share2, 
-  Info, MessageCircle, ThumbsUp, Calendar, Globe, Facebook, 
-  Instagram, CheckCircle2, XCircle, AlertCircle, Users, Award
+import {
+  Star, Clock, Truck, MapPin, Phone, ArrowLeft, Heart, Share2,
+  Info, MessageCircle, ThumbsUp, Calendar, Globe, Facebook,
+  Instagram, CheckCircle2, XCircle, AlertCircle, Users, Award, Loader2
 } from "lucide-react";
 import { Link } from "wouter";
 import MenuBrowser from "@/components/menu-browser";
 import CartSidebar from "@/components/cart-sidebar";
+import CustomerHeader from "@/components/customer/customer-header";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Restaurant, MenuCategory, MenuItem } from "@shared/schema";
+
+interface FavoriteRestaurant {
+  id: string;
+  userId: string;
+  restaurantId: string;
+  createdAt: string;
+  restaurant: Restaurant;
+}
 
 export default function RestaurantDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: restaurant, isLoading: restaurantLoading } = useQuery<Restaurant>({
     queryKey: ["/api/restaurants", id],
@@ -44,8 +57,60 @@ export default function RestaurantDetail() {
     enabled: !!id,
   });
 
-  const [isFavorite, setIsFavorite] = useState(false);
-  const { toast } = useToast();
+  // Fetch favorites to check if this restaurant is a favorite
+  const { data: favorites = [] } = useQuery<FavoriteRestaurant[]>({
+    queryKey: ["/api/customer/favorites"],
+    enabled: !!user,
+  });
+
+  // Check if current restaurant is in favorites
+  const isFavorite = favorites.some((fav) => fav.restaurantId === id);
+
+  // Add to favorites mutation
+  const addFavoriteMutation = useMutation({
+    mutationFn: async (restaurantId: string) => {
+      const response = await apiRequest("POST", `/api/customer/favorites/${restaurantId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Added to favorites",
+        description: `${restaurant?.name} added to your favorites`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer/favorites"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add to favorites",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Remove from favorites mutation
+  const removeFavoriteMutation = useMutation({
+    mutationFn: async (restaurantId: string) => {
+      const response = await apiRequest("DELETE", `/api/customer/favorites/${restaurantId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Removed from favorites",
+        description: `${restaurant?.name} removed from your favorites`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer/favorites"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove from favorites",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isTogglingFavorite = addFavoriteMutation.isPending || removeFavoriteMutation.isPending;
 
   if (restaurantLoading || categoriesLoading || menuLoading) {
     return (
@@ -176,13 +241,22 @@ export default function RestaurantDetail() {
 
   // Toggle favorite
   const handleToggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-    toast({
-      title: isFavorite ? "Removed from favorites" : "Added to favorites",
-      description: isFavorite 
-        ? `${restaurant.name} removed from your favorites` 
-        : `${restaurant.name} added to your favorites`,
-    });
+    if (!user) {
+      toast({
+        title: "Login required",
+        description: "Please login to add restaurants to favorites",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!id) return;
+
+    if (isFavorite) {
+      removeFavoriteMutation.mutate(id);
+    } else {
+      addFavoriteMutation.mutate(id);
+    }
   };
 
   // Share restaurant
@@ -212,15 +286,10 @@ export default function RestaurantDetail() {
   } : null;
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="restaurant-detail-page">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Back Button */}
-        <Link href="/restaurants">
-          <Button variant="ghost" className="mb-6" data-testid="back-to-restaurants">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Restaurants
-          </Button>
-        </Link>
+    <div className="min-h-screen bg-background pb-20" data-testid="restaurant-detail-page">
+      <CustomerHeader title={restaurant.name} showBack backPath="/restaurants" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         <div className="grid lg:grid-cols-4 gap-8">
           <div className="lg:col-span-3">
@@ -268,14 +337,19 @@ export default function RestaurantDetail() {
 
                 {/* Action Buttons */}
                 <div className="absolute top-4 right-4 flex space-x-2">
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     className="bg-white/90 hover:bg-white text-black"
                     onClick={handleToggleFavorite}
+                    disabled={isTogglingFavorite}
                     data-testid="favorite-button"
                   >
-                    <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    {isTogglingFavorite ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    )}
                   </Button>
                   <Button 
                     size="sm" 

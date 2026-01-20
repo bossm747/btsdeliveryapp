@@ -34,6 +34,7 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
 import btsLogo from "@assets/bts-logo-transparent.png";
+import CustomerHeader from "@/components/customer/customer-header";
 
 // Types for optimistic update context
 interface OptimisticUpdateContext {
@@ -45,10 +46,14 @@ interface OptimisticUpdateContext {
 // Enhanced validation schemas for comprehensive payment system
 const deliveryAddressSchema = z.object({
   street: z.string().min(1, "Street address is required"),
-  barangay: z.string().min(1, "Barangay is required"),
+  barangay: z.string().optional().default(""),
   city: z.string().min(1, "City is required"),
   province: z.string().default("Batangas"),
-  zipCode: z.string().min(4, "Valid zip code required"),
+  zipCode: z.string().optional().default(""),
+  coordinates: z.object({
+    lat: z.number(),
+    lng: z.number()
+  }).optional(),
 });
 
 const orderSchema = z.object({
@@ -479,9 +484,11 @@ export default function Cart() {
   // Check delivery zone based on coordinates
   const checkDeliveryZone = async (lat: number, lng: number) => {
     try {
+      const restaurantId = getCurrentRestaurantId();
       const response = await apiRequest('POST', '/api/delivery-zones/check', {
         latitude: lat,
-        longitude: lng
+        longitude: lng,
+        restaurantId: restaurantId || undefined
       });
       const result = await response.json();
 
@@ -607,8 +614,26 @@ export default function Cart() {
       return;
     }
 
+    // Check if delivery address is complete
+    if (!data.deliveryAddress.street || !data.deliveryAddress.city) {
+      toast({
+        title: "Delivery address required",
+        description: "Please enter or select a delivery address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const subtotal = getTotalPrice();
     const total = subtotal + deliveryFee + serviceFee;
+
+    // Get coordinates from selected address if available
+    let addressCoordinates = data.deliveryAddress.coordinates;
+    if (!addressCoordinates && selectedSavedAddress?.coordinates) {
+      addressCoordinates = selectedSavedAddress.coordinates;
+    } else if (!addressCoordinates && selectedAddress?.coordinates) {
+      addressCoordinates = selectedAddress.coordinates;
+    }
 
     const orderData = {
       customerId: user?.id || "", // Get from authenticated user
@@ -630,7 +655,10 @@ export default function Cart() {
       // Saved payment method support
       savedPaymentMethodId: savedPaymentMethodId, // Use saved payment method if selected
       savePaymentMethod: savePaymentForFuture, // Option to save new payment method
-      deliveryAddress: data.deliveryAddress,
+      deliveryAddress: {
+        ...data.deliveryAddress,
+        coordinates: addressCoordinates // Include coordinates if available
+      },
       specialInstructions: data.specialInstructions,
       paymentStatus: "pending",
       loyaltyPointsUsed: loyaltyPointsToUse,
@@ -678,21 +706,14 @@ export default function Cart() {
   const total = subtotal + deliveryFee + serviceFee;
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="cart-page">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <Link href="/restaurants">
-              <Button variant="ghost" data-testid="back-to-restaurants">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Restaurants
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground" data-testid="cart-title">Your Cart</h1>
-              <p className="text-muted-foreground">Review your order and complete checkout</p>
-            </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="cart-page">
+      <CustomerHeader title="Your Cart" showBack backPath="/restaurants" />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Cart Summary */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="text-muted-foreground" data-testid="cart-title">Review your order and complete checkout</p>
           </div>
           <Badge variant="secondary" className="text-lg px-3 py-1" data-testid="cart-item-count">
             {items.reduce((total, item) => total + item.quantity, 0)} items
@@ -718,7 +739,7 @@ export default function Cart() {
                       data-testid={`cart-item-${item.id}`}
                     >
                       <img
-                        src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"
+                        src={item.image || "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"}
                         alt={item.name}
                         className="w-16 h-16 object-cover rounded-lg"
                         data-testid={`cart-item-image-${item.id}`}
@@ -1272,7 +1293,21 @@ export default function Cart() {
               {/* Place Order Button */}
               <Button
                 className="w-full bg-primary text-white hover:bg-primary/90 py-6 text-lg font-semibold"
-                onClick={form.handleSubmit(onSubmit)}
+                onClick={form.handleSubmit(onSubmit, (errors) => {
+                  console.error("Form validation errors:", errors);
+                  // Show first validation error to user
+                  const firstError = Object.entries(errors)[0];
+                  if (firstError) {
+                    const [field, error] = firstError;
+                    toast({
+                      title: "Please complete your order details",
+                      description: typeof error?.message === 'string'
+                        ? error.message
+                        : `Please check the ${field.replace('deliveryAddress.', '')} field`,
+                      variant: "destructive"
+                    });
+                  }
+                })}
                 disabled={createOrderMutation.isPending}
                 data-testid="place-order-button"
               >

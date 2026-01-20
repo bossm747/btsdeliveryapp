@@ -83,6 +83,7 @@ import * as geminiAI from "./services/gemini";
 import { processAssistantQuery, type AssistantContext } from "./services/ai-assistant";
 import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { LocalObjectStorageService, ObjectNotFoundError as LocalObjectNotFoundError } from "./services/local-object-storage";
 import { gpsTrackingService } from "./gps-tracking";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
 import * as aiServices from "./ai-services";
@@ -662,6 +663,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           paymentProviders: {
             nexuspay: !!process.env.NEXUSPAY_USERNAME,
             cod: true, // Cash on delivery always available
+          },
+
+          // Service fees configuration
+          serviceFees: {
+            pabili: {
+              serviceFee: 50,
+              deliveryFee: 49,
+              currency: "PHP"
+            },
+            pabayad: {
+              serviceFee: 25,
+              currency: "PHP"
+            },
+            parcel: {
+              packages: [
+                { id: "small", name: "Small", description: "Kasya sa shoebox", maxWeight: "3kg", price: 60 },
+                { id: "medium", name: "Medium", description: "Kasya sa balikbayan box (small)", maxWeight: "10kg", price: 100 },
+                { id: "large", name: "Large", description: "Kasya sa balikbayan box (large)", maxWeight: "20kg", price: 150 },
+                { id: "xlarge", name: "Extra Large", description: "Malaking item/appliance", maxWeight: "50kg", price: 250 }
+              ],
+              currency: "PHP"
+            }
           }
         }
       });
@@ -2375,8 +2398,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         coordinates: z.object({
           lat: z.number(),
           lng: z.number()
-        }),
-        deliveryAddress: z.string(),
+        }).optional(),
+        deliveryAddress: z.string().optional(),
+        city: z.string().optional(), // Allow city-based pricing
         distance: z.number().optional(),
         weight: z.number().optional(),
         vehicleType: z.enum(['motorcycle', 'bicycle', 'car', 'truck']).optional(),
@@ -2386,6 +2410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weatherCondition: z.string().optional(),
         loyaltyPoints: z.number().optional(),
         promoCodes: z.array(z.string()).optional(),
+        promoCode: z.string().optional(), // Support both single and array
         tip: z.number().optional(),
         customerId: z.string().optional(),
         vendorId: z.string().optional(),
@@ -2393,9 +2418,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const validatedData = pricingSchema.parse(req.body);
-      
+
+      // Provide default coordinates if not supplied (center of Batangas Province)
+      const pricingParams = {
+        ...validatedData,
+        coordinates: validatedData.coordinates || { lat: 13.7565, lng: 121.0583 },
+        deliveryAddress: validatedData.deliveryAddress || validatedData.city || 'Batangas City',
+        // Convert single promoCode to promoCodes array if needed
+        promoCodes: validatedData.promoCodes || (validatedData.promoCode ? [validatedData.promoCode] : undefined)
+      };
+
       // Calculate comprehensive pricing using enhanced service
-      const pricingCalculation = await enhancedPricingService.calculateComprehensivePricing(validatedData);
+      const pricingCalculation = await enhancedPricingService.calculateComprehensivePricing(pricingParams);
       
       res.json({
         success: true,
@@ -3338,6 +3372,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available orders for rider to accept
+  app.get("/api/rider/available-orders", authenticateToken, async (req, res) => {
+    try {
+      // Get orders that are ready for pickup and don't have a rider assigned
+      const availableOrders = await db
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          totalAmount: orders.totalAmount,
+          deliveryFee: orders.deliveryFee,
+          status: orders.status,
+          deliveryAddress: orders.deliveryAddress,
+          customerId: orders.customerId,
+          restaurantId: orders.restaurantId,
+          createdAt: orders.createdAt,
+          items: orders.items
+        })
+        .from(orders)
+        .where(
+          and(
+            inArray(orders.status, ['ready', 'confirmed']),
+            isNull(orders.riderId)
+          )
+        )
+        .orderBy(desc(orders.createdAt))
+        .limit(20);
+
+      // Enrich with restaurant and customer data
+      const enrichedOrders = await Promise.all(
+        availableOrders.map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          const customer = await db.select().from(users).where(eq(users.id, order.customerId)).limit(1);
+
+          const deliveryAddr = order.deliveryAddress as any;
+          const restaurantAddr = restaurant?.address as any;
+
+          return {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            totalAmount: parseFloat(order.totalAmount),
+            deliveryFee: parseFloat(order.deliveryFee || '0'),
+            status: order.status,
+            createdAt: order.createdAt,
+            itemCount: Array.isArray(order.items) ? order.items.length : 1,
+            customer: {
+              name: customer[0] ? `${customer[0].firstName} ${customer[0].lastName}` : "Customer",
+              phone: customer[0]?.phone || "",
+            },
+            deliveryAddress: {
+              street: deliveryAddr?.street || deliveryAddr?.address || "Delivery Address",
+              barangay: deliveryAddr?.barangay || "",
+              city: deliveryAddr?.city || "Batangas City",
+              coordinates: deliveryAddr?.coordinates || { lat: 13.7565, lng: 121.0583 }
+            },
+            restaurant: {
+              id: restaurant?.id,
+              name: restaurant?.name || "Restaurant",
+              address: restaurantAddr?.street || restaurantAddr?.address || restaurant?.name,
+              coordinates: restaurantAddr?.coordinates || { lat: 13.7600, lng: 121.0600 }
+            },
+            estimatedDistance: 5, // Default estimate
+            estimatedTime: 30, // Default 30 minutes
+            priority: order.status === 'ready' ? 'high' : 'normal'
+          };
+        })
+      );
+
+      res.json(enrichedOrders);
+    } catch (error) {
+      console.error("Error fetching available orders:", error);
+      res.status(500).json({ message: "Failed to fetch available orders" });
+    }
+  });
+
+  // Accept order by rider
+  app.post("/api/rider/orders/:orderId/accept", authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const riderId = req.user?.id;
+
+      if (!riderId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Get rider profile
+      const rider = await storage.getRiderByUserId(riderId);
+      if (!rider) {
+        return res.status(404).json({ message: "Rider profile not found" });
+      }
+
+      // Get the order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (order.riderId) {
+        return res.status(400).json({ message: "Order already assigned to another rider" });
+      }
+
+      // Assign rider to order and update status
+      await storage.updateOrder(orderId, {
+        riderId: riderId,
+        status: order.status === 'ready' ? 'picked_up' : 'confirmed',
+        riderAssignedAt: new Date()
+      });
+
+      // Notify via WebSocket
+      wsManager.broadcastOrderStatusUpdate({
+        orderId,
+        status: order.status === 'ready' ? 'picked_up' : 'confirmed',
+        riderId,
+        message: 'Rider has accepted the order'
+      });
+
+      res.json({ success: true, message: "Order accepted successfully" });
+    } catch (error) {
+      console.error("Error accepting order:", error);
+      res.status(500).json({ message: "Failed to accept order" });
+    }
+  });
+
+  // Reject/Skip order by rider
+  app.post("/api/rider/orders/:orderId/reject", authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const riderId = req.user?.id;
+
+      if (!riderId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // For now, just acknowledge the rejection
+      // In the future, this could track rider rejections for analytics
+      res.json({ success: true, message: "Order skipped" });
+    } catch (error) {
+      console.error("Error rejecting order:", error);
+      res.status(500).json({ message: "Failed to reject order" });
+    }
+  });
+
   // Real-time delivery queue for riders
   app.get("/api/rider/deliveries/queue", async (req, res) => {
     try {
@@ -3663,6 +3838,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available batch offers for rider
+  app.get("/api/rider/batch-offers", authenticateToken, async (req: any, res) => {
+    try {
+      const riderId = req.user?.id;
+
+      // Get pending/ready orders that could form batches
+      const pendingOrders = await db
+        .select({
+          order: orders,
+          restaurant: restaurants,
+        })
+        .from(orders)
+        .leftJoin(restaurants, eq(orders.restaurantId, restaurants.id))
+        .where(
+          and(
+            or(eq(orders.status, "ready"), eq(orders.status, "confirmed")),
+            isNull(orders.riderId)
+          )
+        )
+        .limit(10);
+
+      // If we have at least 2 orders, we can potentially create a batch
+      if (pendingOrders.length < 2) {
+        return res.json([]);
+      }
+
+      // Simple batching: group orders from nearby restaurants
+      // In a production system, this would use more sophisticated clustering
+      const batchOffers = [];
+
+      // Group by restaurant to find multi-order batches from same restaurant
+      const ordersByRestaurant: Record<number, typeof pendingOrders> = {};
+      for (const po of pendingOrders) {
+        if (po.restaurant?.id) {
+          if (!ordersByRestaurant[po.restaurant.id]) {
+            ordersByRestaurant[po.restaurant.id] = [];
+          }
+          ordersByRestaurant[po.restaurant.id].push(po);
+        }
+      }
+
+      // Create batch offers for restaurants with multiple orders
+      let batchCounter = 1;
+      for (const [restaurantId, restaurantOrders] of Object.entries(ordersByRestaurant)) {
+        if (restaurantOrders.length >= 2) {
+          const ordersForBatch = restaurantOrders.slice(0, 3); // Max 3 orders per batch
+          const totalEarnings = ordersForBatch.reduce((sum, po) => {
+            const deliveryFee = parseFloat(po.order.deliveryFee || '50');
+            return sum + deliveryFee;
+          }, 0);
+
+          batchOffers.push({
+            batchId: `batch-${restaurantId}-${Date.now()}`,
+            batchNumber: `BATCH-${String(batchCounter).padStart(3, '0')}`,
+            orderCount: ordersForBatch.length,
+            totalEarnings: totalEarnings,
+            totalDistance: ordersForBatch.length * 1.5, // Estimated ~1.5km per order
+            estimatedTime: ordersForBatch.length * 10, // Estimated ~10 min per order
+            expiresAt: new Date(Date.now() + 120000).toISOString(), // 2 minutes
+            orders: ordersForBatch.map(po => ({
+              id: String(po.order.id),
+              orderNumber: po.order.orderNumber || `ORD-${po.order.id}`,
+              restaurantName: po.restaurant?.name || 'Restaurant',
+            })),
+          });
+          batchCounter++;
+        }
+      }
+
+      // Also try to create a batch from first 2-3 different restaurants if they're close
+      if (batchOffers.length === 0 && pendingOrders.length >= 2) {
+        const ordersForBatch = pendingOrders.slice(0, Math.min(3, pendingOrders.length));
+        const totalEarnings = ordersForBatch.reduce((sum, po) => {
+          const deliveryFee = parseFloat(po.order.deliveryFee || '50');
+          return sum + deliveryFee;
+        }, 0);
+
+        batchOffers.push({
+          batchId: `batch-mixed-${Date.now()}`,
+          batchNumber: 'BATCH-001',
+          orderCount: ordersForBatch.length,
+          totalEarnings: totalEarnings,
+          totalDistance: ordersForBatch.length * 2, // Estimated ~2km per order for mixed
+          estimatedTime: ordersForBatch.length * 12, // Estimated ~12 min per order for mixed
+          expiresAt: new Date(Date.now() + 120000).toISOString(),
+          orders: ordersForBatch.map(po => ({
+            id: String(po.order.id),
+            orderNumber: po.order.orderNumber || `ORD-${po.order.id}`,
+            restaurantName: po.restaurant?.name || 'Restaurant',
+          })),
+        });
+      }
+
+      res.json(batchOffers);
+    } catch (error) {
+      console.error("Error fetching batch offers:", error);
+      res.status(500).json({ message: "Failed to fetch batch offers" });
+    }
+  });
+
   // Accept a batch of orders
   app.post("/api/rider/batch/:batchId/accept", async (req, res) => {
     try {
@@ -3870,6 +4145,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get rider performance data
+  app.get("/api/rider/performance", authenticateToken, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "Rider authentication required" });
+      }
+
+      // Find rider record
+      const [rider] = await db.select().from(riders).where(eq(riders.userId, userId)).limit(1);
+
+      if (!rider) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+
+      // Get all orders for this rider
+      const allOrders = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.riderId, rider.id));
+
+      // Calculate time periods
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const thisWeekStart = new Date(today);
+      thisWeekStart.setDate(today.getDate() - today.getDay());
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Filter orders by status and time
+      const deliveredOrders = allOrders.filter(o => o.status === 'delivered');
+      const cancelledOrders = allOrders.filter(o => o.status === 'cancelled' && o.riderId);
+      const thisWeekOrders = deliveredOrders.filter(o => o.deliveredAt && new Date(o.deliveredAt) >= thisWeekStart);
+      const thisMonthOrders = deliveredOrders.filter(o => o.deliveredAt && new Date(o.deliveredAt) >= thisMonthStart);
+
+      // Calculate rates
+      const totalAssigned = allOrders.length;
+      const completionRate = totalAssigned > 0 ? Math.round((deliveredOrders.length / totalAssigned) * 100) : 100;
+
+      // On-time calculation (assuming delivery should be within estimated time)
+      const onTimeDeliveries = deliveredOrders.filter(o => {
+        if (!o.deliveredAt || !o.createdAt) return false;
+        const deliveryMinutes = (new Date(o.deliveredAt).getTime() - new Date(o.createdAt).getTime()) / 60000;
+        return deliveryMinutes <= 45; // Consider on-time if delivered within 45 minutes
+      });
+      const onTimeRate = deliveredOrders.length > 0 ? Math.round((onTimeDeliveries.length / deliveredOrders.length) * 100) : 100;
+
+      // Average delivery time
+      const deliveryTimes = deliveredOrders
+        .filter(o => o.deliveredAt && o.createdAt)
+        .map(o => (new Date(o.deliveredAt!).getTime() - new Date(o.createdAt!).getTime()) / 60000);
+      const averageDeliveryTime = deliveryTimes.length > 0
+        ? Math.round(deliveryTimes.reduce((sum, t) => sum + t, 0) / deliveryTimes.length)
+        : 30;
+
+      // Get rider reviews (from rider_reviews or order reviews)
+      const reviewsList = await db
+        .select()
+        .from(riderReviews)
+        .where(eq(riderReviews.riderId, rider.id))
+        .orderBy(desc(riderReviews.createdAt))
+        .limit(10);
+
+      // Calculate rating breakdown
+      const ratingCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+      let totalRating = 0;
+      for (const review of reviewsList) {
+        const rating = review.rating || 5;
+        if (rating >= 1 && rating <= 5) {
+          ratingCounts[rating as keyof typeof ratingCounts]++;
+          totalRating += rating;
+        }
+      }
+      const overallRating = reviewsList.length > 0
+        ? Math.round((totalRating / reviewsList.length) * 10) / 10
+        : parseFloat(rider.rating || '5.0');
+
+      // Calculate streak (days with deliveries)
+      const sortedDeliveries = deliveredOrders
+        .filter(o => o.deliveredAt)
+        .sort((a, b) => new Date(b.deliveredAt!).getTime() - new Date(a.deliveredAt!).getTime());
+
+      let currentStreak = 0;
+      let lastDate: Date | null = null;
+      for (const order of sortedDeliveries) {
+        const orderDate = new Date(order.deliveredAt!);
+        orderDate.setHours(0, 0, 0, 0);
+
+        if (!lastDate) {
+          lastDate = orderDate;
+          currentStreak = 1;
+        } else {
+          const dayDiff = Math.floor((lastDate.getTime() - orderDate.getTime()) / (24 * 60 * 60 * 1000));
+          if (dayDiff === 1) {
+            currentStreak++;
+            lastDate = orderDate;
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Format recent reviews
+      const recentReviews = reviewsList.slice(0, 3).map(review => ({
+        id: String(review.id),
+        customerName: 'Customer',
+        rating: review.rating || 5,
+        comment: review.comment || '',
+        date: review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Recently',
+        orderId: review.orderId ? `ORD-${review.orderId}` : 'N/A',
+      }));
+
+      // Default badges based on performance
+      const badges = [];
+      if (onTimeRate >= 90) {
+        badges.push({
+          id: 'speed-demon',
+          name: 'Speed Demon',
+          description: '90%+ on-time deliveries',
+          icon: 'zap',
+          earnedAt: new Date().toISOString(),
+          tier: onTimeRate >= 98 ? 'platinum' : onTimeRate >= 95 ? 'gold' : 'silver'
+        });
+      }
+      if (overallRating >= 4.5) {
+        badges.push({
+          id: 'customer-favorite',
+          name: 'Customer Favorite',
+          description: '4.5+ star rating',
+          icon: 'heart',
+          earnedAt: new Date().toISOString(),
+          tier: overallRating >= 4.9 ? 'gold' : 'silver'
+        });
+      }
+      if (completionRate >= 95) {
+        badges.push({
+          id: 'reliable-rider',
+          name: 'Reliable Rider',
+          description: '95%+ completion rate',
+          icon: 'shield',
+          earnedAt: new Date().toISOString(),
+          tier: completionRate >= 99 ? 'gold' : 'silver'
+        });
+      }
+
+      // Achievements
+      const achievements = [
+        {
+          id: 'century-club',
+          name: 'Century Club',
+          description: 'Complete 100 deliveries',
+          icon: 'package',
+          progress: deliveredOrders.length,
+          target: 100,
+          completed: deliveredOrders.length >= 100,
+          reward: deliveredOrders.length < 100 ? '₱500 bonus' : undefined
+        },
+        {
+          id: 'perfect-week',
+          name: 'Perfect Week',
+          description: '100% on-time for 7 days',
+          icon: 'clock',
+          progress: Math.min(currentStreak, 7),
+          target: 7,
+          completed: currentStreak >= 7 && onTimeRate === 100
+        },
+        {
+          id: 'top-rated',
+          name: 'Top Rated',
+          description: 'Maintain 4.8+ rating',
+          icon: 'star',
+          progress: overallRating,
+          target: 4.8,
+          completed: overallRating >= 4.8
+        }
+      ];
+
+      res.json({
+        rating: {
+          overall: overallRating,
+          totalReviews: reviewsList.length,
+          breakdown: ratingCounts
+        },
+        metrics: {
+          acceptanceRate: 90, // Would need accept/reject tracking
+          completionRate,
+          onTimeRate,
+          totalDeliveries: deliveredOrders.length,
+          thisWeekDeliveries: thisWeekOrders.length,
+          thisMonthDeliveries: thisMonthOrders.length,
+          cancelledDeliveries: cancelledOrders.length,
+          averageDeliveryTime
+        },
+        recentReviews,
+        badges,
+        achievements,
+        streak: {
+          currentDays: currentStreak,
+          longestDays: currentStreak, // Would need historical tracking
+          lastActive: sortedDeliveries[0]?.deliveredAt || new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching rider performance:", error);
+      res.status(500).json({ message: "Failed to fetch performance data" });
+    }
+  });
 
   app.get("/api/admin/users", async (req, res) => {
     try {
@@ -4097,47 +4579,199 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== OBJECT STORAGE ENDPOINTS ====================
-  
-  // Object Storage Routes
+  // ==================== OBJECT STORAGE ENDPOINTS (Local Storage) ====================
+
+  // Generate upload URL (returns a token-based local upload URL)
   app.post("/api/objects/upload", async (req, res) => {
     try {
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      const { category = "ai-uploads", entityId } = req.body;
+      const validCategories = ["restaurants", "menu", "users", "ai-uploads", "ai-generated", "delivery-proofs", "documents"];
+      const safeCategory = validCategories.includes(category) ? category : "ai-uploads";
+
+      const { uploadURL, objectPath } = LocalObjectStorageService.generateUploadURL(
+        safeCategory as any,
+        entityId
+      );
+
+      res.json({ uploadURL, objectPath });
     } catch (error) {
       console.error("Error generating upload URL:", error);
       res.status(500).json({ error: "Failed to generate upload URL" });
     }
   });
 
-  // Serve private objects
-  app.get("/objects/:objectPath(*)", async (req, res) => {
-    const objectStorageService = new ObjectStorageService();
+  // Handle token-based file upload (PUT to /api/upload/:token)
+  app.put("/api/upload/:token", async (req, res) => {
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      objectStorageService.downloadObject(objectFile, res);
+      const { token } = req.params;
+
+      // Collect the body data
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          const contentType = req.headers["content-type"] || "application/octet-stream";
+
+          const result = await LocalObjectStorageService.completeUpload(token, buffer, contentType);
+
+          if (!result.success) {
+            return res.status(400).json({ error: result.error });
+          }
+
+          res.json({
+            success: true,
+            url: result.url,
+            path: result.url // Return both for compatibility
+          });
+        } catch (error: any) {
+          console.error("Error completing upload:", error);
+          res.status(500).json({ error: "Failed to complete upload" });
+        }
+      });
+    } catch (error) {
+      console.error("Error handling upload:", error);
+      res.status(500).json({ error: "Failed to handle upload" });
+    }
+  });
+
+  // Direct file upload endpoint (multipart/form-data)
+  app.post("/api/upload/direct", authenticateToken, async (req: any, res) => {
+    try {
+      const { category = "ai-uploads", entityId } = req.body;
+
+      // Check if file is in body as base64
+      if (req.body.file && typeof req.body.file === "string") {
+        const result = await LocalObjectStorageService.saveBase64Image(
+          req.body.file,
+          category as any,
+          entityId
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        return res.json({
+          success: true,
+          url: result.url,
+          path: result.url
+        });
+      }
+
+      res.status(400).json({ error: "No file provided" });
+    } catch (error) {
+      console.error("Error handling direct upload:", error);
+      res.status(500).json({ error: "Failed to handle upload" });
+    }
+  });
+
+  // Multipart file upload endpoint (using multer)
+  const uploadMiddleware = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+      }
+    }
+  });
+
+  app.post("/api/upload/image", authenticateToken, uploadMiddleware.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const category = (req.body.category || 'ai-uploads') as any;
+      const entityId = req.body.entityId;
+
+      const result = await LocalObjectStorageService.saveFile(
+        req.file.buffer,
+        req.file.originalname,
+        category,
+        entityId
+      );
+
+      if (!result.success) {
+        return res.status(500).json({ error: result.error });
+      }
+
+      res.json({
+        success: true,
+        url: result.url,
+        filename: result.filename
+      });
+    } catch (error: any) {
+      console.error("Error uploading image:", error);
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
+  });
+
+  // Multiple file upload endpoint
+  app.post("/api/upload/images", authenticateToken, uploadMiddleware.array('files', 5), async (req: any, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const category = (req.body.category || 'ai-uploads') as any;
+      const entityId = req.body.entityId;
+
+      const results = [];
+      for (const file of req.files) {
+        const result = await LocalObjectStorageService.saveFile(
+          file.buffer,
+          file.originalname,
+          category,
+          entityId
+        );
+        if (result.success) {
+          results.push({
+            originalName: file.originalname,
+            url: result.url,
+            filename: result.filename
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        files: results
+      });
+    } catch (error: any) {
+      console.error("Error uploading images:", error);
+      res.status(500).json({ error: error.message || "Failed to upload images" });
+    }
+  });
+
+  // Serve objects from local storage (fallback for /objects/ paths)
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    try {
+      const objectPath = req.params.objectPath;
+      await LocalObjectStorageService.downloadObject(`/objects/${objectPath}`, res);
     } catch (error) {
       console.error("Error serving object:", error);
-      if (error instanceof ObjectNotFoundError) {
+      if (error instanceof LocalObjectNotFoundError) {
         return res.sendStatus(404);
       }
       return res.sendStatus(500);
     }
   });
 
-  // Serve public assets
+  // Serve public assets (alias for uploads)
   app.get("/public-objects/:filePath(*)", async (req, res) => {
-    const filePath = req.params.filePath;
-    const objectStorageService = new ObjectStorageService();
     try {
-      const file = await objectStorageService.searchPublicObject(filePath);
-      if (!file) {
+      const filePath = req.params.filePath;
+      await LocalObjectStorageService.downloadObject(filePath, res);
+    } catch (error) {
+      console.error("Error serving public object:", error);
+      if (error instanceof LocalObjectNotFoundError) {
         return res.status(404).json({ error: "File not found" });
       }
-      objectStorageService.downloadObject(file, res);
-    } catch (error) {
-      console.error("Error searching for public object:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -4147,6 +4781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Upload delivery proof photo for contactless deliveries
    * Used by riders when completing "Leave at Door" deliveries
+   * Accepts either base64 image data or generates an upload URL
    */
   app.post("/api/delivery-proof/upload", authenticateToken, async (req: any, res) => {
     try {
@@ -4154,7 +4789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Authentication required" });
       }
 
-      const { orderId, photoType, timestamp } = req.body;
+      const { orderId, photoType, timestamp, photoData } = req.body;
 
       if (!orderId) {
         return res.status(400).json({ message: "Order ID is required" });
@@ -4171,13 +4806,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized to upload proof for this order" });
       }
 
-      // Generate upload URL for the photo
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      let photoUrl: string;
 
-      // For now, we'll return a mock URL - in production this would be the actual uploaded file URL
-      // The actual file upload would be handled by the client directly to object storage
-      const photoUrl = `/objects/delivery-proofs/${orderId}/${Date.now()}.jpg`;
+      // If photo data is provided (base64), save it directly
+      if (photoData) {
+        const result = await LocalObjectStorageService.saveBase64Image(
+          photoData,
+          "delivery-proofs",
+          String(orderId)
+        );
+
+        if (!result.success) {
+          return res.status(500).json({ message: result.error || "Failed to save photo" });
+        }
+
+        photoUrl = result.url!;
+      } else {
+        // Generate upload URL for client-side upload
+        const { uploadURL, objectPath } = LocalObjectStorageService.generateUploadURL(
+          "delivery-proofs",
+          String(orderId)
+        );
+
+        // Return upload URL for client to use
+        return res.json({
+          success: true,
+          uploadURL,
+          objectPath,
+          message: "Use PUT request to uploadURL to upload the photo"
+        });
+      }
 
       // Update order with the delivery proof photo URL
       const updatedOrder = await storage.updateOrder(orderId, {
@@ -4193,7 +4851,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         photoUrl: photoUrl,
-        uploadURL: uploadURL,
         order: updatedOrder
       });
     } catch (error) {
@@ -7493,6 +8150,250 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/vendor/analytics - Comprehensive analytics for vendor dashboard
+  app.get("/api/vendor/analytics", authenticateToken, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { range = '30d' } = req.query;
+
+      // Get vendor's restaurant
+      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      if (restaurants.length === 0) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const restaurant = restaurants[0];
+
+      // Calculate date ranges based on query parameter
+      const now = new Date();
+      let startDate = new Date();
+      switch (range) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 30);
+      }
+
+      // Get all orders for this restaurant within the date range
+      const allOrders = await storage.getOrdersByRestaurant(restaurant.id);
+      const orders = allOrders.filter(order => {
+        const orderDate = new Date(order.createdAt || '');
+        return orderDate >= startDate && orderDate <= now;
+      });
+
+      // Calculate daily revenue data (last 30 days)
+      const dailyData: { date: string; amount: number; orders: number }[] = [];
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+
+        const dayOrders = orders.filter(o => {
+          const orderDate = new Date(o.createdAt || '');
+          return orderDate >= date && orderDate < nextDate;
+        });
+
+        const dayRevenue = dayOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+
+        dailyData.push({
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          amount: Math.round(dayRevenue * 100) / 100,
+          orders: dayOrders.length
+        });
+      }
+
+      // Calculate weekly revenue data (last 12 weeks)
+      const weeklyData: { week: string; amount: number; orders: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+
+        const weekOrders = orders.filter(o => {
+          const orderDate = new Date(o.createdAt || '');
+          return orderDate >= weekStart && orderDate < weekEnd;
+        });
+
+        const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+
+        weeklyData.push({
+          week: `Week ${12 - i}`,
+          amount: Math.round(weekRevenue * 100) / 100,
+          orders: weekOrders.length
+        });
+      }
+
+      // Calculate monthly revenue data (last 12 months)
+      const monthlyData: { month: string; amount: number; orders: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const monthStart = new Date();
+        monthStart.setMonth(monthStart.getMonth() - i, 1);
+        monthStart.setHours(0, 0, 0, 0);
+        const monthEnd = new Date(monthStart);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+        const monthOrders = orders.filter(o => {
+          const orderDate = new Date(o.createdAt || '');
+          return orderDate >= monthStart && orderDate < monthEnd;
+        });
+
+        const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+
+        monthlyData.push({
+          month: monthStart.toLocaleDateString('en-US', { month: 'short' }),
+          amount: Math.round(monthRevenue * 100) / 100,
+          orders: monthOrders.length
+        });
+      }
+
+      // Calculate order volume stats
+      const completedOrders = orders.filter(o => o.status === 'delivered');
+      const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+      const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+      const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+
+      // Calculate growth (compare this period to previous period)
+      const periodDays = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 365;
+      const previousStart = new Date(startDate);
+      previousStart.setDate(previousStart.getDate() - periodDays);
+      const previousOrders = allOrders.filter(order => {
+        const orderDate = new Date(order.createdAt || '');
+        return orderDate >= previousStart && orderDate < startDate;
+      });
+      const growth = previousOrders.length > 0
+        ? Math.round(((orders.length - previousOrders.length) / previousOrders.length) * 100 * 10) / 10
+        : 0;
+
+      // Get popular items from order items
+      const itemCounts: Record<string, { name: string; quantity: number; revenue: number }> = {};
+      for (const order of completedOrders) {
+        const items = order.items as any[] || [];
+        for (const item of items) {
+          const itemName = item.name || 'Unknown Item';
+          if (!itemCounts[itemName]) {
+            itemCounts[itemName] = { name: itemName, quantity: 0, revenue: 0 };
+          }
+          itemCounts[itemName].quantity += item.quantity || 1;
+          itemCounts[itemName].revenue += (parseFloat(item.price || '0') * (item.quantity || 1));
+        }
+      }
+
+      // Sort and get top 8 items
+      const popularItems = Object.values(itemCounts)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 8)
+        .map((item, index) => ({
+          ...item,
+          revenue: Math.round(item.revenue * 100) / 100,
+          trend: index < 3 ? 'up' as const : index < 6 ? 'stable' as const : 'down' as const
+        }));
+
+      // Calculate peak hours
+      const hourCounts: Record<number, { orders: number; revenue: number }> = {};
+      for (let h = 0; h < 24; h++) {
+        hourCounts[h] = { orders: 0, revenue: 0 };
+      }
+      for (const order of orders) {
+        const hour = new Date(order.createdAt || '').getHours();
+        hourCounts[hour].orders++;
+        hourCounts[hour].revenue += parseFloat(order.total || '0');
+      }
+      const peakHours = Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        orders: hourCounts[hour].orders,
+        revenue: Math.round(hourCounts[hour].revenue * 100) / 100
+      }));
+
+      // Customer demographics
+      const customerOrders: Record<string, { orders: number; spent: number; name: string; firstOrder: Date }> = {};
+      for (const order of orders) {
+        const customerId = order.customerId?.toString() || 'unknown';
+        const customerName = (order as any).customerName || 'Customer';
+        if (!customerOrders[customerId]) {
+          customerOrders[customerId] = {
+            orders: 0,
+            spent: 0,
+            name: customerName,
+            firstOrder: new Date(order.createdAt || '')
+          };
+        }
+        customerOrders[customerId].orders++;
+        customerOrders[customerId].spent += parseFloat(order.total || '0');
+      }
+
+      const customerList = Object.values(customerOrders);
+      const newCustomers = customerList.filter(c => c.firstOrder >= startDate).length;
+      const returningCustomers = customerList.filter(c => c.orders > 1).length;
+
+      const topCustomers = customerList
+        .sort((a, b) => b.spent - a.spent)
+        .slice(0, 5)
+        .map(c => ({
+          name: c.name,
+          orders: c.orders,
+          spent: Math.round(c.spent * 100) / 100
+        }));
+
+      // Order types (all delivery for this app)
+      const deliveryOrders = orders.filter(o => o.deliveryType === 'delivery' || !o.deliveryType).length;
+      const pickupOrders = orders.filter(o => o.deliveryType === 'pickup').length;
+      const total = orders.length || 1;
+
+      const ordersByType = [
+        { type: 'Delivery', count: deliveryOrders, percentage: Math.round((deliveryOrders / total) * 100) },
+        { type: 'Pickup', count: pickupOrders, percentage: Math.round((pickupOrders / total) * 100) }
+      ].filter(t => t.count > 0);
+
+      // If no order types found, show delivery as default
+      if (ordersByType.length === 0) {
+        ordersByType.push({ type: 'Delivery', count: 0, percentage: 100 });
+      }
+
+      res.json({
+        revenue: {
+          daily: dailyData,
+          weekly: weeklyData,
+          monthly: monthlyData
+        },
+        orderVolume: {
+          total: orders.length,
+          completed: completedOrders.length,
+          cancelled: cancelledOrders.length,
+          avgOrderValue: Math.round(avgOrderValue * 100) / 100,
+          growth
+        },
+        popularItems,
+        peakHours,
+        customerDemographics: {
+          newCustomers,
+          returningCustomers,
+          topCustomers,
+          ordersByType
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching vendor analytics:", error);
+      res.status(500).json({ message: "Failed to fetch analytics" });
+    }
+  });
+
   // Staff Management
   app.get("/api/vendor/staff", authenticateToken, async (req, res) => {
     try {
@@ -8844,29 +9745,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const restaurants = await storage.getRestaurants();
       const orders = await storage.getOrders();
       const riders = await storage.getRiders();
-      
-      // Calculate real statistics from database
       const users = await storage.getUsers();
+
+      // Calculate date ranges
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      const twoWeeksAgo = new Date(today);
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      // Calculate real statistics from database
       const totalUsers = users.length;
       const activeRestaurants = restaurants.filter(r => r.isActive).length;
       const totalOrders = orders.length;
-      const activeRiders = riders.filter(r => r.isOnline).length;
       const onlineRiders = riders.filter(r => r.isOnline).length;
-      
-      // Calculate today's revenue
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+
+      // Calculate today's stats
       const todayOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= today);
-      const revenueToday = todayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
-      
+      const yesterdayOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= yesterday && new Date(o.createdAt) < today);
+      const completedToday = todayOrders.filter(o => o.status === 'delivered').length;
+      const completedYesterday = yesterdayOrders.filter(o => o.status === 'delivered').length;
+      const pendingOrders = orders.filter(o => ['pending', 'confirmed', 'preparing'].includes(o.status)).length;
+
+      // Calculate this week vs last week
+      const thisWeekOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= lastWeek);
+      const lastWeekOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= twoWeeksAgo && new Date(o.createdAt) < lastWeek);
+      const weeklyGrowth = lastWeekOrders.length > 0
+        ? Math.round(((thisWeekOrders.length - lastWeekOrders.length) / lastWeekOrders.length) * 100)
+        : 0;
+
+      // Calculate daily growth for completed orders
+      const dailyGrowth = completedYesterday > 0
+        ? Math.round(((completedToday - completedYesterday) / completedYesterday) * 100)
+        : 0;
+
+      // Calculate average delivery time (in minutes) from delivered orders
+      const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.createdAt && o.deliveredAt);
+      let averageDeliveryTime = 30; // default
+      if (deliveredOrders.length > 0) {
+        const totalMinutes = deliveredOrders.reduce((sum, o) => {
+          const created = new Date(o.createdAt!);
+          const delivered = new Date(o.deliveredAt!);
+          return sum + Math.round((delivered.getTime() - created.getTime()) / 60000);
+        }, 0);
+        averageDeliveryTime = Math.round(totalMinutes / deliveredOrders.length);
+      }
+
+      // Calculate revenue
+      const revenueToday = todayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
+      const revenueThisMonth = orders
+        .filter(o => o.createdAt && new Date(o.createdAt) >= thisMonth)
+        .reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
+
+      // Restaurant stats
+      const pendingApplications = restaurants.filter(r => !r.isActive && !r.isRejected).length;
+      const avgRestaurantRating = restaurants.length > 0
+        ? (restaurants.reduce((sum, r) => sum + parseFloat(r.rating || '0'), 0) / restaurants.length).toFixed(1)
+        : '0';
+
+      // Rider stats
+      const pendingVerification = riders.filter(r => !r.isVerified).length;
+      const avgRiderRating = riders.length > 0
+        ? (riders.reduce((sum, r) => sum + parseFloat(r.rating || '0'), 0) / riders.length).toFixed(1)
+        : '0';
+
+      // User stats
+      const newUsersThisMonth = users.filter(u => u.createdAt && new Date(u.createdAt) >= thisMonth).length;
+      const newUsersLastMonth = users.filter(u => u.createdAt && new Date(u.createdAt) >= lastMonth && new Date(u.createdAt) < thisMonth).length;
+      const userGrowth = newUsersLastMonth > 0
+        ? Math.round(((newUsersThisMonth - newUsersLastMonth) / newUsersLastMonth) * 100)
+        : 0;
+
       res.json({
+        // Basic counts
         totalUsers,
-        activeRestaurants,
         totalOrders,
-        activeRiders: riders.length,
+        activeRestaurants,
+        totalRestaurants: restaurants.length,
+        totalRiders: riders.length,
         onlineRiders,
+
+        // Today's stats
+        completedToday,
+        pendingOrders,
         revenueToday,
-        activeUsers: 12456
+
+        // Time metrics
+        averageDeliveryTime,
+
+        // Growth metrics
+        weeklyGrowth,
+        dailyGrowth,
+        userGrowth,
+
+        // Restaurant stats
+        pendingApplications,
+        avgRestaurantRating,
+
+        // Rider stats
+        pendingVerification,
+        avgRiderRating,
+
+        // User stats
+        newUsersThisMonth,
+
+        // Revenue
+        revenueThisMonth
       });
     } catch (error) {
       console.error("Error fetching admin stats:", error);
@@ -9517,61 +10507,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delivery zone check - check if location is serviceable
   app.post("/api/delivery-zones/check", async (req, res) => {
     try {
-      const { latitude, longitude, city } = req.body;
+      const { latitude, longitude, city, restaurantId, restaurantLat, restaurantLng } = req.body;
 
       if (!latitude || !longitude) {
         return res.status(400).json({ message: "Location coordinates required" });
       }
 
-      const { geofenceService, GEOFENCE_RADIUS } = await import("./services/geofence-service");
+      const { geofenceService, BATANGAS_PROVINCE_BOUNDS, DELIVERY_ZONES } = await import("./services/geofence-service");
 
-      // Check if within Batangas service area (25km from Batangas City center)
-      const isServiceable = await geofenceService.isWithinServiceArea(
+      // Check if customer location is within Batangas Province (covers entire province)
+      const isServiceable = await geofenceService.isWithinServiceArea(latitude, longitude);
+
+      // Get restaurant location for distance calculation
+      let refLat = BATANGAS_PROVINCE_BOUNDS.center.lat;
+      let refLng = BATANGAS_PROVINCE_BOUNDS.center.lng;
+
+      // If restaurant coordinates provided directly, use them
+      if (restaurantLat && restaurantLng) {
+        refLat = parseFloat(restaurantLat);
+        refLng = parseFloat(restaurantLng);
+      }
+      // Otherwise, try to get from restaurantId
+      else if (restaurantId) {
+        const restaurantLocation = await geofenceService.getRestaurantLocation(restaurantId);
+        if (restaurantLocation) {
+          refLat = restaurantLocation.lat;
+          refLng = restaurantLocation.lng;
+        }
+      }
+
+      // Calculate distance from restaurant (or province center if no restaurant)
+      const distanceToRestaurant = geofenceService.calculateDistance(
         latitude,
         longitude,
-        13.7565, // Batangas City center lat
-        121.0583, // Batangas City center lng
-        25 // 25km radius
+        refLat,
+        refLng
       );
 
-      // Calculate distance from service center
-      const distanceToCenter = geofenceService.calculateDistance(
-        latitude,
-        longitude,
-        13.7565,
-        121.0583
-      );
+      const distanceKm = distanceToRestaurant / 1000;
 
-      // Determine delivery fee zone
+      // Get delivery zone based on distance
+      const zoneInfo = geofenceService.getDeliveryZone(distanceKm);
+
       let zone: string;
       let deliveryFee: number;
+      let estimatedTime: string;
 
-      const distanceKm = distanceToCenter / 1000;
-      if (distanceKm <= 5) {
-        zone = 'zone1';
-        deliveryFee = 49;
-      } else if (distanceKm <= 10) {
-        zone = 'zone2';
-        deliveryFee = 69;
-      } else if (distanceKm <= 15) {
-        zone = 'zone3';
-        deliveryFee = 89;
-      } else if (distanceKm <= 25) {
-        zone = 'zone4';
-        deliveryFee = 119;
+      if (zoneInfo && isServiceable) {
+        zone = zoneInfo.zone;
+        deliveryFee = zoneInfo.fee;
+        estimatedTime = `${zoneInfo.estimatedMinutes.min}-${zoneInfo.estimatedMinutes.max} mins`;
       } else {
         zone = 'outside';
         deliveryFee = 0;
+        estimatedTime = 'N/A';
       }
 
       res.json({
-        serviceable: isServiceable,
+        serviceable: isServiceable && zone !== 'outside',
         zone,
+        zoneName: zoneInfo?.name || 'Outside Service Area',
         deliveryFee,
         distanceKm: Math.round(distanceKm * 10) / 10,
-        message: isServiceable
+        estimatedTime,
+        message: isServiceable && zone !== 'outside'
           ? `Delivery available! Estimated fee: ₱${deliveryFee}`
-          : 'Sorry, this location is outside our delivery area'
+          : 'Sorry, this location is outside our delivery area in Batangas Province'
       });
     } catch (error) {
       console.error("Error checking delivery zone:", error);
@@ -9582,50 +10583,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get delivery zones configuration
   app.get("/api/delivery-zones", async (req, res) => {
     try {
-      // Service area configuration centered on Batangas City
+      const { BATANGAS_PROVINCE_BOUNDS, DELIVERY_ZONES } = await import("./services/geofence-service");
+
+      // Delivery zones for entire Batangas Province
       const zones = [
         {
           id: 'zone1',
-          name: 'Zone 1 - Central',
-          radiusKm: 5,
-          deliveryFee: 49,
-          estimatedTime: '15-25 mins',
+          name: 'Zone 1 - Nearby',
+          radiusKm: DELIVERY_ZONES.zone1.maxDistanceKm,
+          deliveryFee: DELIVERY_ZONES.zone1.fee,
+          estimatedTime: `${DELIVERY_ZONES.zone1.estimatedMinutes.min}-${DELIVERY_ZONES.zone1.estimatedMinutes.max} mins`,
           color: '#22c55e', // green
-          description: 'Batangas City center and nearby barangays'
+          description: 'Very close to restaurant (within 5km)'
         },
         {
           id: 'zone2',
           name: 'Zone 2 - Inner',
-          radiusKm: 10,
-          deliveryFee: 69,
-          estimatedTime: '25-40 mins',
+          radiusKm: DELIVERY_ZONES.zone2.maxDistanceKm,
+          deliveryFee: DELIVERY_ZONES.zone2.fee,
+          estimatedTime: `${DELIVERY_ZONES.zone2.estimatedMinutes.min}-${DELIVERY_ZONES.zone2.estimatedMinutes.max} mins`,
           color: '#3b82f6', // blue
-          description: 'Bauan, San Pascual, and nearby areas'
+          description: 'Within 10km from restaurant'
         },
         {
           id: 'zone3',
           name: 'Zone 3 - Outer',
-          radiusKm: 15,
-          deliveryFee: 89,
-          estimatedTime: '40-55 mins',
+          radiusKm: DELIVERY_ZONES.zone3.maxDistanceKm,
+          deliveryFee: DELIVERY_ZONES.zone3.fee,
+          estimatedTime: `${DELIVERY_ZONES.zone3.estimatedMinutes.min}-${DELIVERY_ZONES.zone3.estimatedMinutes.max} mins`,
           color: '#f59e0b', // amber
-          description: 'Lemery, Taal, Rosario, and surrounding areas'
+          description: 'Within 20km from restaurant'
         },
         {
           id: 'zone4',
           name: 'Zone 4 - Extended',
-          radiusKm: 25,
-          deliveryFee: 119,
-          estimatedTime: '55-75 mins',
+          radiusKm: DELIVERY_ZONES.zone4.maxDistanceKm,
+          deliveryFee: DELIVERY_ZONES.zone4.fee,
+          estimatedTime: `${DELIVERY_ZONES.zone4.estimatedMinutes.min}-${DELIVERY_ZONES.zone4.estimatedMinutes.max} mins`,
           color: '#ef4444', // red
-          description: 'Lipa, Tanauan, Nasugbu, and outer areas'
+          description: 'Within 50km from restaurant'
+        },
+        {
+          id: 'zone5',
+          name: 'Zone 5 - Province-wide',
+          radiusKm: DELIVERY_ZONES.zone5.maxDistanceKm,
+          deliveryFee: DELIVERY_ZONES.zone5.fee,
+          estimatedTime: `${DELIVERY_ZONES.zone5.estimatedMinutes.min}-${DELIVERY_ZONES.zone5.estimatedMinutes.max} mins`,
+          color: '#8b5cf6', // purple
+          description: 'Anywhere in Batangas Province (up to 100km)'
         }
       ];
 
       res.json({
-        center: { lat: 13.7565, lng: 121.0583 },
+        center: BATANGAS_PROVINCE_BOUNDS.center,
+        bounds: {
+          north: BATANGAS_PROVINCE_BOUNDS.north,
+          south: BATANGAS_PROVINCE_BOUNDS.south,
+          east: BATANGAS_PROVINCE_BOUNDS.east,
+          west: BATANGAS_PROVINCE_BOUNDS.west
+        },
         zones,
-        maxRadiusKm: 25
+        maxRadiusKm: DELIVERY_ZONES.zone5.maxDistanceKm,
+        province: 'Batangas'
       });
     } catch (error) {
       console.error("Error getting delivery zones:", error);
@@ -12033,6 +13052,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating delivery zone:", error);
       res.status(500).json({ message: "Failed to create delivery zone" });
+    }
+  });
+
+  // ============= DELIVERY SETTINGS MANAGEMENT =============
+
+  // Get delivery settings (rates, commissions, fees)
+  app.get("/api/admin/delivery-settings", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { deliverySettingsService, DEFAULT_DELIVERY_SETTINGS } = await import("./services/delivery-settings");
+      const settings = await deliverySettingsService.getSettings();
+      res.json({
+        success: true,
+        settings,
+        defaults: DEFAULT_DELIVERY_SETTINGS
+      });
+    } catch (error) {
+      console.error("Error fetching delivery settings:", error);
+      res.status(500).json({ message: "Failed to fetch delivery settings" });
+    }
+  });
+
+  // Update delivery settings
+  app.patch("/api/admin/delivery-settings", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const settings = await deliverySettingsService.updateSettings(req.body, req.user?.id);
+
+      // Log configuration change
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'delivery_settings_update',
+        resource: 'delivery_settings',
+        resourceId: 'delivery_settings',
+        details: req.body,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, settings });
+    } catch (error) {
+      console.error("Error updating delivery settings:", error);
+      res.status(500).json({ message: "Failed to update delivery settings" });
+    }
+  });
+
+  // Update specific delivery settings section
+  app.patch("/api/admin/delivery-settings/:section", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { section } = req.params;
+      const validSections = ['deliveryFees', 'serviceFees', 'riderCommission', 'vendorCommission', 'surgePricing', 'distanceZones'];
+
+      if (!validSections.includes(section)) {
+        return res.status(400).json({ message: `Invalid section. Valid sections: ${validSections.join(', ')}` });
+      }
+
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const updateData = { [section]: req.body };
+      const settings = await deliverySettingsService.updateSettings(updateData, req.user?.id);
+
+      // Log configuration change
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'delivery_settings_section_update',
+        resource: 'delivery_settings',
+        resourceId: section,
+        details: req.body,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, settings, updatedSection: section });
+    } catch (error) {
+      console.error("Error updating delivery settings section:", error);
+      res.status(500).json({ message: "Failed to update delivery settings section" });
+    }
+  });
+
+  // Reset delivery settings to defaults
+  app.post("/api/admin/delivery-settings/reset", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const settings = await deliverySettingsService.resetToDefaults(req.user?.id);
+
+      // Log configuration change
+      await storage.createAdminAuditLog({
+        adminUserId: req.user!.id,
+        action: 'delivery_settings_reset',
+        resource: 'delivery_settings',
+        resourceId: 'delivery_settings',
+        details: { action: 'reset_to_defaults' },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, settings, message: "Settings reset to defaults" });
+    } catch (error) {
+      console.error("Error resetting delivery settings:", error);
+      res.status(500).json({ message: "Failed to reset delivery settings" });
+    }
+  });
+
+  // Calculate delivery fee preview (for testing settings)
+  app.post("/api/admin/delivery-settings/preview/delivery-fee", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { distanceKm, orderAmount } = req.body;
+
+      if (typeof distanceKm !== 'number' || typeof orderAmount !== 'number') {
+        return res.status(400).json({ message: "distanceKm and orderAmount are required numbers" });
+      }
+
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const result = await deliverySettingsService.calculateDeliveryFee(distanceKm, orderAmount);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error calculating delivery fee preview:", error);
+      res.status(500).json({ message: "Failed to calculate delivery fee" });
+    }
+  });
+
+  // Calculate rider earnings preview (for testing settings)
+  app.post("/api/admin/delivery-settings/preview/rider-earnings", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { distanceKm, waitingTimeMinutes = 0, isNightTime = false, isBadWeather = false } = req.body;
+
+      if (typeof distanceKm !== 'number') {
+        return res.status(400).json({ message: "distanceKm is required" });
+      }
+
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const result = await deliverySettingsService.calculateRiderEarnings(
+        distanceKm,
+        waitingTimeMinutes,
+        isNightTime,
+        isBadWeather
+      );
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error calculating rider earnings preview:", error);
+      res.status(500).json({ message: "Failed to calculate rider earnings" });
+    }
+  });
+
+  // Calculate vendor commission preview (for testing settings)
+  app.post("/api/admin/delivery-settings/preview/vendor-commission", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { orderAmount, customCommissionRate, isSelfDelivery = false } = req.body;
+
+      if (typeof orderAmount !== 'number') {
+        return res.status(400).json({ message: "orderAmount is required" });
+      }
+
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const result = await deliverySettingsService.calculateVendorCommission(
+        orderAmount,
+        customCommissionRate,
+        isSelfDelivery
+      );
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error calculating vendor commission preview:", error);
+      res.status(500).json({ message: "Failed to calculate vendor commission" });
+    }
+  });
+
+  // Public endpoint: Get delivery fee estimate (for customers)
+  app.post("/api/delivery/estimate", async (req, res) => {
+    try {
+      const { distanceKm, orderAmount } = req.body;
+
+      if (typeof distanceKm !== 'number' || typeof orderAmount !== 'number') {
+        return res.status(400).json({ message: "distanceKm and orderAmount are required numbers" });
+      }
+
+      const { deliverySettingsService } = await import("./services/delivery-settings");
+      const [deliveryResult, serviceFeeResult] = await Promise.all([
+        deliverySettingsService.calculateDeliveryFee(distanceKm, orderAmount),
+        deliverySettingsService.calculateServiceFee(orderAmount)
+      ]);
+
+      const total = orderAmount + deliveryResult.deliveryFee + deliveryResult.smallOrderFee + serviceFeeResult.serviceFee;
+
+      res.json({
+        success: true,
+        orderAmount,
+        deliveryFee: deliveryResult.deliveryFee,
+        smallOrderFee: deliveryResult.smallOrderFee,
+        serviceFee: serviceFeeResult.serviceFee,
+        zone: deliveryResult.zone,
+        estimatedMinutes: deliveryResult.estimatedMinutes,
+        isFreeDelivery: deliveryResult.isFreeDelivery,
+        total
+      });
+    } catch (error) {
+      console.error("Error calculating delivery estimate:", error);
+      res.status(500).json({ message: "Failed to calculate delivery estimate" });
     }
   });
 

@@ -53,6 +53,7 @@ export default function MenuBrowser({ categories, menuItems, restaurantId }: Men
       id: `${item.id}_${Date.now()}`,
       name: item.name,
       price: parseFloat(item.price),
+      image: item.imageUrl || undefined,
       restaurantId: restaurantId,
     });
     

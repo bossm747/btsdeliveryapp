@@ -20,7 +20,30 @@ export const GEOFENCE_RADIUS = {
   CUSTOMER_ARRIVAL: 100,     // 100 meters - rider arrived at customer
   RESTAURANT_NEARBY: 200,    // 200 meters - rider approaching restaurant
   CUSTOMER_NEARBY: 500,      // 500 meters - rider approaching customer
-  SERVICE_AREA: 25000,       // 25 km - service area radius
+  SERVICE_AREA: 100000,      // 100 km - service area radius (covers all of Batangas Province)
+};
+
+// Batangas Province boundaries (covers entire province)
+export const BATANGAS_PROVINCE_BOUNDS = {
+  north: 14.15,   // Northern boundary (near Tanauan/Calamba border)
+  south: 13.45,   // Southern boundary (Calatagan/Nasugbu area)
+  east: 121.45,   // Eastern boundary (inland toward Quezon)
+  west: 120.50,   // Western boundary (Nasugbu coast)
+  // Province center for reference
+  center: {
+    lat: 13.7565,
+    lng: 121.0583,
+    name: 'Batangas City'
+  }
+};
+
+// Delivery zone configuration based on distance from restaurant
+export const DELIVERY_ZONES = {
+  zone1: { maxDistanceKm: 5, fee: 49, estimatedMinutes: { min: 15, max: 25 }, name: 'Nearby' },
+  zone2: { maxDistanceKm: 10, fee: 69, estimatedMinutes: { min: 25, max: 40 }, name: 'Inner' },
+  zone3: { maxDistanceKm: 20, fee: 89, estimatedMinutes: { min: 40, max: 60 }, name: 'Outer' },
+  zone4: { maxDistanceKm: 50, fee: 119, estimatedMinutes: { min: 60, max: 90 }, name: 'Extended' },
+  zone5: { maxDistanceKm: 100, fee: 149, estimatedMinutes: { min: 90, max: 120 }, name: 'Province-wide' },
 };
 
 // Minimum time between same event triggers (to prevent spam)
@@ -767,17 +790,59 @@ class GeofenceService {
   }
 
   /**
+   * Check if a location is within Batangas Province boundaries
+   * Uses bounding box check for the entire province
+   */
+  isWithinProvinceBounds(latitude: number, longitude: number): boolean {
+    return (
+      latitude >= BATANGAS_PROVINCE_BOUNDS.south &&
+      latitude <= BATANGAS_PROVINCE_BOUNDS.north &&
+      longitude >= BATANGAS_PROVINCE_BOUNDS.west &&
+      longitude <= BATANGAS_PROVINCE_BOUNDS.east
+    );
+  }
+
+  /**
    * Check if a location is within the service area
+   * Now checks if location is within Batangas Province bounds
    */
   async isWithinServiceArea(
     latitude: number,
     longitude: number,
-    centerLat: number = 13.7565,  // Default: Batangas City center
-    centerLng: number = 121.0583,
-    radiusMeters: number = GEOFENCE_RADIUS.SERVICE_AREA
+    centerLat?: number,
+    centerLng?: number,
+    radiusMeters?: number
   ): Promise<boolean> {
-    const distance = this.calculateDistance(latitude, longitude, centerLat, centerLng);
-    return distance <= radiusMeters;
+    // First check if within province bounds (primary check)
+    if (this.isWithinProvinceBounds(latitude, longitude)) {
+      return true;
+    }
+
+    // Fallback: check distance from center (for edge cases near borders)
+    const refLat = centerLat ?? BATANGAS_PROVINCE_BOUNDS.center.lat;
+    const refLng = centerLng ?? BATANGAS_PROVINCE_BOUNDS.center.lng;
+    const radius = radiusMeters ?? GEOFENCE_RADIUS.SERVICE_AREA;
+
+    const distance = this.calculateDistance(latitude, longitude, refLat, refLng);
+    return distance <= radius;
+  }
+
+  /**
+   * Get delivery zone and fee based on distance from restaurant
+   */
+  getDeliveryZone(distanceKm: number): { zone: string; fee: number; estimatedMinutes: { min: number; max: number }; name: string } | null {
+    if (distanceKm <= DELIVERY_ZONES.zone1.maxDistanceKm) {
+      return { zone: 'zone1', ...DELIVERY_ZONES.zone1 };
+    } else if (distanceKm <= DELIVERY_ZONES.zone2.maxDistanceKm) {
+      return { zone: 'zone2', ...DELIVERY_ZONES.zone2 };
+    } else if (distanceKm <= DELIVERY_ZONES.zone3.maxDistanceKm) {
+      return { zone: 'zone3', ...DELIVERY_ZONES.zone3 };
+    } else if (distanceKm <= DELIVERY_ZONES.zone4.maxDistanceKm) {
+      return { zone: 'zone4', ...DELIVERY_ZONES.zone4 };
+    } else if (distanceKm <= DELIVERY_ZONES.zone5.maxDistanceKm) {
+      return { zone: 'zone5', ...DELIVERY_ZONES.zone5 };
+    }
+    return null; // Outside all delivery zones
   }
 
   /**

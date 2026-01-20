@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,30 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Package, MapPin, User, Phone, Ruler, Weight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import CustomerHeader from "@/components/customer/customer-header";
 
-const packageSizes = [
+interface PackageSize {
+  id: string;
+  name: string;
+  description: string;
+  maxWeight: string;
+  price: number;
+}
+
+interface PublicConfig {
+  success: boolean;
+  config: {
+    serviceFees: {
+      parcel: {
+        packages: PackageSize[];
+        currency: string;
+      };
+    };
+  };
+}
+
+// Default package sizes as fallback
+const DEFAULT_PACKAGE_SIZES: PackageSize[] = [
   { id: "small", name: "Small", description: "Kasya sa shoebox", maxWeight: "3kg", price: 60 },
   { id: "medium", name: "Medium", description: "Kasya sa balikbayan box (small)", maxWeight: "10kg", price: 100 },
   { id: "large", name: "Large", description: "Kasya sa balikbayan box (large)", maxWeight: "20kg", price: 150 },
@@ -21,18 +44,27 @@ export default function Parcel() {
   const [packageSize, setPackageSize] = useState("small");
   const [itemDescription, setItemDescription] = useState("");
   const [itemValue, setItemValue] = useState("");
-  
+
   // Sender info
   const [senderName, setSenderName] = useState("");
   const [senderPhone, setSenderPhone] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
-  
+
   // Receiver info
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
-  
+
   const [specialInstructions, setSpecialInstructions] = useState("");
+
+  // Fetch service fees from public config
+  const { data: configData } = useQuery<PublicConfig>({
+    queryKey: ["/api/config/public"],
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
+  // Extract package sizes with fallback
+  const packageSizes = configData?.config?.serviceFees?.parcel?.packages ?? DEFAULT_PACKAGE_SIZES;
 
   const selectedPackage = packageSizes.find(p => p.id === packageSize) || packageSizes[0];
 
@@ -92,18 +124,16 @@ export default function Parcel() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8" data-testid="page-parcel">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-yellow-600 mb-2" data-testid="text-title">
-            Parcel Delivery
-          </h1>
-          <p className="text-gray-600" data-testid="text-subtitle">
+    <div className="min-h-screen bg-background pb-20" data-testid="page-parcel">
+      <CustomerHeader title="Parcel Delivery" showBack backPath="/customer-dashboard" />
+
+      <div className="container mx-auto px-4 py-6">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-gray-600 text-center mb-6" data-testid="text-subtitle">
             Magpadala ng packages anywhere in Batangas Province
           </p>
-        </div>
 
-        <div className="grid gap-6">
+          <div className="grid gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -287,27 +317,28 @@ export default function Parcel() {
             </CardContent>
           </Card>
 
-          <Button 
-            size="lg" 
-            className="w-full bg-yellow-600 hover:bg-yellow-700"
-            onClick={handleSubmitParcel}
-            disabled={!senderName || !senderPhone || !pickupAddress || 
-                    !receiverName || !receiverPhone || !deliveryAddress || !itemDescription}
-            data-testid="button-submit"
-          >
-            Book Parcel Delivery
-          </Button>
-        </div>
+            <Button
+              size="lg"
+              className="w-full bg-yellow-600 hover:bg-yellow-700"
+              onClick={handleSubmitParcel}
+              disabled={!senderName || !senderPhone || !pickupAddress ||
+                      !receiverName || !receiverPhone || !deliveryAddress || !itemDescription}
+              data-testid="button-submit"
+            >
+              Book Parcel Delivery
+            </Button>
 
-        <div className="mt-8 bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <h3 className="font-semibold mb-2">📦 Reminders</h3>
-          <ul className="list-disc list-inside space-y-1 text-sm">
-            <li>Siguraduhing tama ang package size para maiwasan ang additional charges</li>
-            <li>I-pack ng maayos ang fragile items</li>
-            <li>Bawal ang prohibited items (weapons, illegal drugs, etc.)</li>
-            <li>Pickup within 2 hours, delivery within the day</li>
-            <li>Cash on delivery available for item value up to ₱5,000</li>
-          </ul>
+            <div className="mt-8 bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">📦 Reminders</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Siguraduhing tama ang package size para maiwasan ang additional charges</li>
+                <li>I-pack ng maayos ang fragile items</li>
+                <li>Bawal ang prohibited items (weapons, illegal drugs, etc.)</li>
+                <li>Pickup within 2 hours, delivery within the day</li>
+                <li>Cash on delivery available for item value up to ₱5,000</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>

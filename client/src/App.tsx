@@ -64,6 +64,7 @@ const RiderVerification = lazy(() => import("@/pages/admin/rider-verification"))
 const SupportTickets = lazy(() => import("@/pages/admin/support-tickets"));
 const CommissionSettings = lazy(() => import("@/pages/admin/commission-settings"));
 const DeliveryZones = lazy(() => import("@/pages/admin/delivery-zones"));
+const DeliverySettings = lazy(() => import("@/pages/admin/delivery-settings"));
 const PromoManagement = lazy(() => import("@/pages/admin/promo-management"));
 const FinancialDashboard = lazy(() => import("@/pages/admin/financial-dashboard"));
 const FraudDashboard = lazy(() => import("@/pages/admin/fraud-dashboard"));
@@ -72,8 +73,6 @@ const AdminRiders = lazy(() => import("@/pages/admin/admin-riders"));
 const VendorTaxReports = lazy(() => import("@/pages/vendor/tax-reports"));
 
 // Layout components (loaded immediately as they're used often)
-import Navbar from "@/components/navbar";
-import Footer from "@/components/footer";
 import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { LanguageProvider } from "@/contexts/language-context";
 import AIChatWidget from "@/components/ai-chat-widget";
@@ -94,13 +93,9 @@ function CustomerLayout({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
       <div className="min-h-screen flex flex-col relative">
-        <Navbar />
         <main className="flex-1 pb-safe-bottom md:pb-0 min-h-screen">
           {children}
         </main>
-        <div className="hidden md:block">
-          <Footer />
-        </div>
         <MobileBottomNav />
       </div>
     </LanguageProvider>
@@ -238,9 +233,9 @@ function Router() {
 
       <Route path="/wallet">
         <ProtectedRoute allowedRoles={["customer"]}>
-          <CustomerLayout>
+          <DashboardLayout>
             <CustomerWallet />
-          </CustomerLayout>
+          </DashboardLayout>
         </ProtectedRoute>
       </Route>
 
@@ -473,6 +468,15 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
             <DeliveryZones />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Delivery Settings - Rates, Commissions, Fees */}
+      <Route path="/admin/delivery-settings">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <DeliverySettings />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

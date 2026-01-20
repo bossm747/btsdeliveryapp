@@ -102,6 +102,55 @@ export default function VendorEarnings() {
 
   const chartData = processChartData();
 
+  // Fetch settlements/payouts data
+  const { data: settlements = [] } = useQuery<any[]>({
+    queryKey: ["/api/vendor/settlements"],
+    enabled: !!restaurant,
+  });
+
+  // Calculate growth metrics from earnings data
+  const calculateGrowth = () => {
+    if (earningsData.length === 0) {
+      return { grossGrowth: 0, commissionGrowth: 0, netGrowth: 0, transactionGrowth: 0 };
+    }
+
+    const now = new Date();
+    const halfwayPoint = new Date(dateRange.startDate);
+    const endDate = new Date(dateRange.endDate);
+    const totalDays = Math.ceil((endDate.getTime() - halfwayPoint.getTime()) / (1000 * 60 * 60 * 24));
+    halfwayPoint.setDate(halfwayPoint.getDate() + Math.floor(totalDays / 2));
+
+    const firstHalf = earningsData.filter((item: any) => {
+      const date = new Date(item.recordDate || item.createdAt);
+      return date < halfwayPoint;
+    });
+    const secondHalf = earningsData.filter((item: any) => {
+      const date = new Date(item.recordDate || item.createdAt);
+      return date >= halfwayPoint;
+    });
+
+    const firstHalfGross = firstHalf.reduce((sum: number, item: any) => sum + parseFloat(item.grossAmount || '0'), 0);
+    const secondHalfGross = secondHalf.reduce((sum: number, item: any) => sum + parseFloat(item.grossAmount || '0'), 0);
+    const firstHalfCommission = firstHalf.reduce((sum: number, item: any) => sum + parseFloat(item.commissionAmount || '0'), 0);
+    const secondHalfCommission = secondHalf.reduce((sum: number, item: any) => sum + parseFloat(item.commissionAmount || '0'), 0);
+    const firstHalfNet = firstHalf.reduce((sum: number, item: any) => sum + parseFloat(item.netAmount || '0'), 0);
+    const secondHalfNet = secondHalf.reduce((sum: number, item: any) => sum + parseFloat(item.netAmount || '0'), 0);
+
+    const calcGrowth = (first: number, second: number) => {
+      if (first === 0) return second > 0 ? 100 : 0;
+      return Math.round(((second - first) / first) * 100 * 10) / 10;
+    };
+
+    return {
+      grossGrowth: calcGrowth(firstHalfGross, secondHalfGross),
+      commissionGrowth: calcGrowth(firstHalfCommission, secondHalfCommission),
+      netGrowth: calcGrowth(firstHalfNet, secondHalfNet),
+      transactionGrowth: calcGrowth(firstHalf.length, secondHalf.length)
+    };
+  };
+
+  const growth = calculateGrowth();
+
   // AI Sales Analysis Mutation
   const analyzeSalesMutation = useMutation({
     mutationFn: async (period: string) => {
@@ -296,8 +345,14 @@ export default function VendorEarnings() {
                     ₱{(earningsSummary as any).total_gross?.toFixed(2) || '0.00'}
                   </p>
                   <div className="flex items-center mt-2">
-                    <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm text-green-600 dark:text-green-400">+20.1% from last month</span>
+                    {growth.grossGrowth >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                    )}
+                    <span className={`text-sm ${growth.grossGrowth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {growth.grossGrowth >= 0 ? '+' : ''}{growth.grossGrowth}% this period
+                    </span>
                   </div>
                 </div>
                 <div className="bg-green-500/10 p-3 rounded-xl">
@@ -317,8 +372,14 @@ export default function VendorEarnings() {
                     ₱{(earningsSummary as any).total_commission?.toFixed(2) || '0.00'}
                   </p>
                   <div className="flex items-center mt-2">
-                    <TrendingUp className="h-4 w-4 text-red-500 mr-1" />
-                    <span className="text-sm text-red-600 dark:text-red-400">-4% from last month</span>
+                    {growth.commissionGrowth >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-red-500 mr-1" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-green-500 mr-1" />
+                    )}
+                    <span className={`text-sm ${growth.commissionGrowth >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                      {growth.commissionGrowth >= 0 ? '+' : ''}{growth.commissionGrowth}% this period
+                    </span>
                   </div>
                 </div>
                 <div className="bg-red-500/10 p-3 rounded-xl">
@@ -338,8 +399,14 @@ export default function VendorEarnings() {
                     ₱{(earningsSummary as any).total_net?.toFixed(2) || '0.00'}
                   </p>
                   <div className="flex items-center mt-2">
-                    <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm text-green-600 dark:text-green-400">+12% from last month</span>
+                    {growth.netGrowth >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                    )}
+                    <span className={`text-sm ${growth.netGrowth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {growth.netGrowth >= 0 ? '+' : ''}{growth.netGrowth}% this period
+                    </span>
                   </div>
                 </div>
                 <div className="bg-primary/10 p-3 rounded-xl">
@@ -359,8 +426,14 @@ export default function VendorEarnings() {
                     {(earningsSummary as any).total_transactions || 0}
                   </p>
                   <div className="flex items-center mt-2">
-                    <TrendingUp className="h-4 w-4 text-blue-500 mr-1" />
-                    <span className="text-sm text-blue-600 dark:text-blue-400">+8% from last month</span>
+                    {growth.transactionGrowth >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-blue-500 mr-1" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                    )}
+                    <span className={`text-sm ${growth.transactionGrowth >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {growth.transactionGrowth >= 0 ? '+' : ''}{growth.transactionGrowth}% this period
+                    </span>
                   </div>
                 </div>
                 <div className="bg-blue-500/10 p-3 rounded-xl">
@@ -380,23 +453,33 @@ export default function VendorEarnings() {
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">Weekly Payout</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Every Friday</p>
+                  <p className="font-medium text-gray-900 dark:text-white">Pending Payout</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Current balance</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-primary">₱2,450.00</p>
-                  <p className="text-xs text-gray-500">Next: Dec 29</p>
+                  <p className="font-semibold text-primary">
+                    ₱{((earningsSummary as any)?.total_net || 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {(() => {
+                      const nextFriday = new Date();
+                      nextFriday.setDate(nextFriday.getDate() + ((5 - nextFriday.getDay() + 7) % 7 || 7));
+                      return `Next: ${nextFriday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                    })()}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">Monthly Bonus</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">End of month</p>
+                  <p className="font-medium text-gray-900 dark:text-white">Total Transactions</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">This period</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-green-600">₱1,200.00</p>
-                  <p className="text-xs text-gray-500">Next: Dec 31</p>
+                  <p className="font-semibold text-green-600">
+                    {(earningsSummary as any)?.total_transactions || 0}
+                  </p>
+                  <p className="text-xs text-gray-500">orders</p>
                 </div>
               </div>
             </div>
@@ -405,22 +488,27 @@ export default function VendorEarnings() {
 
         <Card>
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Payouts</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Settlements</h3>
             <div className="space-y-3">
-              {[
-                { date: 'Dec 22, 2024', amount: 2450.00, status: 'Completed' },
-                { date: 'Dec 15, 2024', amount: 2180.50, status: 'Completed' },
-                { date: 'Dec 8, 2024', amount: 2650.00, status: 'Completed' },
-                { date: 'Dec 1, 2024', amount: 1200.00, status: 'Completed' }
-              ].map((payout, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{payout.date}</p>
-                    <p className="text-sm text-green-600">{payout.status}</p>
+              {settlements.length > 0 ? (
+                settlements.slice(0, 4).map((settlement: any, index: number) => (
+                  <div key={settlement.id || index} className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {new Date(settlement.settledAt || settlement.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                      <p className={`text-sm ${settlement.status === 'completed' ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {settlement.status === 'completed' ? 'Completed' : 'Pending'}
+                      </p>
+                    </div>
+                    <p className="font-semibold text-gray-900 dark:text-white">
+                      ₱{parseFloat(settlement.netAmount || settlement.amount || '0').toFixed(2)}
+                    </p>
                   </div>
-                  <p className="font-semibold text-gray-900 dark:text-white">₱{payout.amount.toFixed(2)}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-4">No settlements yet</p>
+              )}
             </div>
           </CardContent>
         </Card>

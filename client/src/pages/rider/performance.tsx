@@ -305,119 +305,34 @@ export default function RiderPerformance() {
     queryKey: ["/api/rider/performance"],
   });
 
-  // Mock data for development
-  const mockPerformance: PerformanceData = {
+  // Default data for when API returns empty or errors
+  const defaultPerformance: PerformanceData = {
     rating: {
-      overall: 4.8,
-      totalReviews: 156,
-      breakdown: {
-        5: 120,
-        4: 25,
-        3: 8,
-        2: 2,
-        1: 1
-      }
+      overall: 5.0,
+      totalReviews: 0,
+      breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
     },
     metrics: {
-      acceptanceRate: 92,
-      completionRate: 98,
-      onTimeRate: 95,
-      totalDeliveries: 485,
-      thisWeekDeliveries: 28,
-      thisMonthDeliveries: 98,
-      cancelledDeliveries: 3,
-      averageDeliveryTime: 25
+      acceptanceRate: 100,
+      completionRate: 100,
+      onTimeRate: 100,
+      totalDeliveries: 0,
+      thisWeekDeliveries: 0,
+      thisMonthDeliveries: 0,
+      cancelledDeliveries: 0,
+      averageDeliveryTime: 0
     },
-    recentReviews: [
-      {
-        id: '1',
-        customerName: 'Maria Santos',
-        rating: 5,
-        comment: 'Super bait ng rider! Mabilis at maingat sa paghatid ng pagkain.',
-        date: '2 hours ago',
-        orderId: 'BTS-12345'
-      },
-      {
-        id: '2',
-        customerName: 'Juan Dela Cruz',
-        rating: 5,
-        comment: 'On time delivery. Very professional.',
-        date: '5 hours ago',
-        orderId: 'BTS-12344'
-      },
-      {
-        id: '3',
-        customerName: 'Ana Reyes',
-        rating: 4,
-        comment: 'Good service overall.',
-        date: '1 day ago',
-        orderId: 'BTS-12340'
-      }
-    ],
-    badges: [
-      {
-        id: '1',
-        name: 'Speed Demon',
-        description: '100 on-time deliveries',
-        icon: 'zap',
-        earnedAt: '2024-01-15',
-        tier: 'gold'
-      },
-      {
-        id: '2',
-        name: 'Customer Favorite',
-        description: '50 five-star ratings',
-        icon: 'heart',
-        earnedAt: '2024-01-10',
-        tier: 'silver'
-      },
-      {
-        id: '3',
-        name: 'Reliable Rider',
-        description: '95%+ completion rate',
-        icon: 'shield',
-        earnedAt: '2024-01-05',
-        tier: 'bronze'
-      }
-    ],
-    achievements: [
-      {
-        id: '1',
-        name: 'Century Club',
-        description: 'Complete 100 deliveries',
-        icon: 'package',
-        progress: 485,
-        target: 500,
-        completed: false,
-        reward: '500 bonus'
-      },
-      {
-        id: '2',
-        name: 'Perfect Week',
-        description: '100% on-time for 7 days',
-        icon: 'clock',
-        progress: 5,
-        target: 7,
-        completed: false
-      },
-      {
-        id: '3',
-        name: 'Top Rated',
-        description: 'Maintain 4.8+ rating',
-        icon: 'star',
-        progress: 4.8,
-        target: 4.8,
-        completed: true
-      }
-    ],
+    recentReviews: [],
+    badges: [],
+    achievements: [],
     streak: {
-      currentDays: 12,
-      longestDays: 21,
-      lastActive: '2024-01-17'
+      currentDays: 0,
+      longestDays: 0,
+      lastActive: new Date().toISOString()
     }
   };
 
-  const performanceData = performance || mockPerformance;
+  const performanceData = performance || defaultPerformance;
 
   const getMetricColor = (value: number, thresholds: { good: number; warning: number }) => {
     if (value >= thresholds.good) return true;

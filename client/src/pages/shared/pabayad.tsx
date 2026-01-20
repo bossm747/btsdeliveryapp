@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreditCard, Zap, Droplets, Phone, Wifi, Home, FileText, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import CustomerHeader from "@/components/customer/customer-header";
+
+interface PublicConfig {
+  success: boolean;
+  config: {
+    serviceFees: {
+      pabayad: {
+        serviceFee: number;
+        currency: string;
+      };
+    };
+  };
+}
+
+// Default service fee as fallback
+const DEFAULT_SERVICE_FEE = 25;
 
 const billTypes = [
   { id: "electricity", name: "Kuryente (Meralco/BATELEC)", icon: Zap, color: "text-yellow-500" },
@@ -29,6 +46,15 @@ export default function Pabayad() {
   const [contactNumber, setContactNumber] = useState("");
   const [email, setEmail] = useState("");
 
+  // Fetch service fees from public config
+  const { data: configData } = useQuery<PublicConfig>({
+    queryKey: ["/api/config/public"],
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
+  // Extract service fee with fallback
+  const serviceFee = configData?.config?.serviceFees?.pabayad?.serviceFee ?? DEFAULT_SERVICE_FEE;
+
   const handleSubmitPayment = async () => {
     if (!selectedBillType || !accountNumber || !accountName || !amount || !contactNumber) {
       toast({
@@ -48,7 +74,7 @@ export default function Pabayad() {
         dueDate,
         contactNumber,
         email,
-        serviceFee: 25
+        serviceFee
       });
 
       toast({
@@ -76,18 +102,16 @@ export default function Pabayad() {
   const selectedBill = billTypes.find(b => b.id === selectedBillType);
 
   return (
-    <div className="container mx-auto px-4 py-8" data-testid="page-pabayad">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-green-700 mb-2" data-testid="text-title">
-            Pabayad Service
-          </h1>
-          <p className="text-gray-600" data-testid="text-subtitle">
-            Bayaran ang bills nang walang pila! Service fee: ₱25 only
-          </p>
-        </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="page-pabayad">
+      <CustomerHeader title="Pabayad Service" showBack backPath="/customer-dashboard" />
 
-        <div className="grid gap-6">
+      <div className="container mx-auto px-4 py-6">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-gray-600 text-center mb-6" data-testid="text-subtitle">
+            Bayaran ang bills nang walang pila! Service fee: ₱{serviceFee} only
+          </p>
+
+          <div className="grid gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Piliin ang Uri ng Bill</CardTitle>
@@ -214,13 +238,13 @@ export default function Pabayad() {
                   </div>
                   <div className="flex justify-between">
                     <span>Service Fee:</span>
-                    <span>₱25.00</span>
+                    <span>₱{serviceFee.toFixed(2)}</span>
                   </div>
                   <div className="border-t pt-2 font-bold">
                     <div className="flex justify-between">
                       <span>Total to Pay:</span>
                       <span className="text-green-700" data-testid="text-total">
-                        ₱{(parseFloat(amount) + 25).toFixed(2)}
+                        ₱{(parseFloat(amount) + serviceFee).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -242,42 +266,43 @@ export default function Pabayad() {
           )}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-orange-200">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-3xl mb-2">⏱️</div>
-                <h3 className="font-semibold">Same Day Payment</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Babayaran namin within the day
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-orange-200">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl mb-2">⏱️</div>
+                    <h3 className="font-semibold">Same Day Payment</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Babayaran namin within the day
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-green-200">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-3xl mb-2">📱</div>
-                <h3 className="font-semibold">SMS Updates</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Real-time updates sa payment status
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-green-200">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl mb-2">📱</div>
+                    <h3 className="font-semibold">SMS Updates</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Real-time updates sa payment status
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-yellow-200">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-3xl mb-2">📄</div>
-                <h3 className="font-semibold">Digital Receipt</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Padadalhan kayo ng proof of payment
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-yellow-200">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl mb-2">📄</div>
+                    <h3 className="font-semibold">Digital Receipt</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Padadalhan kayo ng proof of payment
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import FlashDealsSection from "@/components/customer/flash-deals-section";
 import TrendingSection from "@/components/customer/trending-section";
 import FeaturedCarousel from "@/components/customer/featured-carousel";
 import CustomerPageWrapper from "@/components/customer/customer-page-wrapper";
+import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { DashboardSkeleton } from "@/components/skeletons";
 
 interface CustomerProfile {
@@ -77,6 +78,11 @@ export default function CustomerDashboard() {
     });
   };
 
+  // Calculate active orders count (orders that are pending, preparing, or on the way)
+  const activeOrdersCount = recentOrders.filter(
+    (order) => !["delivered", "cancelled", "completed"].includes(order.status.toLowerCase())
+  ).length;
+
   // Mobile-first Header Component
   const MobileHeader = () => (
     <div className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
@@ -93,11 +99,17 @@ export default function CustomerDashboard() {
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Notifications */}
-          <Button variant="ghost" size="sm" className="p-2 relative">
-            <Bell className="w-5 h-5" />
-            <Badge className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-red-500">3</Badge>
-          </Button>
+          {/* Notifications - shows active orders count */}
+          <Link href="/customer-orders">
+            <Button variant="ghost" size="sm" className="p-2 relative">
+              <Bell className="w-5 h-5" />
+              {activeOrdersCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-red-500">
+                  {activeOrdersCount > 9 ? "9+" : activeOrdersCount}
+                </Badge>
+              )}
+            </Button>
+          </Link>
 
           {/* Menu Trigger */}
           <Sheet open={showMenu} onOpenChange={setShowMenu}>
@@ -373,20 +385,23 @@ export default function CustomerDashboard() {
   }
 
   return (
-    <CustomerPageWrapper
-      pageTitle="BTS Delivery Dashboard"
-      pageDescription="Your personal dashboard for ordering food, tracking deliveries, and managing your account"
-      refreshQueryKeys={[
-        "/api/customer/profile",
-        "/api/customer/orders/recent",
-        "/api/restaurants",
-        "/api/loyalty/points"
-      ]}
-    >
-      <div className="min-h-screen bg-gray-50" data-testid="customer-dashboard">
-        <MobileHeader />
-        <MainContent />
-      </div>
-    </CustomerPageWrapper>
+    <>
+      <CustomerPageWrapper
+        pageTitle="BTS Delivery Dashboard"
+        pageDescription="Your personal dashboard for ordering food, tracking deliveries, and managing your account"
+        refreshQueryKeys={[
+          "/api/customer/profile",
+          "/api/customer/orders/recent",
+          "/api/restaurants",
+          "/api/loyalty/points"
+        ]}
+      >
+        <div className="min-h-screen bg-gray-50 pb-20" data-testid="customer-dashboard">
+          <MobileHeader />
+          <MainContent />
+        </div>
+      </CustomerPageWrapper>
+      <MobileBottomNav />
+    </>
   );
 }

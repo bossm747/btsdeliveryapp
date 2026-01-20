@@ -10,6 +10,7 @@ import { MapPin, Star, Clock, Sparkles, TrendingUp, Heart, Utensils, Pizza, Coff
 import RestaurantCard from "@/components/restaurant-card";
 import RestaurantFilters from "@/components/restaurant-filters";
 import FeaturedCarousel from "@/components/customer/featured-carousel";
+import CustomerHeader from "@/components/customer/customer-header";
 import type { Restaurant } from "@shared/schema";
 
 // Quick category pills for filtering
@@ -171,9 +172,12 @@ export default function Restaurants() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-8 md:pb-8" data-testid="restaurants-page">
+    <div className="min-h-screen bg-background pb-20 md:pb-8" data-testid="restaurants-page">
+      {/* Customer Header */}
+      <CustomerHeader title="Restaurants" showBack backPath="/customer-dashboard" />
+
       {/* Sticky Category Pills */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+      <div className="sticky top-14 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {quickCategories.map((cat) => (

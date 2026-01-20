@@ -162,7 +162,9 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-blue-100 text-sm font-medium">Total Orders</p>
                 <p className="text-3xl font-bold">{(stats as any)?.totalOrders || 0}</p>
-                <p className="text-blue-100 text-sm">+18% from last week</p>
+                <p className="text-blue-100 text-sm">
+                  {(stats as any)?.weeklyGrowth >= 0 ? '+' : ''}{(stats as any)?.weeklyGrowth || 0}% from last week
+                </p>
               </div>
               <Package className="h-8 w-8 text-blue-200" />
             </div>
@@ -174,8 +176,10 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-100 text-sm font-medium">Completed Today</p>
-                <p className="text-3xl font-bold">127</p>
-                <p className="text-green-100 text-sm">+8% from yesterday</p>
+                <p className="text-3xl font-bold">{(stats as any)?.completedToday || 0}</p>
+                <p className="text-green-100 text-sm">
+                  {(stats as any)?.dailyGrowth >= 0 ? '+' : ''}{(stats as any)?.dailyGrowth || 0}% from yesterday
+                </p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-200" />
             </div>
@@ -187,8 +191,10 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-orange-100 text-sm font-medium">Pending Orders</p>
-                <p className="text-3xl font-bold">23</p>
-                <p className="text-orange-100 text-sm">Needs attention</p>
+                <p className="text-3xl font-bold">{(stats as any)?.pendingOrders || 0}</p>
+                <p className="text-orange-100 text-sm">
+                  {(stats as any)?.pendingOrders > 0 ? 'Needs attention' : 'All clear'}
+                </p>
               </div>
               <AlertCircle className="h-8 w-8 text-orange-200" />
             </div>
@@ -200,8 +206,8 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-purple-100 text-sm font-medium">Average Time</p>
-                <p className="text-3xl font-bold">24m</p>
-                <p className="text-purple-100 text-sm">-2m from average</p>
+                <p className="text-3xl font-bold">{(stats as any)?.averageDeliveryTime || 30}m</p>
+                <p className="text-purple-100 text-sm">Delivery time</p>
               </div>
               <TrendingUp className="h-8 w-8 text-purple-200" />
             </div>
@@ -285,7 +291,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending Applications</p>
-                <p className="text-2xl font-bold">5</p>
+                <p className="text-2xl font-bold">{(stats as any)?.pendingApplications || 0}</p>
               </div>
               <AlertCircle className="h-8 w-8 text-orange-600" />
             </div>
@@ -295,8 +301,10 @@ export default function AdminDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold">₱2.4M</p>
+                <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
+                <p className="text-2xl font-bold">
+                  ₱{((stats as any)?.revenueThisMonth || 0).toLocaleString()}
+                </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
             </div>
@@ -307,7 +315,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Avg Rating</p>
-                <p className="text-2xl font-bold">4.7</p>
+                <p className="text-2xl font-bold">{(stats as any)?.avgRestaurantRating || '0'}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-purple-600" />
             </div>
@@ -395,7 +403,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending Verification</p>
-                <p className="text-2xl font-bold">8</p>
+                <p className="text-2xl font-bold">{(stats as any)?.pendingVerification || 0}</p>
               </div>
               <AlertCircle className="h-8 w-8 text-orange-600" />
             </div>
@@ -406,7 +414,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Avg Rating</p>
-                <p className="text-2xl font-bold">4.8</p>
+                <p className="text-2xl font-bold">{(stats as any)?.avgRiderRating || '0'}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-purple-600" />
             </div>
@@ -494,7 +502,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">New This Month</p>
-                <p className="text-2xl font-bold">245</p>
+                <p className="text-2xl font-bold">{(stats as any)?.newUsersThisMonth || 0}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-purple-600" />
             </div>
@@ -504,8 +512,10 @@ export default function AdminDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Retention Rate</p>
-                <p className="text-2xl font-bold">87%</p>
+                <p className="text-sm font-medium text-gray-600">User Growth</p>
+                <p className="text-2xl font-bold">
+                  {(stats as any)?.userGrowth >= 0 ? '+' : ''}{(stats as any)?.userGrowth || 0}%
+                </p>
               </div>
               <BarChart3 className="h-8 w-8 text-green-600" />
             </div>

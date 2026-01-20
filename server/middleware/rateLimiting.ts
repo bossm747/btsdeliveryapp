@@ -2,11 +2,10 @@ import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response, NextFunction } from 'express';
 
-// General API rate limiting - disabled in development
-const isDev = process.env.NODE_ENV === 'development';
+// Rate limiting disabled - set to very high limits
 export const generalRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDev ? 10000 : 100, // Much higher limit in development
+  max: 100000, // Effectively disabled
   message: {
     error: 'Too many requests from this IP',
     message: 'Please try again after 15 minutes',
@@ -25,10 +24,10 @@ export const generalRateLimit = rateLimit({
   }
 });
 
-// Authentication rate limiting (more restrictive)
+// Authentication rate limiting - disabled
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login attempts per windowMs
+  max: 100000, // Effectively disabled
   message: {
     error: 'Too many authentication attempts',
     message: 'Please try again after 15 minutes',
@@ -48,10 +47,10 @@ export const authRateLimit = rateLimit({
   }
 });
 
-// Password reset rate limiting
+// Password reset rate limiting - disabled
 export const passwordResetRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // Limit each IP to 3 password reset attempts per hour
+  max: 100000, // Effectively disabled
   message: {
     error: 'Too many password reset attempts',
     message: 'Please try again after 1 hour',
@@ -61,10 +60,10 @@ export const passwordResetRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Order creation rate limiting
+// Order creation rate limiting - disabled
 export const orderRateLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 5, // Limit each IP to 5 orders per minute
+  max: 100000, // Effectively disabled
   message: {
     error: 'Order creation rate limit exceeded',
     message: 'Please wait before creating another order',
@@ -74,10 +73,10 @@ export const orderRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Upload rate limiting
+// Upload rate limiting - disabled
 export const uploadRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 uploads per 15 minutes
+  max: 100000, // Effectively disabled
   message: {
     error: 'Upload rate limit exceeded',
     message: 'Too many file uploads. Please try again later.',
@@ -87,12 +86,12 @@ export const uploadRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Slow down middleware for progressive delays
+// Slow down middleware - disabled
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  delayAfter: 50, // Allow 50 requests per windowMs without delay
-  delayMs: () => 500, // Add 500ms delay per request after delayAfter
-  maxDelayMs: 20000, // Max delay of 20 seconds
+  delayAfter: 100000, // Effectively disabled
+  delayMs: () => 0, // No delay
+  maxDelayMs: 0, // No delay
 });
 
 // Account lockout tracking
@@ -107,33 +106,9 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes
 const ATTEMPT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
+// Account lockout middleware - disabled
 export const accountLockoutMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const identifier = req.body.email || req.ip;
-  const now = new Date();
-  
-  if (!identifier) {
-    return next();
-  }
-
-  const attempt = loginAttempts.get(identifier);
-  
-  // Check if account is currently locked
-  if (attempt?.lockoutUntil && now < attempt.lockoutUntil) {
-    const remainingTime = Math.ceil((attempt.lockoutUntil.getTime() - now.getTime()) / 60000);
-    return res.status(423).json({
-      error: 'Account temporarily locked',
-      message: `Account is locked due to too many failed attempts. Try again in ${remainingTime} minutes.`,
-      lockoutRemaining: remainingTime
-    });
-  }
-
-  // Reset attempts if window has passed
-  if (attempt && (now.getTime() - attempt.lastAttempt.getTime()) > ATTEMPT_WINDOW) {
-    loginAttempts.delete(identifier);
-  }
-
-  // Add middleware flag to track this attempt
-  req.accountLockoutIdentifier = identifier;
+  // Disabled - just pass through
   next();
 };
 

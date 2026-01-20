@@ -58,6 +58,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationPreferences, { NotificationPreferencesData } from "@/components/notification-preferences";
+import CustomerHeader from "@/components/customer/customer-header";
 import { useHapticSettings, isVibrationSupported, isMobileDevice } from "@/hooks/use-haptic";
 
 // Profile update schema
@@ -227,23 +228,12 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="profile-settings-page">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex items-center space-x-4 mb-8">
-          <Link href="/customer-dashboard">
-            <Button variant="ghost" data-testid="back-button">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-[#004225]" data-testid="page-title">
-              Profile Settings
-            </h1>
-            <p className="text-gray-600">Manage your account settings and preferences</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="profile-settings-page">
+      <CustomerHeader title="Profile Settings" showBack backPath="/customer-dashboard" />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Description */}
+        <p className="text-gray-600 mb-6">Manage your account settings and preferences</p>
 
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">

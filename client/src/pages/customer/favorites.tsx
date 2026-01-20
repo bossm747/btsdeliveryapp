@@ -32,6 +32,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
+import CustomerHeader from "@/components/customer/customer-header";
 
 interface Restaurant {
   id: string;
@@ -154,26 +155,15 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="favorites-page">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center space-x-4">
-            <Link href="/customer-dashboard">
-              <Button variant="ghost" data-testid="back-button">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-[#004225]" data-testid="page-title">
-                My Favorites
-              </h1>
-              <p className="text-gray-600">
-                {favorites.length} favorite restaurant{favorites.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="favorites-page">
+      <CustomerHeader title="My Favorites" showBack backPath="/customer-dashboard" />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Search & Count */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <p className="text-gray-600">
+            {favorites.length} favorite restaurant{favorites.length !== 1 ? "s" : ""}
+          </p>
 
           {/* Search */}
           {favorites.length > 0 && (

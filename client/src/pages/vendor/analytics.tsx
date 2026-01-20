@@ -230,17 +230,10 @@ export default function VendorAnalytics() {
     queryKey: ["/api/vendor/restaurant"],
   });
 
-  // Fetch analytics data
+  // Fetch analytics data from API
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
-    queryKey: ["/api/vendor/analytics", dateRange],
+    queryKey: [`/api/vendor/analytics?range=${dateRange}`],
     enabled: !!restaurant,
-    // Use mock data for now
-    queryFn: async () => {
-      // In production, this would fetch from the API
-      // const response = await fetch(`/api/vendor/analytics?range=${dateRange}`);
-      // return response.json();
-      return generateMockAnalytics();
-    },
   });
 
   // Fetch vendor's orders for additional metrics
@@ -317,8 +310,14 @@ export default function VendorAnalytics() {
                   ₱{totalRevenue.toLocaleString()}
                 </p>
                 <div className="flex items-center mt-2">
-                  <ArrowUpRight className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-sm text-green-600 dark:text-green-400">+15.3% vs last period</span>
+                  {analytics.orderVolume.growth >= 0 ? (
+                    <ArrowUpRight className="h-4 w-4 text-green-500 mr-1" />
+                  ) : (
+                    <ArrowDownRight className="h-4 w-4 text-red-500 mr-1" />
+                  )}
+                  <span className={`text-sm ${analytics.orderVolume.growth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {analytics.orderVolume.growth >= 0 ? '+' : ''}{analytics.orderVolume.growth}% vs last period
+                  </span>
                 </div>
               </div>
               <div className="bg-green-500/10 p-3 rounded-xl">
@@ -357,8 +356,10 @@ export default function VendorAnalytics() {
                   ₱{analytics.orderVolume.avgOrderValue.toFixed(2)}
                 </p>
                 <div className="flex items-center mt-2">
-                  <ArrowUpRight className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-sm text-green-600 dark:text-green-400">+8.2%</span>
+                  <Activity className="h-4 w-4 text-purple-500 mr-1" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    per order
+                  </span>
                 </div>
               </div>
               <div className="bg-purple-500/10 p-3 rounded-xl">
@@ -375,7 +376,9 @@ export default function VendorAnalytics() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Completion Rate</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {((analytics.orderVolume.completed / analytics.orderVolume.total) * 100).toFixed(1)}%
+                  {analytics.orderVolume.total > 0
+                    ? ((analytics.orderVolume.completed / analytics.orderVolume.total) * 100).toFixed(1)
+                    : '0.0'}%
                 </p>
                 <div className="flex items-center mt-2">
                   <Star className="h-4 w-4 text-yellow-500 fill-current mr-1" />
@@ -618,12 +621,16 @@ export default function VendorAnalytics() {
               <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg text-center">
                 <p className="text-sm text-green-700 dark:text-green-300 mb-1">New Customers</p>
                 <p className="text-3xl font-bold text-green-600">{analytics.customerDemographics.newCustomers}</p>
-                <p className="text-xs text-green-600 mt-1">+12% this month</p>
+                <p className="text-xs text-green-600 mt-1">this period</p>
               </div>
               <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg text-center">
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-1">Returning</p>
                 <p className="text-3xl font-bold text-blue-600">{analytics.customerDemographics.returningCustomers}</p>
-                <p className="text-xs text-blue-600 mt-1">66% retention</p>
+                <p className="text-xs text-blue-600 mt-1">
+                  {(analytics.customerDemographics.newCustomers + analytics.customerDemographics.returningCustomers) > 0
+                    ? Math.round((analytics.customerDemographics.returningCustomers / (analytics.customerDemographics.newCustomers + analytics.customerDemographics.returningCustomers)) * 100)
+                    : 0}% retention
+                </p>
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 import * as fs from "fs";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import OpenAI from "openai";
+import { LocalObjectStorageService } from "./services/local-object-storage";
 
 // ============================================================================
 // AI Provider Configuration - OpenRouter (primary) + Gemini (fallback)
@@ -136,8 +137,52 @@ export async function generateBusinessDescription(businessName: string, cuisineT
 // IMAGE GENERATION SERVICES
 // ============================================================================
 
+/**
+ * Generate menu item image using Gemini's image generation
+ * Saves the image locally and returns a URL path
+ */
 export async function generateMenuItemImage(itemName: string, description: string): Promise<string> {
-  // Try OpenRouter with image model
+  const prompt = `Generate a professional food photography image of ${itemName}. ${description}. High-quality, well-lit, appetizing presentation on a clean plate. Restaurant-quality plating. Filipino cuisine style.`;
+
+  // Try Gemini image generation first (native support)
+  if (gemini) {
+    try {
+      const response = await gemini.models.generateContent({
+        model: "gemini-2.0-flash-preview-image-generation",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
+        },
+      });
+
+      const candidates = response.candidates;
+      if (candidates && candidates.length > 0) {
+        const content = candidates[0].content;
+        if (content && content.parts) {
+          for (const part of content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              // Save the generated image locally
+              const imageBuffer = Buffer.from(part.inlineData.data, "base64");
+              const result = await LocalObjectStorageService.saveFile(
+                imageBuffer,
+                `${itemName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.jpg`,
+                "ai-generated"
+              );
+
+              if (result.success && result.url) {
+                console.log(`[AI] Generated menu item image: ${result.url}`);
+                return result.url;
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[AI] Error generating image via Gemini:', error.message);
+    }
+  }
+
+  // Try OpenRouter as fallback (for models that return image URLs)
   if (openRouter) {
     try {
       const response = await openRouter.chat.completions.create({
@@ -145,28 +190,76 @@ export async function generateMenuItemImage(itemName: string, description: strin
         messages: [
           {
             role: "user",
-            content: `Generate a professional food photography image of ${itemName}. ${description}. High-quality, well-lit, appetizing presentation on a clean plate. Restaurant-quality plating.`
+            content: prompt
           }
         ],
         max_tokens: 1000
       });
 
-      // Check if there's an image URL in the response
       const content = response.choices[0]?.message?.content;
       if (content && content.startsWith('http')) {
-        return content;
+        // Download and save the image locally
+        const result = await LocalObjectStorageService.saveImageFromUrl(content, "ai-generated");
+        if (result.success && result.url) {
+          console.log(`[AI] Saved OpenRouter image: ${result.url}`);
+          return result.url;
+        }
+        return content; // Return external URL as fallback
       }
     } catch (error: any) {
-      console.error('Error generating image via OpenRouter:', error.message);
+      console.error('[AI] Error generating image via OpenRouter:', error.message);
     }
   }
 
   // Return placeholder if image generation fails
-  return `https://placehold.co/400x400?text=${encodeURIComponent(itemName)}`;
+  return `https://placehold.co/400x400/ff6b35/ffffff?text=${encodeURIComponent(itemName)}`;
 }
 
+/**
+ * Generate promotional banner using AI
+ * Saves the image locally and returns a URL path
+ */
 export async function generatePromotionalBanner(businessName: string, promotion: string, colors: string[] = ["#ff6b35", "#ffffff"]): Promise<string> {
-  // Try OpenRouter with image model
+  const prompt = `Create a modern promotional banner for "${businessName}" restaurant. Promotion: "${promotion}". Colors: ${colors.join(' and ')}. Social media ready, horizontal layout, Filipino food delivery style.`;
+
+  // Try Gemini image generation first
+  if (gemini) {
+    try {
+      const response = await gemini.models.generateContent({
+        model: "gemini-2.0-flash-preview-image-generation",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
+        },
+      });
+
+      const candidates = response.candidates;
+      if (candidates && candidates.length > 0) {
+        const content = candidates[0].content;
+        if (content && content.parts) {
+          for (const part of content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              const imageBuffer = Buffer.from(part.inlineData.data, "base64");
+              const result = await LocalObjectStorageService.saveFile(
+                imageBuffer,
+                `banner-${businessName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.jpg`,
+                "ai-generated"
+              );
+
+              if (result.success && result.url) {
+                console.log(`[AI] Generated promotional banner: ${result.url}`);
+                return result.url;
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[AI] Error generating banner via Gemini:', error.message);
+    }
+  }
+
+  // Try OpenRouter as fallback
   if (openRouter) {
     try {
       const response = await openRouter.chat.completions.create({
@@ -174,7 +267,7 @@ export async function generatePromotionalBanner(businessName: string, promotion:
         messages: [
           {
             role: "user",
-            content: `Create a modern promotional banner for "${businessName}" restaurant. Promotion: "${promotion}". Colors: ${colors.join(' and ')}. Social media ready, horizontal layout.`
+            content: prompt
           }
         ],
         max_tokens: 1000
@@ -182,14 +275,18 @@ export async function generatePromotionalBanner(businessName: string, promotion:
 
       const content = response.choices[0]?.message?.content;
       if (content && content.startsWith('http')) {
+        const result = await LocalObjectStorageService.saveImageFromUrl(content, "ai-generated");
+        if (result.success && result.url) {
+          return result.url;
+        }
         return content;
       }
     } catch (error: any) {
-      console.error('Error generating banner via OpenRouter:', error.message);
+      console.error('[AI] Error generating banner via OpenRouter:', error.message);
     }
   }
 
-  return `https://placehold.co/1200x400?text=${encodeURIComponent(promotion)}`;
+  return `https://placehold.co/1200x400/ff6b35/ffffff?text=${encodeURIComponent(promotion)}`;
 }
 
 // ============================================================================

@@ -24,6 +24,7 @@ import type { Order, DeliveryType } from "@shared/schema";
 import { DELIVERY_TYPES } from "@shared/schema";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import OrderChat, { ChatButton } from "@/components/order-chat";
+import CustomerHeader from "@/components/customer/customer-header";
 
 // Countdown Timer Component
 function ModificationCountdown({
@@ -416,33 +417,27 @@ export default function OrderTracking() {
   const orderItems = order.items as any[];
 
   return (
-    <div className="min-h-screen bg-background py-8" data-testid="order-tracking-page">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <Button variant="ghost" data-testid="back-to-home">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground" data-testid="order-tracking-title">
-                Order Tracking
-              </h1>
-              <p className="text-muted-foreground">Track your order in real-time</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background pb-20" data-testid="order-tracking-page">
+      <CustomerHeader
+        title="Order Tracking"
+        showBack
+        backPath="/customer-orders"
+        rightContent={
           <Button
-            variant="outline"
+            variant="ghost"
+            size="sm"
             onClick={() => refetch()}
             data-testid="refresh-order-button"
+            className="text-gray-700"
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            <RefreshCw className="h-4 w-4" />
           </Button>
-        </div>
+        }
+      />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Subtitle */}
+        <p className="text-muted-foreground mb-6">Track your order in real-time</p>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Real-Time Delivery Tracking */}

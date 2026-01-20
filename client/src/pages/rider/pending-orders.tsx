@@ -446,22 +446,11 @@ export default function PendingOrders() {
     refetchInterval: 10000, // Poll every 10 seconds
   });
 
-  // Mock batch offers - In production, this would come from the API
-  const [batchOffers] = useState<BatchOffer[]>([
-    {
-      batchId: 'batch-001',
-      batchNumber: 'BATCH-ABC123',
-      orderCount: 2,
-      totalEarnings: 180,
-      totalDistance: 4.5,
-      estimatedTime: 25,
-      expiresAt: new Date(Date.now() + 120000).toISOString(),
-      orders: [
-        { id: 'order-1', orderNumber: 'ORD-1001', restaurantName: 'Lomi King' },
-        { id: 'order-2', orderNumber: 'ORD-1002', restaurantName: 'Bulalo Express' },
-      ],
-    },
-  ]);
+  // Fetch batch offers from API
+  const { data: batchOffers = [] } = useQuery<BatchOffer[]>({
+    queryKey: ["/api/rider/batch-offers"],
+    refetchInterval: 15000, // Poll every 15 seconds
+  });
 
   // Accept order mutation
   const acceptOrderMutation = useMutation({

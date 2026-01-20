@@ -1920,30 +1920,46 @@ export class EnhancedPricingService {
   
   /**
    * Basic pricing calculation for fallback scenarios
+   * Now uses configurable delivery settings from admin panel
    */
   private async calculateBasicPricing(params: any): Promise<any> {
-    // This implements the original basic pricing logic as fallback
+    // Import delivery settings service for configurable rates
+    const { deliverySettingsService } = await import("./delivery-settings");
+
+    // Get distance (default 5km if not provided)
+    const distanceKm = params.distance || 5;
+    const baseAmount = params.baseAmount;
+
+    // Calculate delivery fee using configurable settings
+    const deliveryResult = await deliverySettingsService.calculateDeliveryFee(distanceKm, baseAmount);
+
+    // Calculate service fee using configurable settings
+    const serviceFeeResult = await deliverySettingsService.calculateServiceFee(baseAmount, params.paymentMethod !== 'cash');
+
     const basicServiceFees = {
-      basePrice: params.baseAmount,
-      deliveryFee: 50,
-      serviceFee: params.baseAmount * 0.05,
-      processingFee: 10,
-      insuranceFee: 0,
+      basePrice: baseAmount,
+      deliveryFee: deliveryResult.deliveryFee,
+      serviceFee: serviceFeeResult.serviceFee,
+      processingFee: serviceFeeResult.processingFee,
+      smallOrderFee: deliveryResult.smallOrderFee,
+      insuranceFee: params.isInsured ? Math.round(baseAmount * 0.02) : 0,
       tip: params.tip || 0,
-      tax: (params.baseAmount * 0.05 + 10) * 0.12,
+      tax: Math.round((serviceFeeResult.serviceFee + serviceFeeResult.processingFee) * 0.12),
       totalFees: 0,
       finalAmount: 0
     };
-    
-    const subtotal = basicServiceFees.basePrice + basicServiceFees.deliveryFee + 
-                     basicServiceFees.serviceFee + basicServiceFees.processingFee + 
+
+    const subtotal = basicServiceFees.basePrice + basicServiceFees.deliveryFee +
+                     basicServiceFees.serviceFee + basicServiceFees.processingFee +
+                     basicServiceFees.smallOrderFee + basicServiceFees.insuranceFee +
                      basicServiceFees.tip;
     const total = subtotal + basicServiceFees.tax;
-    
-    basicServiceFees.totalFees = basicServiceFees.deliveryFee + basicServiceFees.serviceFee + 
-                                 basicServiceFees.processingFee + basicServiceFees.tax;
+
+    basicServiceFees.totalFees = basicServiceFees.deliveryFee + basicServiceFees.serviceFee +
+                                 basicServiceFees.processingFee + basicServiceFees.smallOrderFee +
+                                 basicServiceFees.tax;
     basicServiceFees.finalAmount = total;
-    
+
     return {
       orderType: params.orderType,
       baseAmount: params.baseAmount,
@@ -1959,6 +1975,7 @@ export class EnhancedPricingService {
         deliveryFee: basicServiceFees.deliveryFee,
         serviceFee: basicServiceFees.serviceFee,
         processingFee: basicServiceFees.processingFee,
+        smallOrderFee: basicServiceFees.smallOrderFee,
         insuranceFee: basicServiceFees.insuranceFee,
         tip: basicServiceFees.tip,
         subtotalBeforeTax: subtotal,
@@ -1967,6 +1984,9 @@ export class EnhancedPricingService {
         totalDiscounts: 0,
         finalTotal: total
       },
+      zone: deliveryResult.zone,
+      estimatedMinutes: deliveryResult.estimatedMinutes,
+      isFreeDelivery: deliveryResult.isFreeDelivery,
       finalTotal: total
     };
   }

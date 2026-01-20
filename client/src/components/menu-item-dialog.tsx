@@ -188,6 +188,7 @@ export default function MenuItemDialog({ item, isOpen, onClose, restaurantId }: 
       name: item.name,
       price: calculateItemPrice(),
       quantity,
+      image: item.imageUrl || undefined,
       restaurantId,
       specialInstructions: specialInstructions || undefined,
       modifiers: modifierDetails.length > 0 ? modifierDetails.join("; ") : undefined
