@@ -40,7 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
-import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper, CustomerHeader, LoyaltyPageSkeleton } from "@/components/customer";
 
 // Types for loyalty data
 interface LoyaltyAccount {
@@ -228,41 +228,59 @@ export default function LoyaltyPage() {
 
   if (accountLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="loyalty-loading">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <Skeleton className="h-48 w-full rounded-xl mb-6" />
-          <div className="grid md:grid-cols-3 gap-4 mb-6">
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-          </div>
-          <Skeleton className="h-64 w-full rounded-xl" />
+      <CustomerPageWrapper
+        pageTitle="Loyalty Rewards"
+        pageDescription="Loading your loyalty account information"
+      >
+        <div className="min-h-screen bg-background pb-20">
+          <CustomerHeader
+            title="Loyalty Rewards"
+            showBack
+            backPath="/customer-dashboard"
+            variant="green"
+          />
+          <LoyaltyPageSkeleton />
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   if (accountError || !account) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="loyalty-error">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Gift className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h2 className="text-xl font-semibold mb-2">Unable to load loyalty account</h2>
-              <p className="text-gray-600 mb-4">
-                There was an error loading your loyalty information. Please try again.
-              </p>
-              <Button onClick={() => window.location.reload()}>Try Again</Button>
-            </CardContent>
-          </Card>
+      <CustomerPageWrapper
+        pageTitle="Loyalty Rewards"
+        pageDescription="Error loading loyalty information"
+      >
+        <div className="min-h-screen bg-background py-8" data-testid="loyalty-error">
+          <CustomerHeader
+            title="Loyalty Rewards"
+            showBack
+            backPath="/customer-dashboard"
+            variant="green"
+          />
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Gift className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <h2 className="text-xl font-semibold mb-2">Unable to load loyalty account</h2>
+                <p className="text-gray-600 mb-4">
+                  There was an error loading your loyalty information. Please try again.
+                </p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   return (
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/loyalty/account", "/api/loyalty/tiers", "/api/loyalty/history", "/api/loyalty/expiring-soon"]}
+      pageTitle="Loyalty Rewards"
+      pageDescription="Earn points, unlock rewards, and enjoy exclusive benefits"
+    >
     <div className="min-h-screen bg-background pb-20" data-testid="loyalty-page">
       <CustomerHeader
         title="Loyalty Rewards"
@@ -705,5 +723,6 @@ export default function LoyaltyPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </CustomerPageWrapper>
   );
 }

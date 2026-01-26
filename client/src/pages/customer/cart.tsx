@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet, Loader2 } from "lucide-react";
+import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet, Loader2, Heart } from "lucide-react";
 import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
 import { EmptyState } from "@/components/customer/empty-state";
 import { CartItemsSkeleton, CartSummarySkeleton } from "@/components/skeletons";
@@ -38,6 +38,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { DeliveryAddress } from "@/lib/types";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import CustomerHeader from "@/components/customer/customer-header";
+import { TipSelector, PromoCodeInput } from "@/components/checkout";
 
 // Types for optimistic update context
 interface OptimisticUpdateContext {
@@ -147,6 +148,7 @@ export default function Cart() {
   const [pricingCalculation, setPricingCalculation] = useState<any>(null);
   const [isCalculatingPricing, setIsCalculatingPricing] = useState(false);
   const [appliedPromoCode, setAppliedPromoCode] = useState<string>('');
+  const [promoDiscount, setPromoDiscount] = useState(0);
   const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
   const [tipAmount, setTipAmount] = useState(0);
   const [isInsured, setIsInsured] = useState(false);
@@ -651,6 +653,9 @@ export default function Cart() {
       subtotal,
       deliveryFee,
       serviceFee,
+      tip: tipAmount,
+      promoCode: appliedPromoCode || undefined,
+      promoDiscount: promoDiscount,
       totalAmount: total,
       paymentMethod: data.paymentProvider,
       paymentProvider: data.paymentProvider,
@@ -698,7 +703,7 @@ export default function Cart() {
   }
 
   const subtotal = getTotalPrice();
-  const total = subtotal + deliveryFee + serviceFee;
+  const total = subtotal + deliveryFee + serviceFee + tipAmount - promoDiscount;
 
   return (
     <CustomerPageWrapper
@@ -1098,6 +1103,27 @@ export default function Cart() {
           {/* Order Summary & Payment */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-6">
+              {/* Tip Your Rider */}
+              <TipSelector
+                subtotal={subtotal}
+                value={tipAmount}
+                onChange={setTipAmount}
+              />
+
+              {/* Promo Code */}
+              <PromoCodeInput
+                subtotal={subtotal}
+                appliedCode={appliedPromoCode}
+                onApply={(code, discount) => {
+                  setAppliedPromoCode(code);
+                  setPromoDiscount(discount);
+                }}
+                onRemove={() => {
+                  setAppliedPromoCode('');
+                  setPromoDiscount(0);
+                }}
+              />
+
               {/* Loyalty Points Section */}
               {user && (
                 <Card data-testid="loyalty-points-section" className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
@@ -1206,6 +1232,34 @@ export default function Cart() {
                     deliveryFee={deliveryFee}
                     serviceFee={serviceFee}
                   />
+
+                  {/* Tip Amount */}
+                  {tipAmount > 0 && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="flex items-center gap-1 text-pink-600">
+                          <Heart className="h-3 w-3" />
+                          Rider Tip:
+                        </span>
+                        <span className="text-pink-600" data-testid="summary-tip">+₱{tipAmount.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Promo Discount */}
+                  {promoDiscount > 0 && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span className="flex items-center gap-1">
+                          <Percent className="h-3 w-3" />
+                          Promo Discount:
+                        </span>
+                        <span data-testid="summary-promo-discount">-₱{promoDiscount.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
 
                   {/* Loyalty Points Discount (applied on top of tax calculations) */}
                   {loyaltyPointsToUse > 0 && (

@@ -26,7 +26,8 @@ function runTest(testName: string, testFn: () => void) {
     console.log('✅ PASSED');
     testsPassed++;
   } catch (error) {
-    console.log(`❌ FAILED: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(`❌ FAILED: ${message}`);
     testsFailed++;
   }
 }
@@ -194,10 +195,11 @@ runTest('Error handling and security', () => {
   } catch (error) {
     // Accept various valid error messages for decryption failures
     const validErrors = ['decrypt', 'invalid', 'bad', 'wrong', 'unable', 'error', 'failed'];
-    const hasValidError = validErrors.some(err => error.message.toLowerCase().includes(err));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const hasValidError = validErrors.some(err => errorMessage.toLowerCase().includes(err));
     if (!hasValidError) {
-      console.log('   Actual error:', error.message);
-      throw new Error(`Unexpected error message: ${error.message}`);
+      console.log('   Actual error:', errorMessage);
+      throw new Error(`Unexpected error message: ${errorMessage}`);
     }
   }
   
@@ -209,7 +211,8 @@ runTest('Error handling and security', () => {
     SecurityUtils.encryptData('test');
     throw new Error('Should have thrown error for missing encryption key');
   } catch (error) {
-    if (!error.message.includes('key not configured')) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('key not configured')) {
       throw new Error('Incorrect error for missing key');
     }
   }

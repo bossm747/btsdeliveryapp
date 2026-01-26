@@ -9,6 +9,7 @@ import { CreditCard, Zap, Droplets, Phone, Wifi, Home, FileText, DollarSign } fr
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
 
 interface PublicConfig {
   success: boolean;
@@ -102,8 +103,13 @@ export default function Pabayad() {
   const selectedBill = billTypes.find(b => b.id === selectedBillType);
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="page-pabayad">
-      <CustomerHeader title="Pabayad Service" showBack backPath="/customer-dashboard" />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/config/public"]}
+      pageTitle="Pabayad Service"
+      pageDescription="Pay your bills without the hassle of queuing"
+    >
+      <div className="min-h-screen bg-background pb-20" data-testid="page-pabayad">
+        <CustomerHeader title="Pabayad Service" showBack backPath="/customer-dashboard" />
 
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
@@ -264,47 +270,48 @@ export default function Pabayad() {
               Bayaran ang Bill
             </Button>
           )}
-        </div>
+          </div>
 
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-orange-200">
-                <CardContent className="pt-6">
-                  <div className="text-center">
-                    <div className="text-3xl mb-2">⏱️</div>
-                    <h3 className="font-semibold">Same Day Payment</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Babayaran namin within the day
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-orange-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-3xl mb-2">⏱️</div>
+                  <h3 className="font-semibold">Same Day Payment</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Babayaran namin within the day
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="border-green-200">
-                <CardContent className="pt-6">
-                  <div className="text-center">
-                    <div className="text-3xl mb-2">📱</div>
-                    <h3 className="font-semibold">SMS Updates</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Real-time updates sa payment status
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="border-green-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-3xl mb-2">📱</div>
+                  <h3 className="font-semibold">SMS Updates</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Real-time updates sa payment status
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="border-yellow-200">
-                <CardContent className="pt-6">
-                  <div className="text-center">
-                    <div className="text-3xl mb-2">📄</div>
-                    <h3 className="font-semibold">Digital Receipt</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Padadalhan kayo ng proof of payment
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <Card className="border-yellow-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-3xl mb-2">📄</div>
+                  <h3 className="font-semibold">Digital Receipt</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Padadalhan kayo ng proof of payment
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
+      </div>
+    </CustomerPageWrapper>
   );
 }

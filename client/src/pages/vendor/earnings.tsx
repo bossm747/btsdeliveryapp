@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { VendorPageWrapper, NoEarningsEmptyState, VendorEarningsSkeleton, VendorStatsSkeleton, VendorChartSkeleton } from "@/components/vendor";
+import { useVendorToast } from "@/hooks/use-vendor-toast";
 import {
   DollarSign,
   TrendingUp,
@@ -45,7 +45,7 @@ import type { Restaurant, VendorEarnings } from "@shared/schema";
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function VendorEarnings() {
-  const { toast } = useToast();
+  const vendorToast = useVendorToast();
   
   // State for date filters
   const [dateRange, setDateRange] = useState({
@@ -159,10 +159,10 @@ export default function VendorEarnings() {
     },
     onSuccess: (data: any) => {
       setAiInsights(data);
-      toast({ title: 'AI Analysis Complete', description: 'Sales insights have been generated!' });
+      vendorToast.aiContentGenerated();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to generate AI insights', variant: 'destructive' });
+      vendorToast.aiError();
     }
   });
 
@@ -193,20 +193,35 @@ export default function VendorEarnings() {
 
   if (earningsLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
+      <VendorPageWrapper 
+        refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/earnings/summary", "/api/vendor/earnings", "/api/vendor/settlements"]}
+        pageTitle="Earnings Dashboard"
+        pageDescription="View your restaurant earnings, payouts, and revenue trends"
+      >
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="flex gap-3">
+              <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+              <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            </div>
+          </div>
+          <VendorStatsSkeleton count={4} />
+          <div className="grid md:grid-cols-2 gap-6">
+            <VendorChartSkeleton height={300} />
+            <VendorChartSkeleton height={300} />
+          </div>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
-        <Skeleton className="h-64" />
-      </div>
+      </VendorPageWrapper>
     );
   }
 
   return (
+    <VendorPageWrapper 
+      refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/earnings/summary", "/api/vendor/earnings", "/api/vendor/settlements"]}
+      pageTitle="Earnings Dashboard"
+      pageDescription="View your restaurant earnings, payouts, and revenue trends"
+    >
     <div className="space-y-6" data-testid="vendor-earnings-page">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Earnings Dashboard</h1>
@@ -750,5 +765,6 @@ export default function VendorEarnings() {
         </CardContent>
       </Card>
     </div>
+    </VendorPageWrapper>
   );
 }

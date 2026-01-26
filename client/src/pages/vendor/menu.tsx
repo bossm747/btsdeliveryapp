@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VendorPageWrapper, NoMenuItemsEmptyState, NoMenuCategoriesEmptyState, VendorMenuItemSkeleton, VendorCategorySkeleton } from "@/components/vendor";
 import { 
   Package, 
   Plus,
@@ -23,13 +24,13 @@ import {
   Sparkles,
   Loader2
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useVendorToast } from "@/hooks/use-vendor-toast";
 import { apiRequest } from "@/lib/queryClient";
 import FileUpload from "@/components/FileUpload";
 import type { Restaurant, MenuItem, MenuCategory, MenuModifier, ModifierOption, MenuItemModifier } from "@shared/schema";
 
 export default function VendorMenu() {
-  const { toast } = useToast();
+  const vendorToast = useVendorToast();
   const queryClient = useQueryClient();
   
   // Dialog states
@@ -112,17 +113,10 @@ export default function VendorMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
-      toast({
-        title: "Menu item updated",
-        description: "The menu item has been successfully updated.",
-      });
+      vendorToast.menuItemUpdated();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to update menu item",
-        description: error.message,
-        variant: "destructive",
-      });
+      vendorToast.error(error.message || "Failed to update menu item");
     },
   });
 
@@ -136,10 +130,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
       setNewMenuItem({ name: '', description: '', price: '', category_id: '', image_url: '' });
       setIsAddMenuItemOpen(false);
-      toast({ title: 'Success', description: 'Menu item created successfully' });
+      vendorToast.menuItemAdded();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create menu item', variant: 'destructive' });
+      vendorToast.error("Failed to create menu item");
     }
   });
 
@@ -153,10 +147,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
       setNewCategory({ name: '', description: '', restaurant_id: '' });
       setIsAddCategoryOpen(false);
-      toast({ title: 'Success', description: 'Category created successfully' });
+      vendorToast.categoryAdded();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create category', variant: 'destructive' });
+      vendorToast.error("Failed to create category");
     }
   });
 
@@ -170,10 +164,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/modifiers'] });
       setNewModifier({ name: '', type: 'single', is_required: false, min_selections: 0, max_selections: 1 });
       setIsAddModifierOpen(false);
-      toast({ title: 'Success', description: 'Modifier created successfully' });
+      vendorToast.success("Modifier created successfully");
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create modifier', variant: 'destructive' });
+      vendorToast.error("Failed to create modifier");
     }
   });
 
@@ -187,10 +181,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
       setEditingMenuItem(null);
       setIsEditMenuItemOpen(false);
-      toast({ title: 'Success', description: 'Menu item updated successfully' });
+      vendorToast.menuItemUpdated();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update menu item', variant: 'destructive' });
+      vendorToast.error("Failed to update menu item");
     }
   });
 
@@ -203,10 +197,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
       setEditingCategory(null);
       setIsEditCategoryOpen(false);
-      toast({ title: 'Success', description: 'Category updated successfully' });
+      vendorToast.categoryUpdated();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update category', variant: 'destructive' });
+      vendorToast.error("Failed to update category");
     }
   });
 
@@ -219,10 +213,10 @@ export default function VendorMenu() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/modifiers'] });
       setEditingModifier(null);
       setIsEditModifierOpen(false);
-      toast({ title: 'Success', description: 'Modifier updated successfully' });
+      vendorToast.success("Modifier updated successfully");
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update modifier', variant: 'destructive' });
+      vendorToast.error("Failed to update modifier");
     }
   });
 
@@ -238,10 +232,10 @@ export default function VendorMenu() {
       } else {
         setNewMenuItem(prev => ({ ...prev, description: data.description }));
       }
-      toast({ title: 'Success', description: 'AI description generated successfully!' });
+      vendorToast.aiContentGenerated();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to generate description', variant: 'destructive' });
+      vendorToast.aiError();
     }
   });
 
@@ -252,10 +246,10 @@ export default function VendorMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurant?.id, "menu"] });
-      toast({ title: 'Success', description: 'Menu item deleted successfully' });
+      vendorToast.menuItemDeleted();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete menu item', variant: 'destructive' });
+      vendorToast.error("Failed to delete menu item");
     }
   });
 
@@ -265,10 +259,10 @@ export default function VendorMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/categories'] });
-      toast({ title: 'Success', description: 'Category deleted successfully' });
+      vendorToast.categoryDeleted();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete category', variant: 'destructive' });
+      vendorToast.error("Failed to delete category");
     }
   });
 
@@ -278,10 +272,10 @@ export default function VendorMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor/modifiers'] });
-      toast({ title: 'Success', description: 'Modifier deleted successfully' });
+      vendorToast.success("Modifier deleted successfully");
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete modifier', variant: 'destructive' });
+      vendorToast.error("Failed to delete modifier");
     }
   });
 
@@ -297,10 +291,10 @@ export default function VendorMenu() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/modifiers", selectedModifierForOptions?.id, "options"] });
       setNewModifierOption({ name: '', price: '0' });
-      toast({ title: 'Success', description: 'Modifier option created successfully' });
+      vendorToast.success("Modifier option created successfully");
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create modifier option', variant: 'destructive' });
+      vendorToast.error("Failed to create modifier option");
     }
   });
 
@@ -310,10 +304,10 @@ export default function VendorMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/modifiers", selectedModifierForOptions?.id, "options"] });
-      toast({ title: 'Success', description: 'Modifier option deleted successfully' });
+      vendorToast.success("Modifier option deleted successfully");
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete modifier option', variant: 'destructive' });
+      vendorToast.error("Failed to delete modifier option");
     }
   });
 
@@ -322,7 +316,7 @@ export default function VendorMenu() {
     if (itemName.trim() && category?.name) {
       generateDescriptionMutation.mutate({ itemName, category: category.name });
     } else {
-      toast({ title: 'Missing Info', description: 'Please enter item name and select category first', variant: 'destructive' });
+      vendorToast.error("Please enter item name and select category first");
     }
   };
 
@@ -364,24 +358,34 @@ export default function VendorMenu() {
 
   if (menuLoading || categoriesLoading || modifiersLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-32" />
+      <VendorPageWrapper 
+        refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/categories", "/api/vendor/modifiers"]}
+        pageTitle="Menu Management"
+        pageDescription="Manage your restaurant menu items, categories, and modifiers"
+      >
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-8 w-48" />
+            <div className="flex gap-2">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+            </div>
           </div>
+          <VendorCategorySkeleton count={2} />
+          <VendorMenuItemSkeleton count={6} />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-64" />)}
-        </div>
-      </div>
+      </VendorPageWrapper>
     );
   }
 
   return (
-    <div className="space-y-6" data-testid="vendor-menu-page">
+    <VendorPageWrapper 
+      refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/categories", "/api/vendor/modifiers"]}
+      pageTitle="Menu Management"
+      pageDescription="Manage your restaurant menu items, categories, and modifiers"
+    >
+      <div className="space-y-6" data-testid="vendor-menu-page">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Menu Management</h1>
         <div className="flex gap-2">
@@ -749,11 +753,7 @@ export default function VendorMenu() {
       {/* Menu Items */}
       <div className="space-y-4">
         {menuItems && menuItems.length === 0 ? (
-          <div className="text-center py-12">
-            <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Menu Items</h3>
-            <p className="text-gray-500 dark:text-gray-400">Create your first menu item to start selling</p>
-          </div>
+          <NoMenuItemsEmptyState onAddItem={() => setIsAddMenuItemOpen(true)} />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {menuItems?.map((item) => (
@@ -851,7 +851,8 @@ export default function VendorMenu() {
             ))}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </VendorPageWrapper>
   );
 }

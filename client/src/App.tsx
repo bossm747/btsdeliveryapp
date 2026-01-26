@@ -51,6 +51,8 @@ const VendorAnalytics = lazy(() => import("@/pages/vendor/analytics"));
 const VendorCommission = lazy(() => import("@/pages/vendor/commission"));
 const VendorBusinessSettings = lazy(() => import("@/pages/vendor/business-settings"));
 const AIAssistant = lazy(() => import("@/pages/vendor/ai-assistant"));
+const VendorOnboarding = lazy(() => import("@/pages/vendor/onboarding/index"));
+const VendorKYCStatus = lazy(() => import("@/pages/vendor/onboarding/kyc-status"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/admin-dashboard"));
@@ -68,14 +70,17 @@ const DeliverySettings = lazy(() => import("@/pages/admin/delivery-settings"));
 const PromoManagement = lazy(() => import("@/pages/admin/promo-management"));
 const FinancialDashboard = lazy(() => import("@/pages/admin/financial-dashboard"));
 const FraudDashboard = lazy(() => import("@/pages/admin/fraud-dashboard"));
+const AuditLogs = lazy(() => import("@/pages/admin/audit-logs"));
 const TaxManagement = lazy(() => import("@/pages/admin/tax-management"));
 const AdminRiders = lazy(() => import("@/pages/admin/admin-riders"));
+const PayoutManagement = lazy(() => import("@/pages/admin/payout-management"));
 const VendorTaxReports = lazy(() => import("@/pages/vendor/tax-reports"));
 
 // Layout components (loaded immediately as they're used often)
 import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { LanguageProvider } from "@/contexts/language-context";
 import AIChatWidget from "@/components/ai-chat-widget";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Loading fallback for lazy components
 function PageLoader() {
@@ -236,6 +241,18 @@ function Router() {
           <DashboardLayout>
             <CustomerWallet />
           </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Vendor Onboarding - public route for new vendor registration */}
+      <Route path="/vendor/onboarding">
+        <VendorOnboarding />
+      </Route>
+
+      {/* Vendor KYC Status - protected for vendors */}
+      <Route path="/vendor/onboarding/kyc-status">
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorKYCStatus />
         </ProtectedRoute>
       </Route>
 
@@ -498,6 +515,14 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/admin/audit-logs">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <AuditLogs />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/admin/tax">
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
@@ -519,6 +544,14 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <DashboardLayout>
             <FinancialDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/payouts">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <DashboardLayout>
+            <PayoutManagement />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
@@ -550,20 +583,24 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   return (
-    <div className="App">
-      {isLoading && <Preloader onLoadComplete={() => setIsLoading(false)} />}
-      {!isLoading && (
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <TooltipProvider>
-              <Router />
-              <AIChatWidget />
-              <Toaster />
-            </TooltipProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      )}
-    </div>
+    <ErrorBoundary>
+      <div className="App">
+        {isLoading && <Preloader onLoadComplete={() => setIsLoading(false)} />}
+        {!isLoading && (
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <TooltipProvider>
+                <ErrorBoundary>
+                  <Router />
+                </ErrorBoundary>
+                <AIChatWidget />
+                <Toaster />
+              </TooltipProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 

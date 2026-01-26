@@ -44,6 +44,7 @@ import {
   userOnboardingProgress,
   userDietaryPreferences,
   userNotificationPreferences,
+  userNotifications,
   type User, 
   type InsertUser,
   type Restaurant,
@@ -142,7 +143,10 @@ import {
   type PromoCode,
   type InsertPromoCode,
   type PromoUsage,
-  type InsertPromoUsage
+  type InsertPromoUsage,
+  // User Notifications
+  type UserNotification,
+  type InsertUserNotification
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -2520,12 +2524,12 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Calculate SLA percentages
-    const totalOrders = parseInt(data.total_tracked_orders) || 1; // Avoid division by zero
+    const totalOrders = parseInt(String(data.total_tracked_orders)) || 1; // Avoid division by zero
     return {
       ...data,
-      vendor_sla_percentage: (parseInt(data.vendor_sla_met) / totalOrders) * 100,
-      preparation_sla_percentage: (parseInt(data.preparation_sla_met) / totalOrders) * 100,
-      delivery_sla_percentage: (parseInt(data.delivery_sla_met) / totalOrders) * 100
+      vendor_sla_percentage: (parseInt(String(data.vendor_sla_met)) / totalOrders) * 100,
+      preparation_sla_percentage: (parseInt(String(data.preparation_sla_met)) / totalOrders) * 100,
+      delivery_sla_percentage: (parseInt(String(data.delivery_sla_met)) / totalOrders) * 100
     };
   }
 
@@ -2788,7 +2792,7 @@ export class DatabaseStorage implements IStorage {
       FROM orders 
       WHERE status IN ('pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'in_transit')
     `);
-    return parseInt(result.rows[0]?.count || '0');
+    return parseInt(String(result.rows[0]?.count ?? '0'));
   }
 
   async getOnlineRidersCount(): Promise<number> {
@@ -2797,7 +2801,7 @@ export class DatabaseStorage implements IStorage {
       FROM riders 
       WHERE is_online = true AND is_verified = true
     `);
-    return parseInt(result.rows[0]?.count || '0');
+    return parseInt(String(result.rows[0]?.count ?? '0'));
   }
 
   async getActiveRestaurantsCount(): Promise<number> {
@@ -2806,7 +2810,7 @@ export class DatabaseStorage implements IStorage {
       FROM restaurants 
       WHERE is_active = true AND is_accepting_orders = true
     `);
-    return parseInt(result.rows[0]?.count || '0');
+    return parseInt(String(result.rows[0]?.count ?? '0'));
   }
 
   async getTodayRevenue(): Promise<number> {
@@ -2816,7 +2820,7 @@ export class DatabaseStorage implements IStorage {
       WHERE status = 'delivered' 
         AND DATE(created_at) = CURRENT_DATE
     `);
-    return parseFloat(result.rows[0]?.revenue || '0');
+    return parseFloat(String(result.rows[0]?.revenue ?? '0'));
   }
 
   async getSystemHealthMetrics(): Promise<any> {
@@ -2887,10 +2891,10 @@ export class DatabaseStorage implements IStorage {
     
     return {
       orders: result.rows || [],
-      total: parseInt(countResult.rows[0]?.total || '0'),
+      total: parseInt(String(countResult.rows[0]?.total ?? '0')),
       page: params.page,
       limit: params.limit,
-      totalPages: Math.ceil(parseInt(countResult.rows[0]?.total || '0') / params.limit)
+      totalPages: Math.ceil(parseInt(String(countResult.rows[0]?.total ?? '0')) / params.limit)
     };
   }
 
@@ -2960,9 +2964,9 @@ export class DatabaseStorage implements IStorage {
     // This would typically use a library like xlsx or csv-parser
     // For now, return a simple CSV buffer
     const orders = await this.getOrders();
-    const csvContent = 'Order ID,Customer,Restaurant,Amount,Status,Date\n' +
+    const csvContent = 'Order ID,Customer ID,Restaurant ID,Amount,Status,Date\n' +
       orders.map(order => 
-        `${order.orderNumber || order.id},${order.customerName || 'N/A'},${order.restaurantName || 'N/A'},${order.totalAmount},${order.status},${order.createdAt}`
+        `${order.orderNumber || order.id},${order.customerId || 'N/A'},${order.restaurantId || 'N/A'},${order.totalAmount},${order.status},${order.createdAt}`
       ).join('\n');
     
     return Buffer.from(csvContent, 'utf-8');
@@ -3131,8 +3135,8 @@ export class DatabaseStorage implements IStorage {
   async updatePlatformConfig(key: string, value: any, metadata: any): Promise<SelectPlatformConfig> {
     const [result] = await db
       .update(platformConfig)
-      .set({ value: JSON.stringify(value), updatedAt: new Date() })
-      .where(eq(platformConfig.key, key))
+      .set({ configValue: value, updatedAt: new Date() })
+      .where(eq(platformConfig.configKey, key))
       .returning();
     return result;
   }
@@ -3183,7 +3187,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveSystemAlerts(): Promise<any> {
-    return await db.select().from(systemAlerts).where(eq(systemAlerts.isActive, true));
+    return await db.select().from(systemAlerts).where(eq(systemAlerts.status, "active"));
   }
 
   async getRealTimePerformanceMetrics(): Promise<any> {
@@ -3420,6 +3424,137 @@ export class DatabaseStorage implements IStorage {
   async createAdminAuditLog(log: InsertAdminAuditLog): Promise<SelectAdminAuditLog> {
     const [result] = await db.insert(adminAuditLogs).values(log).returning();
     return result;
+  }
+
+  // ============= USER NOTIFICATIONS =============
+  
+  async getUserNotifications(userId: string, options: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    unreadOnly?: boolean;
+    includeArchived?: boolean;
+  } = {}): Promise<UserNotification[]> {
+    const { limit = 20, offset = 0, category, unreadOnly = false, includeArchived = false } = options;
+    
+    let query = db.select()
+      .from(userNotifications)
+      .where(eq(userNotifications.userId, userId))
+      .orderBy(desc(userNotifications.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Build conditions
+    const conditions = [eq(userNotifications.userId, userId)];
+    
+    if (category) {
+      conditions.push(eq(userNotifications.category, category));
+    }
+    
+    if (unreadOnly) {
+      conditions.push(eq(userNotifications.isRead, false));
+    }
+    
+    if (!includeArchived) {
+      conditions.push(eq(userNotifications.isArchived, false));
+    }
+
+    const result = await db.select()
+      .from(userNotifications)
+      .where(and(...conditions))
+      .orderBy(desc(userNotifications.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return result;
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)::int` })
+      .from(userNotifications)
+      .where(and(
+        eq(userNotifications.userId, userId),
+        eq(userNotifications.isRead, false),
+        eq(userNotifications.isArchived, false)
+      ));
+    
+    return result[0]?.count || 0;
+  }
+
+  async createUserNotification(notification: InsertUserNotification): Promise<UserNotification> {
+    const [result] = await db.insert(userNotifications).values(notification).returning();
+    return result;
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<UserNotification | undefined> {
+    const [result] = await db.update(userNotifications)
+      .set({ 
+        isRead: true, 
+        readAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(userNotifications.id, notificationId),
+        eq(userNotifications.userId, userId)
+      ))
+      .returning();
+    
+    return result;
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(userNotifications)
+      .set({ 
+        isRead: true, 
+        readAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(userNotifications.userId, userId),
+        eq(userNotifications.isRead, false)
+      ));
+  }
+
+  async archiveNotification(notificationId: string, userId: string): Promise<UserNotification | undefined> {
+    const [result] = await db.update(userNotifications)
+      .set({ 
+        isArchived: true,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(userNotifications.id, notificationId),
+        eq(userNotifications.userId, userId)
+      ))
+      .returning();
+    
+    return result;
+  }
+
+  async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(userNotifications)
+      .where(and(
+        eq(userNotifications.id, notificationId),
+        eq(userNotifications.userId, userId)
+      ));
+    
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Helper to create notifications for order events (for user inbox)
+  async createOrderUpdateNotification(userId: string, orderId: string, title: string, message: string): Promise<UserNotification> {
+    return this.createUserNotification({
+      userId,
+      type: 'order_update',
+      title,
+      message,
+      icon: 'package',
+      referenceType: 'order',
+      referenceId: orderId,
+      actionUrl: `/order/${orderId}`,
+      actionLabel: 'View Order',
+      category: 'orders',
+      priority: 'normal'
+    });
   }
 }
 

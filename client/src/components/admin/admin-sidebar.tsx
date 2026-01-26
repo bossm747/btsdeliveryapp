@@ -19,7 +19,8 @@ import {
   Percent,
   Tag,
   Layers,
-  Settings
+  Settings,
+  Wallet
 } from "lucide-react";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
@@ -71,6 +72,15 @@ const navigationItems: NavItem[] = [
     icon: DollarSign,
     description: "Revenue, profit & financial insights",
     path: "/admin/financial"
+  },
+  {
+    id: "payouts",
+    label: "Payout Management",
+    icon: Wallet,
+    badge: 0,
+    badgeColor: "bg-green-500",
+    description: "Vendor settlements & payouts",
+    path: "/admin/payouts"
   },
   {
     id: "orders",
@@ -132,6 +142,13 @@ const navigationItems: NavItem[] = [
     badgeColor: "bg-red-500",
     description: "Fraud alerts & prevention",
     path: "/admin/fraud"
+  },
+  {
+    id: "audit",
+    label: "Audit Logs",
+    icon: FileText,
+    description: "System activity & security logs",
+    path: "/admin/audit-logs"
   },
   {
     id: "commission",

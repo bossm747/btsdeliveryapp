@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VendorPageWrapper, NoSettlementsEmptyState, VendorStatsSkeleton, VendorChartSkeleton, VendorTableSkeleton } from "@/components/vendor";
+import { useVendorToast } from "@/hooks/use-vendor-toast";
 import {
   DollarSign,
   Percent,
@@ -234,16 +235,29 @@ export default function VendorCommission() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
+      <VendorPageWrapper 
+        refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/settlements", "/api/vendor/earnings/full-summary"]}
+        pageTitle="Commission & Settlements"
+        pageDescription="View your commission structure and settlement history"
+      >
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="h-8 w-64 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+              <div className="h-4 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse mt-2" />
+            </div>
+            <div className="h-10 w-40 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+          </div>
+          <VendorStatsSkeleton count={4} />
+          <VendorChartSkeleton height={300} />
+          <div className="grid lg:grid-cols-3 gap-6">
+            <VendorChartSkeleton height={250} />
+            <div className="lg:col-span-2">
+              <VendorTableSkeleton rows={6} columns={6} />
+            </div>
+          </div>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
+      </VendorPageWrapper>
     );
   }
 
@@ -274,6 +288,11 @@ export default function VendorCommission() {
   };
 
   return (
+    <VendorPageWrapper 
+      refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/settlements", "/api/vendor/earnings/full-summary"]}
+      pageTitle="Commission & Settlements"
+      pageDescription="View your commission structure and settlement history"
+    >
     <div className="space-y-6" data-testid="vendor-commission-page">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -661,5 +680,6 @@ export default function VendorCommission() {
         </CardContent>
       </Card>
     </div>
+    </VendorPageWrapper>
   );
 }

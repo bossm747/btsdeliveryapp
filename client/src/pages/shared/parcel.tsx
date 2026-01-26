@@ -10,6 +10,7 @@ import { Package, MapPin, User, Phone, Ruler, Weight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
 
 interface PackageSize {
   id: string;
@@ -124,8 +125,13 @@ export default function Parcel() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="page-parcel">
-      <CustomerHeader title="Parcel Delivery" showBack backPath="/customer-dashboard" />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/config/public"]}
+      pageTitle="Parcel Delivery"
+      pageDescription="Send packages anywhere in Batangas Province"
+    >
+      <div className="min-h-screen bg-background pb-20" data-testid="page-parcel">
+        <CustomerHeader title="Parcel Delivery" showBack backPath="/customer-dashboard" />
 
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
@@ -340,7 +346,8 @@ export default function Parcel() {
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </CustomerPageWrapper>
   );
 }

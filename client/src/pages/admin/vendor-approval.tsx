@@ -409,14 +409,17 @@ export default function VendorApproval() {
                     </TableHeader>
                     <TableBody>
                       {isLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <div className="flex items-center justify-center">
-                              <div className="animate-spin w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full mr-2" />
-                              Loading applications...
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-32" /></TableCell>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-24" /></TableCell>
+                            <TableCell><div className="h-8 bg-gray-200 rounded animate-pulse w-40" /></TableCell>
+                            <TableCell><div className="h-6 bg-gray-200 rounded animate-pulse w-16" /></TableCell>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-28" /></TableCell>
+                            <TableCell><div className="h-6 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                            <TableCell><div className="h-8 bg-gray-200 rounded animate-pulse w-24" /></TableCell>
+                          </TableRow>
+                        ))
                       ) : isError ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-8">
@@ -431,9 +434,8 @@ export default function VendorApproval() {
                         </TableRow>
                       ) : filteredVendors.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                            <Store className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                            <p>No vendor applications found</p>
+                          <TableCell colSpan={7} className="p-0">
+                            <NoPendingApprovalEmptyState />
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -509,8 +511,9 @@ export default function VendorApproval() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </main>
+            </div>
+          </main>
+        </AdminPageWrapper>
       </div>
 
       {/* Vendor Details Dialog */}

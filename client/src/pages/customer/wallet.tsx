@@ -26,6 +26,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import btsLogo from "@assets/bts-logo-transparent.png";
 import MobileBottomNav from "@/components/mobile-bottom-nav";
+import { CustomerPageWrapper, EmptyState, WalletPageSkeleton } from "@/components/customer";
 
 // Quick top-up amount options
 const TOPUP_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -274,83 +275,92 @@ export default function WalletPage() {
   // Loading state
   if (walletLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
+      <CustomerPageWrapper
+        pageTitle="BTS Wallet"
+        pageDescription="Loading your wallet information"
+      >
+        <WalletPageSkeleton />
+      </CustomerPageWrapper>
     );
   }
 
   // No wallet state
   if (!walletData?.hasWallet) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-        <div className="max-w-2xl mx-auto">
-          <Card className="text-center">
-            <CardHeader>
-              <div className="mx-auto w-20 h-20 bg-gradient-to-br from-[#004225] to-green-600 rounded-full flex items-center justify-center mb-4">
-                <Wallet className="w-10 h-10 text-white" />
-              </div>
-              <CardTitle className="text-2xl">Create Your BTS Wallet</CardTitle>
-              <CardDescription className="text-lg">
-                Pay faster, earn cashback, and manage your funds all in one place
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                <div className="flex items-start space-x-3 p-4 bg-green-50 rounded-lg">
-                  <CreditCard className="w-6 h-6 text-green-600 mt-1" />
-                  <div>
-                    <h4 className="font-medium">Fast Checkout</h4>
-                    <p className="text-sm text-gray-600">Pay instantly without entering payment details</p>
+      <CustomerPageWrapper
+        pageTitle="BTS Wallet"
+        pageDescription="Create your wallet to manage payments"
+      >
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+          <div className="max-w-2xl mx-auto">
+            <Card className="text-center">
+              <CardHeader>
+                <div className="mx-auto w-20 h-20 bg-gradient-to-br from-[#004225] to-green-600 rounded-full flex items-center justify-center mb-4">
+                  <Wallet className="w-10 h-10 text-white" />
+                </div>
+                <CardTitle className="text-2xl">Create Your BTS Wallet</CardTitle>
+                <CardDescription className="text-lg">
+                  Pay faster, earn cashback, and manage your funds all in one place
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                  <div className="flex items-start space-x-3 p-4 bg-green-50 rounded-lg">
+                    <CreditCard className="w-6 h-6 text-green-600 mt-1" />
+                    <div>
+                      <h4 className="font-medium">Fast Checkout</h4>
+                      <p className="text-sm text-gray-600">Pay instantly without entering payment details</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-3 p-4 bg-purple-50 rounded-lg">
+                    <Gift className="w-6 h-6 text-purple-600 mt-1" />
+                    <div>
+                      <h4 className="font-medium">Earn Cashback</h4>
+                      <p className="text-sm text-gray-600">Get up to 5% cashback on every order</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg">
+                    <RefreshCw className="w-6 h-6 text-blue-600 mt-1" />
+                    <div>
+                      <h4 className="font-medium">Easy Refunds</h4>
+                      <p className="text-sm text-gray-600">Refunds credited instantly to your wallet</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-start space-x-3 p-4 bg-purple-50 rounded-lg">
-                  <Gift className="w-6 h-6 text-purple-600 mt-1" />
-                  <div>
-                    <h4 className="font-medium">Earn Cashback</h4>
-                    <p className="text-sm text-gray-600">Get up to 5% cashback on every order</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg">
-                  <RefreshCw className="w-6 h-6 text-blue-600 mt-1" />
-                  <div>
-                    <h4 className="font-medium">Easy Refunds</h4>
-                    <p className="text-sm text-gray-600">Refunds credited instantly to your wallet</p>
-                  </div>
-                </div>
-              </div>
 
-              <Button
-                onClick={() => createWalletMutation.mutate()}
-                disabled={createWalletMutation.isPending}
-                className="w-full md:w-auto bg-[#004225] hover:bg-[#003018] text-white px-8 py-6 text-lg"
-              >
-                {createWalletMutation.isPending ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="w-5 h-5 mr-2" />
-                    Create My Wallet
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                <Button
+                  onClick={() => createWalletMutation.mutate()}
+                  disabled={createWalletMutation.isPending}
+                  className="w-full md:w-auto bg-[#004225] hover:bg-[#003018] text-white px-8 py-6 text-lg"
+                >
+                  {createWalletMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5 mr-2" />
+                      Create My Wallet
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   const wallet = walletData.wallet!;
 
   return (
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/customer/wallet", "/api/customer/wallet/transactions", "/api/customer/wallet/summary"]}
+      pageTitle="BTS Wallet"
+      pageDescription="Manage your wallet, top-up, and view transactions"
+    >
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Mobile Navigation Header */}
       <div className="sticky top-0 z-50 bg-[#004225] border-b border-green-800">
@@ -810,5 +820,6 @@ export default function WalletPage() {
 
       <MobileBottomNav />
     </div>
+    </CustomerPageWrapper>
   );
 }

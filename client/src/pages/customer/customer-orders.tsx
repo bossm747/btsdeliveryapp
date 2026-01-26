@@ -10,22 +10,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
   Package, Clock, MapPin, Star, Filter, Search,
   ArrowLeft, Eye, Phone, MessageCircle, CheckCircle,
   Truck, Store, Navigation, Calendar, Receipt,
   AlertTriangle, RefreshCw, Bell, X, Heart,
   ChevronRight, CreditCard, MapPin as LocationPin,
-  Timer, User, Utensils, DollarSign
+  Timer, User, Utensils, DollarSign, MessageSquarePlus
 } from "lucide-react";
+import ReviewForm from "@/components/review-form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrderCardSkeleton } from "@/components/skeletons";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { OfflineIndicator, useOnlineStatus } from "@/components/OfflineIndicator";
 import { getOrders as getCachedOrders, saveOrders } from "@/lib/offline-storage";
-import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper, CustomerHeader, EmptyState, CustomerOrdersSkeleton } from "@/components/customer";
 
 interface Order {
   id: string;
@@ -318,62 +318,51 @@ export default function CustomerOrders() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="customer-orders-loading">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header skeleton */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center space-x-4">
-              <Skeleton className="h-10 w-32 rounded-md" />
-              <div>
-                <Skeleton className="h-9 w-32 mb-2" />
-                <Skeleton className="h-5 w-48" />
-              </div>
-            </div>
-          </div>
-
-          {/* Filters skeleton */}
-          <div className="mb-6 rounded-xl border bg-card p-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <Skeleton className="h-10 flex-1 rounded-md" />
-              <Skeleton className="h-10 w-[180px] rounded-md" />
-              <Skeleton className="h-10 w-[160px] rounded-md" />
-            </div>
-          </div>
-
-          {/* Tabs skeleton */}
-          <Skeleton className="h-10 w-80 mb-6 rounded-md" />
-
-          {/* Order cards skeleton */}
-          <div className="space-y-4">
-            <OrderCardSkeleton count={3} showProgress={true} />
-          </div>
+      <CustomerPageWrapper
+        pageTitle="My Orders"
+        pageDescription="Loading your order history"
+      >
+        <div className="min-h-screen bg-background pb-20">
+          <CustomerHeader title="My Orders" showBack backPath="/customer-dashboard" />
+          <CustomerOrdersSkeleton />
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="customer-orders-error">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h2 className="text-xl font-semibold mb-2">Unable to load orders</h2>
-              <p className="text-gray-600 mb-4">
-                There was an error loading your order history. Please try again.
-              </p>
-              <Button onClick={() => window.location.reload()}>
-                Try Again
-              </Button>
-            </CardContent>
-          </Card>
+      <CustomerPageWrapper
+        pageTitle="My Orders"
+        pageDescription="Error loading orders"
+      >
+        <div className="min-h-screen bg-background py-8" data-testid="customer-orders-error">
+          <CustomerHeader title="My Orders" showBack backPath="/customer-dashboard" />
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <h2 className="text-xl font-semibold mb-2">Unable to load orders</h2>
+                <p className="text-gray-600 mb-4">
+                  There was an error loading your order history. Please try again.
+                </p>
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   return (
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/customer/orders"]}
+      pageTitle="My Orders"
+      pageDescription="Track and manage your delivery orders"
+    >
     <div className="min-h-screen bg-background pb-20" data-testid="customer-orders-page">
       <CustomerHeader title="My Orders" showBack backPath="/customer-dashboard" />
 
@@ -454,22 +443,13 @@ export default function CustomerOrders() {
 
           <TabsContent value="active" className="space-y-4">
             {activeOrders.length === 0 ? (
-              <Card>
-                <CardContent className="p-6">
-                  <EmptyState
-                    icon={Package}
-                    title="No active orders"
-                    description="You don't have any active orders right now. Browse restaurants to place your first order."
-                    size="lg"
-                  >
-                    <Link href="/restaurants">
-                      <Button className="bg-[#FF6B35] hover:bg-[#FF6B35]/90 mt-4">
-                        Browse Restaurants
-                      </Button>
-                    </Link>
-                  </EmptyState>
-                </CardContent>
-              </Card>
+              <EmptyState
+                type="orders"
+                title="No active orders"
+                description="You don't have any active orders right now. Browse restaurants to place your first order."
+                actionLabel="Browse Restaurants"
+                actionLink="/restaurants"
+              />
             ) : (
               activeOrders.map((order) => (
                 <OrderCard 
@@ -485,16 +465,13 @@ export default function CustomerOrders() {
 
           <TabsContent value="past" className="space-y-4">
             {pastOrders.length === 0 ? (
-              <Card>
-                <CardContent className="p-6">
-                  <EmptyState
-                    icon={Receipt}
-                    title="No order history"
-                    description="Your completed orders will appear here once you've made some purchases."
-                    size="lg"
-                  />
-                </CardContent>
-              </Card>
+              <EmptyState
+                type="orders"
+                title="No order history"
+                description="Your completed orders will appear here once you've made some purchases."
+                actionLabel="Browse Restaurants"
+                actionLink="/restaurants"
+              />
             ) : (
               pastOrders.map((order) => (
                 <OrderCard 
@@ -510,6 +487,7 @@ export default function CustomerOrders() {
         </Tabs>
       </div>
     </div>
+    </CustomerPageWrapper>
   );
 }
 
@@ -522,9 +500,16 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Check if order has been reviewed
+  const { data: orderReview } = useQuery({
+    queryKey: ["/api/orders", order.id, "review"],
+    enabled: order.status === "delivered",
+  });
 
   // Get real-time updates for this order
   const realtimeData = realTimeUpdates[order.id];
@@ -776,6 +761,28 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
                 <Phone className="w-4 h-4 mr-2" />
                 Call Rider
               </Button>
+            )}
+
+            {/* Write Review Button for delivered orders */}
+            {order.status === "delivered" && !orderReview && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowReviewDialog(true)}
+                className="text-[#FF6B35] border-[#FF6B35]/30 hover:bg-[#FF6B35]/10"
+                data-testid="write-review-btn"
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-2" />
+                Write Review
+              </Button>
+            )}
+
+            {/* Show reviewed badge */}
+            {order.status === "delivered" && orderReview && (
+              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Reviewed
+              </Badge>
             )}
           </div>
         </CardContent>
@@ -1038,6 +1045,26 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Dialog */}
+      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
+          <ReviewForm
+            orderId={order.id}
+            restaurantName={order.restaurantName}
+            isDialog={true}
+            onSuccess={() => {
+              setShowReviewDialog(false);
+              queryClient.invalidateQueries({ queryKey: ["/api/orders", order.id, "review"] });
+              toast({
+                title: "Review Submitted",
+                description: "Salamat sa iyong feedback!",
+              });
+            }}
+            onCancel={() => setShowReviewDialog(false)}
+          />
         </DialogContent>
       </Dialog>
     </>

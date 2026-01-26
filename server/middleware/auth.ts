@@ -135,16 +135,22 @@ export const optionalAuthenticateToken = async (req: any, res: any, next: any) =
 };
 
 // Role-based access control middleware
-export const requireRole = (allowedRoles: string[]) => {
+export const requireRole = (allowedRoles: string | string[]) => {
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
   return (req: any, res: any, next: any) => {
     if (!req.user) {
-      return res.status(401).json({ message: "Authentication required" });
+      return res.status(401).json({ 
+        message: "Authentication required",
+        code: "AUTH_REQUIRED"
+      });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!roles.includes(req.user.role)) {
+      console.warn(`[RBAC] Access denied for user ${req.user.id} (${req.user.role}) to ${req.method} ${req.path}. Required: ${roles.join(', ')}`);
       return res.status(403).json({
-        message: "Insufficient permissions",
-        required: allowedRoles,
+        message: "Access denied. You don't have permission to access this resource.",
+        code: "INSUFFICIENT_PERMISSIONS",
+        required: roles,
         current: req.user.role
       });
     }
@@ -153,14 +159,68 @@ export const requireRole = (allowedRoles: string[]) => {
   };
 };
 
+// Convenience function for requiring any of multiple roles
+export const requireAnyRole = (allowedRoles: string[]) => requireRole(allowedRoles);
+
 // Admin-only middleware
-export const requireAdmin = requireRole(['admin']);
+export const requireAdmin = requireRole('admin');
+
+// Vendor-only middleware
+export const requireVendor = requireRole('vendor');
+
+// Rider-only middleware  
+export const requireRider = requireRole('rider');
+
+// Customer-only middleware
+export const requireCustomer = requireRole('customer');
 
 // Admin or vendor middleware
 export const requireAdminOrVendor = requireRole(['admin', 'vendor']);
 
 // Admin or rider middleware
 export const requireAdminOrRider = requireRole(['admin', 'rider']);
+
+// Admin or customer middleware
+export const requireAdminOrCustomer = requireRole(['admin', 'customer']);
+
+// Admin, vendor or rider middleware (for delivery-related operations)
+export const requireDeliveryAccess = requireRole(['admin', 'vendor', 'rider']);
+
+// Resource owner middleware - allows access if user owns the resource or is admin
+export const requireOwnerOrAdmin = (getOwnerId: (req: any) => string | Promise<string>) => {
+  return async (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        message: "Authentication required",
+        code: "AUTH_REQUIRED"
+      });
+    }
+
+    // Admin always has access
+    if (req.user.role === 'admin') {
+      return next();
+    }
+
+    try {
+      const ownerId = await getOwnerId(req);
+      if (req.user.id === ownerId) {
+        return next();
+      }
+
+      console.warn(`[RBAC] Owner check failed for user ${req.user.id} on ${req.method} ${req.path}. Owner: ${ownerId}`);
+      return res.status(403).json({
+        message: "Access denied. You can only access your own resources.",
+        code: "NOT_RESOURCE_OWNER"
+      });
+    } catch (error) {
+      console.error('[RBAC] Error checking resource ownership:', error);
+      return res.status(500).json({
+        message: "Error verifying access permissions",
+        code: "PERMISSION_CHECK_ERROR"
+      });
+    }
+  };
+};
 
 // Audit logging middleware for admin actions
 export const auditLog = (action: string, resource: string) => {

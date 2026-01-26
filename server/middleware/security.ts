@@ -2,10 +2,79 @@ import helmet from 'helmet';
 import cors from 'cors';
 import { Request, Response, NextFunction } from 'express';
 
+// Allowed origins for CORS (configure via environment)
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.ALLOWED_ORIGINS;
+  if (envOrigins) {
+    return envOrigins.split(',').map(o => o.trim());
+  }
+  
+  // Default allowed origins
+  if (process.env.NODE_ENV === 'production') {
+    return [
+      process.env.PUBLIC_APP_URL || 'https://bts.delivery',
+      'https://app.bts.delivery',
+      'https://admin.bts.delivery'
+    ].filter(Boolean);
+  }
+  
+  // Development - allow localhost
+  return [
+    'http://localhost:5173',
+    'http://localhost:5001',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5001'
+  ];
+};
+
 // Security headers configuration
 export const securityHeaders = helmet({
-  // Content Security Policy - disabled for now to debug blank page issue
-  contentSecurityPolicy: false,
+  // Content Security Policy - properly configured for production
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'", // Required for Vite in dev, should be removed with proper nonce in prod
+        "'unsafe-eval'", // Required for some React dev tools, remove in production
+        "https://maps.googleapis.com",
+        "https://www.googletagmanager.com"
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'", // Required for inline styles
+        "https://fonts.googleapis.com"
+      ],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https:",
+        "https://maps.googleapis.com",
+        "https://maps.gstatic.com"
+      ],
+      fontSrc: [
+        "'self'",
+        "https://fonts.gstatic.com"
+      ],
+      connectSrc: [
+        "'self'",
+        "https://maps.googleapis.com",
+        "https://nexuspay.cloud",
+        "wss:", // WebSocket connections
+        "ws:"  // WebSocket connections (dev)
+      ],
+      frameSrc: [
+        "'self'",
+        "https://nexuspay.cloud" // For payment iframes if needed
+      ],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"], // Prevent clickjacking
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : undefined
+    }
+  },
   
   // HTTP Strict Transport Security
   hsts: {
@@ -39,9 +108,30 @@ export const securityHeaders = helmet({
   // }
 });
 
-// CORS configuration - allow all origins for now during VPS setup
+// CORS configuration - properly restricted
 export const corsConfig = cors({
-  origin: true, // Allow all origins temporarily
+  origin: (origin, callback) => {
+    const allowedOrigins = getAllowedOrigins();
+    
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // In production, you may want to restrict this further
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In development, be more permissive
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // Log blocked CORS attempt
+    console.warn(`CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [

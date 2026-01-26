@@ -26,7 +26,8 @@ function runTest(testName: string, testFn: () => void | Promise<void>) {
       testsPassed++;
       resolve();
     } catch (error) {
-      console.log(`❌ FAILED: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`❌ FAILED: ${message}`);
       testsFailed++;
       resolve();
     }

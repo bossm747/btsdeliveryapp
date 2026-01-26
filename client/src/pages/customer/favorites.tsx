@@ -4,7 +4,6 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -32,7 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
-import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper, CustomerHeader, EmptyState, FavoritesPageSkeleton } from "@/components/customer";
 
 interface Restaurant {
   id: string;
@@ -122,39 +121,49 @@ export default function FavoritesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="favorites-loading">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Skeleton key={i} className="h-64 w-full rounded-xl" />
-            ))}
-          </div>
+      <CustomerPageWrapper
+        pageTitle="My Favorites"
+        pageDescription="Loading your favorite restaurants"
+      >
+        <div className="min-h-screen bg-background pb-20">
+          <CustomerHeader title="My Favorites" showBack backPath="/customer-dashboard" />
+          <FavoritesPageSkeleton />
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="favorites-error">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Heart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h2 className="text-xl font-semibold mb-2">Unable to load favorites</h2>
-              <p className="text-gray-600 mb-4">
-                There was an error loading your favorite restaurants. Please try again.
-              </p>
-              <Button onClick={() => window.location.reload()}>Try Again</Button>
-            </CardContent>
-          </Card>
+      <CustomerPageWrapper
+        pageTitle="My Favorites"
+        pageDescription="Error loading favorites"
+      >
+        <div className="min-h-screen bg-background py-8" data-testid="favorites-error">
+          <CustomerHeader title="My Favorites" showBack backPath="/customer-dashboard" />
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Heart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <h2 className="text-xl font-semibold mb-2">Unable to load favorites</h2>
+                <p className="text-gray-600 mb-4">
+                  There was an error loading your favorite restaurants. Please try again.
+                </p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   return (
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/customer/favorites"]}
+      pageTitle="My Favorites"
+      pageDescription="Your favorite restaurants for quick access"
+    >
     <div className="min-h-screen bg-background pb-20" data-testid="favorites-page">
       <CustomerHeader title="My Favorites" showBack backPath="/customer-dashboard" />
 
@@ -182,31 +191,21 @@ export default function FavoritesPage() {
 
         {/* Favorites Grid */}
         {favorites.length === 0 ? (
-          <Card data-testid="no-favorites">
-            <CardContent className="p-12 text-center">
-              <Heart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold mb-2">No favorite restaurants yet</h3>
-              <p className="text-gray-600 mb-4">
-                Start adding your favorite restaurants to quickly find them later
-              </p>
-              <Link href="/restaurants">
-                <Button className="bg-[#FF6B35] hover:bg-[#FF6B35]/90">
-                  <Store className="mr-2 h-4 w-4" />
-                  Browse Restaurants
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <EmptyState
+            type="favorites"
+            title="No favorite restaurants yet"
+            description="Start adding your favorite restaurants to quickly find them later"
+            actionLabel="Browse Restaurants"
+            actionLink="/restaurants"
+          />
         ) : filteredFavorites.length === 0 ? (
-          <Card data-testid="no-search-results">
-            <CardContent className="p-12 text-center">
-              <Search className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold mb-2">No results found</h3>
-              <p className="text-gray-600">
-                No favorite restaurants match "{searchQuery}"
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            type="search"
+            title="No results found"
+            description={`No favorite restaurants match "${searchQuery}"`}
+            actionLabel="Clear Search"
+            onAction={() => setSearchQuery("")}
+          />
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="favorites-grid">
             {filteredFavorites.map((favorite) => (
@@ -355,5 +354,6 @@ export default function FavoritesPage() {
         </AlertDialog>
       </div>
     </div>
+    </CustomerPageWrapper>
   );
 }

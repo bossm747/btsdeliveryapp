@@ -841,6 +841,42 @@ export const orderNotifications = pgTable("order_notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// User Notifications - Central notification inbox for all users
+export const userNotifications = pgTable("user_notifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  
+  // Notification Content
+  type: varchar("type", { length: 50 }).notNull(), // order_update, promotion, system_alert, loyalty, payment, delivery
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  icon: varchar("icon", { length: 50 }), // lucide icon name
+  
+  // Reference to related entity
+  referenceType: varchar("reference_type", { length: 50 }), // order, restaurant, promotion, reward
+  referenceId: uuid("reference_id"),
+  
+  // Action/Link
+  actionUrl: varchar("action_url", { length: 500 }), // Deep link to related content
+  actionLabel: varchar("action_label", { length: 100 }), // Button text like "View Order"
+  
+  // Status
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  isArchived: boolean("is_archived").default(false),
+  
+  // Priority and grouping
+  priority: varchar("priority", { length: 20 }).default("normal"), // low, normal, high, urgent
+  category: varchar("category", { length: 50 }).default("general"), // orders, promotions, system, loyalty
+  
+  // Metadata
+  metadata: jsonb("metadata"), // Additional context data
+  expiresAt: timestamp("expires_at"), // Auto-archive after this date
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Order Business Rules - Define automatic status transitions and business logic
 export const orderBusinessRules = pgTable("order_business_rules", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2562,6 +2598,7 @@ export const financialReports = pgTable("financial_reports", {
 });
 
 // Insert schemas for new notification tables
+export const insertUserNotificationSchema = createInsertSchema(userNotifications);
 export const insertUserPushSubscriptionSchema = createInsertSchema(userPushSubscriptions);
 export const insertNotificationAnalyticsSchema = createInsertSchema(notificationAnalytics);
 export const insertNotificationCampaignSchema = createInsertSchema(notificationCampaigns);
@@ -2587,6 +2624,8 @@ export const insertFinancialReportSchema = createInsertSchema(financialReports);
 export const insertDailyFinancialSnapshotSchema = createInsertSchema(dailyFinancialSnapshots);
 
 // Types for new notification tables
+export type UserNotification = typeof userNotifications.$inferSelect;
+export type InsertUserNotification = z.infer<typeof insertUserNotificationSchema>;
 export type UserPushSubscription = typeof userPushSubscriptions.$inferSelect;
 export type InsertUserPushSubscription = z.infer<typeof insertUserPushSubscriptionSchema>;
 export type NotificationAnalytics = typeof notificationAnalytics.$inferSelect;

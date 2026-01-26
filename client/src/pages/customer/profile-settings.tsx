@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -58,7 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationPreferences, { NotificationPreferencesData } from "@/components/notification-preferences";
-import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper, CustomerHeader, ProfileSettingsSkeleton } from "@/components/customer";
 import { useHapticSettings, isVibrationSupported, isMobileDevice } from "@/hooks/use-haptic";
 
 // Profile update schema
@@ -218,16 +217,24 @@ export default function ProfileSettingsPage() {
 
   if (profileLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="profile-loading">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <Skeleton className="h-96 w-full rounded-xl" />
+      <CustomerPageWrapper
+        pageTitle="Profile Settings"
+        pageDescription="Loading your profile settings"
+      >
+        <div className="min-h-screen bg-background pb-20">
+          <CustomerHeader title="Profile Settings" showBack backPath="/customer-dashboard" />
+          <ProfileSettingsSkeleton />
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   return (
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/customer/profile", "/api/customer/notification-preferences"]}
+      pageTitle="Profile Settings"
+      pageDescription="Manage your account settings and preferences"
+    >
     <div className="min-h-screen bg-background pb-20" data-testid="profile-settings-page">
       <CustomerHeader title="Profile Settings" showBack backPath="/customer-dashboard" />
 
@@ -740,5 +747,6 @@ export default function ProfileSettingsPage() {
         </AlertDialog>
       </div>
     </div>
+    </CustomerPageWrapper>
   );
 }

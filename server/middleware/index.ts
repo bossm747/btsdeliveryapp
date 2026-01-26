@@ -86,6 +86,27 @@ import {
   enhancedPaymentSecurity
 } from './paymentSecurity';
 
+import {
+  requireNexusPayWebhookSignature,
+  createWebhookVerifier,
+  webhookIdempotency
+} from './webhook-security';
+
+import {
+  globalRouteGuard,
+  routeAuditLogger,
+  addPublicRoute,
+  isPublicRoute
+} from './route-guard';
+
+import {
+  revokeToken,
+  revokeAllUserTokens,
+  isTokenRevoked,
+  checkTokenRevocation,
+  getBlacklistStats
+} from './token-revocation';
+
 // Re-export all middleware functions
 export {
   // Authentication and Authorization
@@ -153,7 +174,22 @@ export {
   encryptPaymentData,
   auditPaymentTransaction,
   gdprPaymentCompliance,
-  enhancedPaymentSecurity
+  enhancedPaymentSecurity,
+  // Webhook Security
+  requireNexusPayWebhookSignature,
+  createWebhookVerifier,
+  webhookIdempotency,
+  // Route Guard (Global Auth Enforcement)
+  globalRouteGuard,
+  routeAuditLogger,
+  addPublicRoute,
+  isPublicRoute,
+  // Token Revocation
+  revokeToken,
+  revokeAllUserTokens,
+  isTokenRevoked,
+  checkTokenRevocation,
+  getBlacklistStats
 };
 
 
@@ -250,7 +286,19 @@ export const securityMiddlewareConfig = {
     validateIP
   ],
   
-  // Webhook routes
+  // Webhook routes (NexusPay)
+  nexusPayWebhook: [
+    requestLogger,
+    securityHeaders,
+    corsConfig,
+    requestSizeLimit(1024 * 1024), // 1MB for webhooks
+    validateIP,
+    requireNexusPayWebhookSignature,
+    webhookIdempotency,
+    securityResponseHeaders
+  ],
+  
+  // Generic webhook routes (legacy)
   webhook: [
     requestLogger,
     securityHeaders,

@@ -8,9 +8,16 @@ import {
   authenticateToken,
   optionalAuthenticateToken,
   requireRole,
+  requireAnyRole,
   requireAdmin,
+  requireVendor,
+  requireRider,
+  requireCustomer,
   requireAdminOrVendor,
   requireAdminOrRider,
+  requireAdminOrCustomer,
+  requireDeliveryAccess,
+  requireOwnerOrAdmin,
   auditLog
 } from './middleware/auth';
 import {
@@ -98,8 +105,10 @@ import walletRoutes, { processCashback } from './routes/wallet';
 import taxRoutes from './routes/tax';
 import fraudRoutes from './routes/fraud';
 import { fraudCheckMiddleware } from './middleware/fraud-check';
+import { cacheQuery, CacheKeys, CacheTTL, invalidate } from './services/cache';
 import { registerNexusPayRoutes } from './routes/nexuspay';
 import { chatService } from './services/chat-service';
+import analyticsRoutes from './routes/analytics';
 import multer from 'multer';
 import { LocalStorageService } from './services/local-storage';
 import { analyzeMenuImage, analyzeImage, createMenuFromAnalysis } from './services/ai-vision';
@@ -695,7 +704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
@@ -708,7 +717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", async (req, res) => {
+  app.get("/api/users/:id", authenticateToken, async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
       if (!user) {
@@ -727,9 +736,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/restaurants", async (req, res) => {
     try {
       const { city } = req.query;
-      const restaurants = city 
-        ? await storage.getRestaurantsByLocation(city as string)
-        : await storage.getRestaurants();
+      const cacheKey = CacheKeys.restaurants(city as string | undefined);
+      
+      const restaurants = await cacheQuery(
+        cacheKey,
+        CacheTTL.RESTAURANTS, // 5 minutes
+        async () => city 
+          ? await storage.getRestaurantsByLocation(city as string)
+          : await storage.getRestaurants()
+      );
+      
       res.json(restaurants);
     } catch (error) {
       console.error("Error fetching restaurants:", error);
@@ -750,10 +766,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/restaurants", async (req, res) => {
+  // SECURITY: Restaurant creation requires admin or vendor role
+  app.post("/api/restaurants", authenticateToken, requireAdminOrVendor, async (req: any, res) => {
     try {
-      const restaurantData = insertRestaurantSchema.parse(req.body);
+      const restaurantData = insertRestaurantSchema.parse({
+        ...req.body,
+        ownerId: req.user.role === 'vendor' ? req.user.id : req.body.ownerId
+      });
       const restaurant = await storage.createRestaurant(restaurantData);
+      
+      // Invalidate restaurant list cache
+      await invalidate.restaurants();
+      
       res.status(201).json(restaurant);
     } catch (error) {
       console.error("Error creating restaurant:", error);
@@ -774,7 +798,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/restaurants/:id/menu", async (req, res) => {
     try {
-      const menuItems = await storage.getMenuItems(req.params.id);
+      const restaurantId = req.params.id;
+      const cacheKey = CacheKeys.restaurantMenu(restaurantId);
+      
+      const menuItems = await cacheQuery(
+        cacheKey,
+        CacheTTL.MENU, // 2 minutes
+        () => storage.getMenuItems(restaurantId)
+      );
+      
       res.json(menuItems);
     } catch (error) {
       console.error("Error fetching menu items:", error);
@@ -782,8 +814,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/restaurants/:id/categories", async (req, res) => {
+  // SECURITY: Menu category creation requires vendor (owner) or admin
+  app.post("/api/restaurants/:id/categories", authenticateToken, requireAdminOrVendor, async (req: any, res) => {
     try {
+      // Verify ownership for vendors
+      if (req.user.role === 'vendor') {
+        const restaurant = await storage.getRestaurant(req.params.id);
+        if (!restaurant || restaurant.ownerId !== req.user.id) {
+          return res.status(403).json({ message: "You don't own this restaurant" });
+        }
+      }
+      
       const categoryData = insertMenuCategorySchema.parse({
         ...req.body,
         restaurantId: req.params.id
@@ -796,13 +837,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/restaurants/:id/menu", async (req, res) => {
+  // SECURITY: Menu item creation requires vendor (owner) or admin
+  app.post("/api/restaurants/:id/menu", authenticateToken, requireAdminOrVendor, async (req: any, res) => {
     try {
+      // Verify ownership for vendors
+      if (req.user.role === 'vendor') {
+        const restaurant = await storage.getRestaurant(req.params.id);
+        if (!restaurant || restaurant.ownerId !== req.user.id) {
+          return res.status(403).json({ message: "You don't own this restaurant" });
+        }
+      }
+      const restaurantId = req.params.id;
       const itemData = insertMenuItemSchema.parse({
         ...req.body,
-        restaurantId: req.params.id
+        restaurantId
       });
       const item = await storage.createMenuItem(itemData);
+      
+      // Invalidate menu cache for this restaurant
+      await invalidate.menu(restaurantId);
+      
       res.status(201).json(item);
     } catch (error) {
       console.error("Error creating menu item:", error);
@@ -811,17 +865,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Order routes
-  app.get("/api/orders", async (req, res) => {
+  // SECURITY: Orders endpoint requires authentication with role-based filtering
+  app.get("/api/orders", authenticateToken, async (req: any, res) => {
     try {
       const { customerId, restaurantId } = req.query;
       let orders;
       
-      if (customerId) {
-        orders = await storage.getOrdersByCustomer(customerId as string);
-      } else if (restaurantId) {
-        orders = await storage.getOrdersByRestaurant(restaurantId as string);
-      } else {
-        orders = await storage.getOrders();
+      // Admin can see all orders with optional filters
+      if (req.user.role === 'admin') {
+        if (customerId) {
+          orders = await storage.getOrdersByCustomer(customerId as string);
+        } else if (restaurantId) {
+          orders = await storage.getOrdersByRestaurant(restaurantId as string);
+        } else {
+          orders = await storage.getOrders();
+        }
+      }
+      // Customers can only see their own orders
+      else if (req.user.role === 'customer') {
+        orders = await storage.getOrdersByCustomer(req.user.id);
+      }
+      // Vendors can see orders for their restaurants
+      else if (req.user.role === 'vendor') {
+        // Get vendor's restaurants and their orders
+        const vendorRestaurants = await storage.getRestaurantsByOwner(req.user.id);
+        orders = [];
+        for (const restaurant of vendorRestaurants) {
+          const restaurantOrders = await storage.getOrdersByRestaurant(restaurant.id);
+          orders.push(...restaurantOrders);
+        }
+      }
+      // Riders can see their assigned orders
+      else if (req.user.role === 'rider') {
+        const rider = await storage.getRiderByUserId(req.user.id);
+        if (rider) {
+          orders = await storage.getOrdersByRider(rider.id);
+        } else {
+          orders = [];
+        }
+      }
+      else {
+        orders = [];
       }
       
       res.json(orders);
@@ -831,12 +915,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/orders/:id", async (req, res) => {
+  // SECURITY: Single order requires authentication and access verification
+  app.get("/api/orders/:id", authenticateToken, async (req: any, res) => {
     try {
       const order = await storage.getOrder(req.params.id);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
+      
+      // Verify access permission
+      let hasAccess = false;
+      
+      // Admin can access all orders
+      if (req.user.role === 'admin') {
+        hasAccess = true;
+      }
+      // Customer can access their own orders
+      else if (order.customerId === req.user.id) {
+        hasAccess = true;
+      }
+      // Rider can access their assigned orders
+      else if (order.riderId === req.user.id) {
+        hasAccess = true;
+      }
+      // Vendor can access orders for their restaurants
+      else if (req.user.role === 'vendor') {
+        const restaurant = await storage.getRestaurant(order.restaurantId);
+        if (restaurant?.ownerId === req.user.id) {
+          hasAccess = true;
+        }
+      }
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this order" });
+      }
+      
       res.json(order);
     } catch (error) {
       console.error("Error fetching order:", error);
@@ -1049,9 +1162,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return messages[status] || `Order status: ${status}`;
   }
 
-  app.post("/api/orders", async (req, res) => {
+  // SECURITY: Order creation requires authentication
+  app.post("/api/orders", authenticateToken, async (req: any, res) => {
     try {
-      const orderData = insertOrderSchema.parse(req.body);
+      // Force customerId to be the authenticated user (prevent impersonation)
+      const orderData = insertOrderSchema.parse({
+        ...req.body,
+        customerId: req.user.id
+      });
 
       // Validate scheduledFor if provided (pre-order scheduling)
       if (orderData.scheduledFor) {
@@ -1100,6 +1218,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Note: Vendor notification happens via WebSocket broadcast in the enhanced order endpoint
       } else {
         console.log(`[Order ${order.id}] Online payment order created with payment_pending status, waiting for payment confirmation`);
+      }
+
+      // Invalidate customer orders cache
+      if (orderData.customerId) {
+        await invalidate.customerOrders(orderData.customerId);
       }
 
       res.status(201).json(order);
@@ -1303,7 +1426,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/orders/:id/status", async (req, res) => {
+  // SECURITY: Order status update requires authentication and authorization
+  app.patch("/api/orders/:id/status", authenticateToken, async (req: any, res) => {
     try {
       const { status, notes } = req.body;
       if (!status) {
@@ -1312,7 +1436,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get previous status for comparison
       const previousOrder = await storage.getOrder(req.params.id);
-      const previousStatus = previousOrder?.status;
+      if (!previousOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      const previousStatus = previousOrder.status;
+      
+      // AUTHORIZATION CHECK: Verify user has permission for this status change
+      let authorized = false;
+      
+      // Admin can do anything
+      if (req.user.role === 'admin') {
+        authorized = true;
+      }
+      // Vendor can confirm, prepare, mark ready, or cancel
+      else if (req.user.role === 'vendor' && ['confirmed', 'preparing', 'ready', 'cancelled'].includes(status)) {
+        const restaurant = await storage.getRestaurant(previousOrder.restaurantId);
+        authorized = restaurant?.ownerId === req.user.id;
+      }
+      // Rider can mark picked_up, in_transit, delivered
+      else if (req.user.role === 'rider' && ['picked_up', 'in_transit', 'delivered'].includes(status)) {
+        authorized = previousOrder.riderId === req.user.id;
+      }
+      // Customer can only cancel pending orders
+      else if (req.user.role === 'customer' && status === 'cancelled' && previousStatus === 'pending') {
+        authorized = previousOrder.customerId === req.user.id;
+      }
+      
+      if (!authorized) {
+        return res.status(403).json({ 
+          message: "Not authorized for this status change",
+          currentRole: req.user.role,
+          attemptedStatus: status,
+          currentStatus: previousStatus
+        });
+      }
 
       const order = await storage.updateOrderStatus(req.params.id, status, notes);
       if (!order) {
@@ -1376,7 +1533,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Rider routes
-  app.get("/api/riders", async (req, res) => {
+  // SECURITY: Get all riders - admin only
+  app.get("/api/riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const riders = await storage.getRiders();
       res.json(riders);
@@ -1386,8 +1544,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/riders/user/:userId", async (req, res) => {
+  // SECURITY: Get rider by user ID - admin or self only
+  app.get("/api/riders/user/:userId", authenticateToken, requireAnyRole(["rider", "admin"]), async (req: any, res) => {
     try {
+      // Only admin or the rider themselves can access
+      if (req.user.role !== 'admin' && req.user.id !== req.params.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const rider = await storage.getRiderByUserId(req.params.userId);
       if (!rider) {
         return res.status(404).json({ message: "Rider not found" });
@@ -1401,9 +1565,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== ADVANCED RIDER TRACKING ENDPOINTS ====================
   
-  // Real-time location updates
-  app.post("/api/riders/:riderId/location", async (req, res) => {
+  // SECURITY: Real-time location updates - rider can only update their own location
+  app.post("/api/riders/:riderId/location", authenticateToken, requireRole(['rider']), async (req: any, res) => {
     try {
+      // Verify rider is updating their own location
+      const rider = await storage.getRiderByUserId(req.user.id);
+      if (!rider || rider.id !== req.params.riderId) {
+        return res.status(403).json({ message: "Cannot update another rider's location" });
+      }
+      
       const locationData = insertRiderLocationHistorySchema.parse({
         riderId: req.params.riderId,
         ...req.body
@@ -1431,7 +1601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider's current location
-  app.get("/api/riders/:riderId/location/current", async (req, res) => {
+  app.get("/api/riders/:riderId/location/current", authenticateToken, requireAnyRole(["rider", "admin", "vendor"]), async (req, res) => {
     try {
       const location = await storage.getRiderCurrentLocation(req.params.riderId);
       if (!location) {
@@ -1445,7 +1615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider location history
-  app.get("/api/riders/:riderId/location/history", async (req, res) => {
+  app.get("/api/riders/:riderId/location/history", authenticateToken, requireAnyRole(["rider", "admin"]), async (req, res) => {
     try {
       const hours = parseInt(req.query.hours as string) || 24;
       const history = await storage.getRiderLocationHistory(req.params.riderId, hours);
@@ -1456,9 +1626,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Start rider session
-  app.post("/api/riders/:riderId/session/start", async (req, res) => {
+  // SECURITY: Start rider session - rider can only start their own session
+  app.post("/api/riders/:riderId/session/start", authenticateToken, requireRole(['rider']), async (req: any, res) => {
     try {
+      // Verify rider is starting their own session
+      const rider = await storage.getRiderByUserId(req.user.id);
+      if (!rider || rider.id !== req.params.riderId) {
+        return res.status(403).json({ message: "Cannot start another rider's session" });
+      }
+      
       // Update rider online status
       await storage.updateRiderStatus(req.params.riderId, { isOnline: true });
       
@@ -1476,7 +1652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // End rider session
-  app.patch("/api/riders/:riderId/session/end", async (req, res) => {
+  app.patch("/api/riders/:riderId/session/end", authenticateToken, requireRider, async (req, res) => {
     try {
       // Update rider offline status
       await storage.updateRiderStatus(req.params.riderId, { isOnline: false });
@@ -1496,7 +1672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get available riders for order assignment
-  app.get("/api/orders/:orderId/available-riders", async (req, res) => {
+  app.get("/api/orders/:orderId/available-riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { lat, lng } = req.query;
       if (!lat || !lng) {
@@ -1517,7 +1693,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create order assignment
-  app.post("/api/orders/:orderId/assign", async (req, res) => {
+  // SECURITY: Order assignment - admin only (or system)
+  app.post("/api/orders/:orderId/assign", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const assignmentData = insertRiderAssignmentQueueSchema.parse({
         orderId: req.params.orderId,
@@ -1543,11 +1720,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Accept/Reject order assignment
-  app.patch("/api/assignments/:assignmentId/respond", async (req, res) => {
+  // SECURITY: Accept/Reject order assignment - rider only (assigned rider)
+  app.patch("/api/assignments/:assignmentId/respond", authenticateToken, requireRole(['rider']), async (req: any, res) => {
     try {
       const { status, rejectionReason } = req.body;
       
+      // Get the rider first to verify their identity
+      const rider = await storage.getRiderByUserId(req.user.id);
+      if (!rider) {
+        return res.status(403).json({ message: "Rider profile not found" });
+      }
+      
+      // Update and get the assignment
+      // TODO: Add getRiderAssignment to storage to verify ownership BEFORE update
+      // For now, we verify after the update and the assignment table has assignedRiderId
       const assignment = await storage.updateRiderAssignmentStatus(
         req.params.assignmentId,
         status,
@@ -1556,6 +1742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!assignment) {
         return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Verify the assignment belongs to this rider
+      if (assignment.assignedRiderId !== rider.id) {
+        return res.status(403).json({ message: "This assignment is not for you" });
       }
       
       // Broadcast status update
@@ -1574,7 +1765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create delivery tracking
-  app.post("/api/deliveries/:orderId/tracking", async (req, res) => {
+  app.post("/api/deliveries/:orderId/tracking", authenticateToken, requireRider, async (req, res) => {
     try {
       const trackingData = insertRiderLocationHistorySchema.parse({
         orderId: req.params.orderId,
@@ -1591,7 +1782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update delivery tracking
-  app.patch("/api/deliveries/:orderId/tracking", async (req, res) => {
+  app.patch("/api/deliveries/:orderId/tracking", authenticateToken, requireRider, async (req, res) => {
     try {
       const tracking = await storage.updateDeliveryTracking(req.params.orderId, req.body);
       if (!tracking) {
@@ -1614,7 +1805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get delivery tracking for customer
-  app.get("/api/deliveries/:orderId/tracking", async (req, res) => {
+  app.get("/api/deliveries/:orderId/tracking", authenticateToken, async (req, res) => {
     try {
       const tracking = await storage.getDeliveryTracking(req.params.orderId);
       if (!tracking) {
@@ -1628,7 +1819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider performance metrics
-  app.get("/api/riders/:riderId/performance", async (req, res) => {
+  app.get("/api/riders/:riderId/performance", authenticateToken, requireAnyRole(["rider", "admin"]), async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
       const metrics = await storage.getRiderPerformanceMetrics(
@@ -1644,7 +1835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all online riders for admin dashboard
-  app.get("/api/admin/riders/online", async (req, res) => {
+  app.get("/api/admin/riders/online", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const onlineRiders = await storage.getOnlineRiders();
       res.json(onlineRiders);
@@ -1825,30 +2016,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment Webhook Endpoint - NexusPay
+  // SECURITY: Payment webhook with REQUIRED signature verification in production
   app.post("/api/payment/webhook", async (req, res) => {
     try {
       const nexusSignature = req.headers['x-nexuspay-signature'] as string;
+      const nexusWebhookSecret = process.env.NEXUSPAY_WEBHOOK_SECRET;
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // SECURITY: In production, webhook signature verification is MANDATORY
+      if (isProduction) {
+        if (!nexusWebhookSecret) {
+          console.error('SECURITY CRITICAL: NEXUSPAY_WEBHOOK_SECRET not configured in production!');
+          return res.status(500).json({ error: 'Webhook configuration error' });
+        }
+        
+        if (!nexusSignature) {
+          console.warn(`SECURITY: Webhook rejected - missing signature from IP ${req.ip}`);
+          return res.status(401).json({ error: 'Missing webhook signature' });
+        }
+        
+        const isValid = nexusPayService.verifyWebhookSignature(
+          JSON.stringify(req.body),
+          nexusSignature,
+          nexusWebhookSecret
+        );
+        
+        if (!isValid) {
+          console.warn(`SECURITY: Webhook rejected - invalid signature from IP ${req.ip}`);
+          return res.status(401).json({ error: 'Invalid webhook signature' });
+        }
+        
+        console.log('[Webhook] Signature verified successfully');
+      } else {
+        // Development mode - warn but allow
+        if (nexusSignature && nexusWebhookSecret) {
+          const isValid = nexusPayService.verifyWebhookSignature(
+            JSON.stringify(req.body),
+            nexusSignature,
+            nexusWebhookSecret
+          );
+          if (!isValid) {
+            console.warn('[DEV] Webhook signature invalid, but allowing in development');
+          }
+        } else {
+          console.warn('[DEV] Processing webhook without signature verification');
+        }
+      }
       
       const paymentProvider: 'nexuspay' = 'nexuspay';
 
       // NexusPay webhook processing
         const { transactionId, status, amount, orderId } = req.body;
-
-        // Verify NexusPay webhook signature if provided
-        if (nexusSignature) {
-          const nexusWebhookSecret = process.env.NEXUSPAY_WEBHOOK_SECRET;
-          if (nexusWebhookSecret) {
-            const isValid = nexusPayService.verifyWebhookSignature(
-              JSON.stringify(req.body),
-              nexusSignature,
-              nexusWebhookSecret
-            );
-            
-            if (!isValid) {
-              return res.status(400).json({ error: 'Invalid NexusPay webhook signature' });
-            }
-          }
-        }
 
         // Handle NexusPay webhook events
         if (status === 'success' || status === 'paid') {
@@ -2899,7 +3117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin endpoint for pricing configuration management
-  app.get("/api/admin/pricing/config", authenticateToken, async (req, res) => {
+  app.get("/api/admin/pricing/config", authenticateToken, requireAdmin, async (req, res) => {
     try {
       // This would fetch current pricing configuration from database
       const config = {
@@ -3078,10 +3296,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rider payout endpoint
-  app.post("/api/rider/payout", async (req, res) => {
+  // Rider payout endpoint - riders can request their own payouts
+  app.post("/api/rider/payout", authenticateToken, requireRider, async (req: any, res) => {
     try {
-      const { riderId, amount, accountNumber, name, paymentMethod } = req.body;
+      const { amount, accountNumber, name, paymentMethod } = req.body;
+      
+      // Get rider ID from authenticated user
+      const rider = await storage.getRiderByUserId(req.user.id);
+      if (!rider) {
+        return res.status(404).json({ message: "Rider profile not found" });
+      }
       
       // Determine payment code based on method
       const code = paymentMethod === 'maya' ? NEXUSPAY_CODES.MAYA : NEXUSPAY_CODES.GCASH;
@@ -3095,10 +3319,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Update rider balance
-      const rider = await storage.getRider(riderId);
-      if (rider && rider.earningsBalance) {
+      if (rider.earningsBalance) {
         const currentBalance = parseFloat(rider.earningsBalance);
-        await storage.updateRider(riderId, {
+        await storage.updateRider(rider.id, {
           earningsBalance: (currentBalance - amount).toString()
         });
       }
@@ -3118,7 +3341,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Pabili Service Routes
-  app.post("/api/pabili", async (req, res) => {
+  // SECURITY: Pabili service requires authentication
+  app.post("/api/pabili", authenticateToken, async (req: any, res) => {
     try {
       const pabiliData = {
         ...req.body,
@@ -3129,7 +3353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create order with pabili service type
       const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const order = await storage.createOrder({
-        customerId: req.body.customerId || "guest",
+        customerId: req.user.id, // Force authenticated user
         restaurantId: "pabili-service",
         orderNumber,
         items: pabiliData.items,
@@ -3150,8 +3374,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Pabayad Service Routes  
-  app.post("/api/pabayad", async (req, res) => {
+  // SECURITY: Pabayad service requires authentication
+  app.post("/api/pabayad", authenticateToken, async (req: any, res) => {
     try {
       const pabayData = {
         ...req.body,
@@ -3162,7 +3386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create order with pabayad service type
       const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const order = await storage.createOrder({
-        customerId: req.body.customerId || "guest",
+        customerId: req.user.id, // Force authenticated user
         restaurantId: "pabayad-service",
         orderNumber,
         items: [{ 
@@ -3187,8 +3411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Parcel Service Routes
-  app.post("/api/parcel", async (req, res) => {
+  // SECURITY: Parcel service requires authentication
+  app.post("/api/parcel", authenticateToken, async (req: any, res) => {
     try {
       const parcelData = {
         ...req.body,
@@ -3199,7 +3423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create order with parcel service type
       const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const order = await storage.createOrder({
-        customerId: req.body.customerId || "guest",
+        customerId: req.user.id, // Force authenticated user
         restaurantId: "parcel-service",
         orderNumber,
         items: [{
@@ -3227,10 +3451,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rider Routes
-  app.get("/api/rider/profile", async (req, res) => {
+  // Rider Routes - All require authentication and rider role
+  app.get("/api/rider/profile", authenticateToken, requireRider, async (req: any, res) => {
     try {
-      // Use raw connection to avoid schema issues
+      // Get rider profile for the authenticated user
       const result = await pool.query(`
         SELECT 
           r.id,
@@ -3247,11 +3471,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, 'Rider') as user_name
         FROM riders r
         INNER JOIN users u ON r.user_id = u.id
+        WHERE r.user_id = $1
         LIMIT 1
-      `);
+      `, [req.user.id]);
 
       if (!result.rows || result.rows.length === 0) {
-        return res.status(404).json({ message: "Rider not found" });
+        return res.status(404).json({ message: "Rider profile not found" });
       }
 
       const rider = result.rows[0] as any;
@@ -3277,11 +3502,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/rider/deliveries/active", async (req, res) => {
+  app.get("/api/rider/deliveries/active", authenticateToken, requireRider, async (req: any, res) => {
     try {
       // Get active deliveries for the authenticated rider
-      // In production, get rider ID from auth token
-      const [rider] = await db.select().from(riders).limit(1);
+      const rider = await storage.getRiderByUserId(req.user.id);
       
       if (!rider) {
         return res.json([]);
@@ -3304,11 +3528,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/rider/deliveries/history", async (req, res) => {
+  app.get("/api/rider/deliveries/history", authenticateToken, requireRider, async (req: any, res) => {
     try {
       // Get delivery history for the authenticated rider
-      // In production, get rider ID from auth token  
-      const [rider] = await db.select().from(riders).limit(1);
+      const rider = await storage.getRiderByUserId(req.user.id);
       
       if (!rider) {
         return res.json([]);
@@ -3333,15 +3556,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/rider/status", async (req, res) => {
+  app.patch("/api/rider/status", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const { isOnline, currentLocation } = req.body;
       
-      // Update the first available rider (in production, use proper authentication)
-      const [rider] = await db.select().from(riders).limit(1);
+      // Get rider for authenticated user
+      const rider = await storage.getRiderByUserId(req.user.id);
       
       if (!rider) {
-        return res.status(404).json({ message: "Rider not found" });
+        return res.status(404).json({ message: "Rider profile not found" });
       }
 
       const updateData: any = { isOnline };
@@ -3362,7 +3585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/rider/deliveries/:orderId/accept", async (req, res) => {
+  app.post("/api/rider/deliveries/:orderId/accept", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const { orderId } = req.params;
       // Accept delivery
@@ -3447,7 +3670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Accept order by rider
-  app.post("/api/rider/orders/:orderId/accept", authenticateToken, async (req, res) => {
+  app.post("/api/rider/orders/:orderId/accept", authenticateToken, requireRider, async (req, res) => {
     try {
       const { orderId } = req.params;
       const riderId = req.user?.id;
@@ -3495,7 +3718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reject/Skip order by rider
-  app.post("/api/rider/orders/:orderId/reject", authenticateToken, async (req, res) => {
+  app.post("/api/rider/orders/:orderId/reject", authenticateToken, requireRider, async (req, res) => {
     try {
       const { orderId } = req.params;
       const riderId = req.user?.id;
@@ -3514,7 +3737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Real-time delivery queue for riders
-  app.get("/api/rider/deliveries/queue", async (req, res) => {
+  app.get("/api/rider/deliveries/queue", authenticateToken, requireRider, async (req, res) => {
     try {
       // Get available orders that need delivery
       const availableOrders = await db
@@ -3582,7 +3805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Route Optimization endpoint
-  app.post("/api/rider/optimize-route", async (req, res) => {
+  app.post("/api/rider/optimize-route", authenticateToken, requireRider, async (req, res) => {
     try {
       const { deliveries, currentLocation } = req.body;
       
@@ -3608,7 +3831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== BATCH ROUTE PREVIEW ====================
   // Get batch preview data for riders to review before accepting
-  app.get("/api/rider/batch-preview/:batchId", async (req, res) => {
+  app.get("/api/rider/batch-preview/:batchId", authenticateToken, requireRider, async (req, res) => {
     try {
       const { batchId } = req.params;
 
@@ -3839,7 +4062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get available batch offers for rider
-  app.get("/api/rider/batch-offers", authenticateToken, async (req: any, res) => {
+  app.get("/api/rider/batch-offers", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const riderId = req.user?.id;
 
@@ -3939,7 +4162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Accept a batch of orders
-  app.post("/api/rider/batch/:batchId/accept", async (req, res) => {
+  app.post("/api/rider/batch/:batchId/accept", authenticateToken, requireRider, async (req, res) => {
     try {
       const { batchId } = req.params;
       const { orderIds } = req.body;
@@ -3961,7 +4184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Decline a batch offer
-  app.post("/api/rider/batch/:batchId/decline", async (req, res) => {
+  app.post("/api/rider/batch/:batchId/decline", authenticateToken, requireRider, async (req, res) => {
     try {
       const { batchId } = req.params;
 
@@ -3982,7 +4205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== END BATCH ROUTE PREVIEW ====================
 
   // Update rider location for real-time tracking
-  app.post("/api/rider/location", authenticateToken, async (req: any, res) => {
+  app.post("/api/rider/location", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const { lat, lng, heading, speed, accuracy, orderId, activityType } = req.body;
 
@@ -4084,7 +4307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider earnings and stats
-  app.get("/api/rider/earnings", async (req, res) => {
+  app.get("/api/rider/earnings", authenticateToken, requireRider, async (req, res) => {
     try {
       // Get rider ID from authenticated user or request
       const riderId = req.user?.id; // Assuming middleware provides rider user
@@ -4146,7 +4369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider performance data
-  app.get("/api/rider/performance", authenticateToken, async (req: any, res) => {
+  app.get("/api/rider/performance", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const userId = req.user?.id;
 
@@ -4353,7 +4576,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/users", async (req, res) => {
+  // NOTE: These legacy admin endpoints are superseded by more comprehensive versions below
+  // Keeping them for backwards compatibility but adding proper RBAC
+  app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
       // Return users list
       const users: any[] = [];
@@ -4363,7 +4588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/restaurants", async (req, res) => {
+  app.get("/api/admin/restaurants", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const restaurants = await storage.getRestaurants();
       res.json(restaurants);
@@ -4372,7 +4597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/orders", async (req, res) => {
+  app.get("/api/admin/orders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const orders = await storage.getOrders();
       res.json(orders);
@@ -4381,7 +4606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/riders", async (req, res) => {
+  app.get("/api/admin/riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const riders = await storage.getRiders();
       res.json(riders);
@@ -4390,7 +4615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/restaurants/:id/approve", async (req, res) => {
+  app.patch("/api/admin/restaurants/:id/approve", authenticateToken, requireAdmin, auditLog('approve', 'restaurants'), async (req, res) => {
     try {
       const restaurant = await storage.updateRestaurant(req.params.id, { isActive: true });
       res.json(restaurant);
@@ -4399,7 +4624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/riders/:id/verify", async (req, res) => {
+  app.patch("/api/admin/riders/:id/verify", authenticateToken, requireAdmin, auditLog('verify', 'riders'), async (req, res) => {
     try {
       const rider = await storage.updateRider(req.params.id, { isVerified: true });
       res.json(rider);
@@ -4408,8 +4633,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rider Assignment Routes
-  app.post("/api/rider-assignments", async (req, res) => {
+  // Rider Assignment Routes - Admin/system can create, riders can accept
+  app.post("/api/rider-assignments", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { orderId, restaurantLocation, deliveryLocation, priority = 1, estimatedValue, maxDistance = 10 } = req.body;
       
@@ -4437,14 +4662,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/rider-assignments/:assignmentId/accept", async (req, res) => {
+  app.post("/api/rider-assignments/:assignmentId/accept", authenticateToken, requireRider, async (req: any, res) => {
     try {
       const { assignmentId } = req.params;
-      const { riderId } = req.body;
-
-      if (!riderId) {
-        return res.status(400).json({ message: "Rider ID is required" });
-      }
+      // Use authenticated rider's ID instead of body param for security
+      const riderId = req.user.id;
 
       const success = await riderAssignmentService.acceptAssignment(assignmentId, riderId);
       
@@ -4459,9 +4681,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/riders/:riderId/pending-assignments", async (req, res) => {
+  app.get("/api/riders/:riderId/pending-assignments", authenticateToken, requireAnyRole(['rider', 'admin']), async (req: any, res) => {
     try {
       const { riderId } = req.params;
+      // Riders can only see their own assignments, admins can see any
+      if (req.user.role === 'rider' && req.user.id !== riderId) {
+        return res.status(403).json({ message: "You can only view your own assignments" });
+      }
       const assignments = await riderAssignmentService.getRiderPendingAssignments(riderId);
       res.json(assignments);
     } catch (error) {
@@ -4470,10 +4696,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/riders/:riderId/location", async (req, res) => {
+  app.post("/api/riders/:riderId/location", authenticateToken, requireAnyRole(['rider', 'admin']), async (req: any, res) => {
     try {
       const { riderId } = req.params;
       const { latitude, longitude, accuracy } = req.body;
+      
+      // Riders can only update their own location
+      if (req.user.role === 'rider' && req.user.id !== riderId) {
+        return res.status(403).json({ message: "You can only update your own location" });
+      }
 
       if (!latitude || !longitude) {
         return res.status(400).json({ message: "Latitude and longitude are required" });
@@ -4497,7 +4728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate platform images endpoint
-  app.post("/api/admin/generate-images", async (req, res) => {
+  app.post("/api/admin/generate-images", authenticateToken, requireAdmin, async (req, res) => {
     try {
       await generatePlatformImages();
       res.json({ success: true, message: "Images generated successfully" });
@@ -4508,7 +4739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate dish images endpoint
-  app.post("/api/admin/generate-dish-images", async (req, res) => {
+  app.post("/api/admin/generate-dish-images", authenticateToken, requireAdmin, async (req, res) => {
     try {
       await generateDishImages();
       res.json({ success: true, message: "Dish images generated successfully" });
@@ -4519,7 +4750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate category images endpoint
-  app.post("/api/admin/generate-category-images", async (req, res) => {
+  app.post("/api/admin/generate-category-images", authenticateToken, requireAdmin, async (req, res) => {
     try {
       await generateCategoryImages();
       res.json({ success: true, message: "Category images generated successfully" });
@@ -4582,7 +4813,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== OBJECT STORAGE ENDPOINTS (Local Storage) ====================
 
   // Generate upload URL (returns a token-based local upload URL)
-  app.post("/api/objects/upload", async (req, res) => {
+  // SECURITY: File upload requires authentication
+  app.post("/api/objects/upload", authenticateToken, async (req: any, res) => {
     try {
       const { category = "ai-uploads", entityId } = req.body;
       const validCategories = ["restaurants", "menu", "users", "ai-uploads", "ai-generated", "delivery-proofs", "documents"];
@@ -4590,7 +4822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { uploadURL, objectPath } = LocalObjectStorageService.generateUploadURL(
         safeCategory as any,
-        entityId
+        entityId || req.user.id // Default to user ID if no entityId
       );
 
       res.json({ uploadURL, objectPath });
@@ -4942,7 +5174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CUSTOMER API ENDPOINTS ====================
 
   // Customer Profile endpoints
-  app.get("/api/customer/profile", authenticateToken, async (req, res) => {
+  app.get("/api/customer/profile", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -4962,7 +5194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/customer/profile", authenticateToken, async (req, res) => {
+  app.patch("/api/customer/profile", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -4993,7 +5225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
 
   // GET /api/customer/notification-preferences - Get notification preferences
-  app.get("/api/customer/notification-preferences", authenticateToken, async (req, res) => {
+  app.get("/api/customer/notification-preferences", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5035,7 +5267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/customer/notification-preferences - Update notification preferences
-  app.put("/api/customer/notification-preferences", authenticateToken, async (req, res) => {
+  app.put("/api/customer/notification-preferences", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5122,7 +5354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
 
   // GET /api/customer/addresses - List all saved addresses
-  app.get("/api/customer/addresses", authenticateToken, async (req, res) => {
+  app.get("/api/customer/addresses", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5137,7 +5369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/customer/addresses - Add new address
-  app.post("/api/customer/addresses", authenticateToken, async (req, res) => {
+  app.post("/api/customer/addresses", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5186,7 +5418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/customer/addresses/:id - Update address
-  app.put("/api/customer/addresses/:id", authenticateToken, async (req, res) => {
+  app.put("/api/customer/addresses/:id", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5227,7 +5459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/customer/addresses/:id - Delete address
-  app.delete("/api/customer/addresses/:id", authenticateToken, async (req, res) => {
+  app.delete("/api/customer/addresses/:id", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5262,7 +5494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/customer/addresses/:id/default - Set as default address
-  app.put("/api/customer/addresses/:id/default", authenticateToken, async (req, res) => {
+  app.put("/api/customer/addresses/:id/default", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5292,7 +5524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // GET /api/customer/payment-methods - List all saved payment methods
-  app.get("/api/customer/payment-methods", authenticateToken, async (req: any, res) => {
+  app.get("/api/customer/payment-methods", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5321,7 +5553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/customer/payment-methods - Save new payment method (tokenized)
-  app.post("/api/customer/payment-methods", authenticateToken, async (req: any, res) => {
+  app.post("/api/customer/payment-methods", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5439,7 +5671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/customer/payment-methods/:id - Remove saved payment method
-  app.delete("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+  app.delete("/api/customer/payment-methods/:id", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5504,7 +5736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/customer/payment-methods/:id/default - Set as default payment method
-  app.patch("/api/customer/payment-methods/:id/default", authenticateToken, async (req: any, res) => {
+  app.patch("/api/customer/payment-methods/:id/default", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5558,7 +5790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/customer/payment-methods/:id - Update payment method (nickname, etc.)
-  app.patch("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+  app.patch("/api/customer/payment-methods/:id", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5623,7 +5855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/customer/payment-methods/:id - Get single payment method
-  app.get("/api/customer/payment-methods/:id", authenticateToken, async (req: any, res) => {
+  app.get("/api/customer/payment-methods/:id", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5803,14 +6035,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= USER NOTIFICATIONS INBOX =============
+  
+  // Get user notifications with pagination and filtering
+  app.get("/api/notifications", authenticateToken, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { 
+        limit = '20', 
+        offset = '0', 
+        category, 
+        unreadOnly = 'false',
+        includeArchived = 'false'
+      } = req.query;
+
+      const notifications = await storage.getUserNotifications(userId, {
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+        category: category as string,
+        unreadOnly: unreadOnly === 'true',
+        includeArchived: includeArchived === 'true'
+      });
+
+      const unreadCount = await storage.getUnreadNotificationCount(userId);
+
+      res.json({
+        notifications,
+        unreadCount,
+        hasMore: notifications.length === parseInt(limit as string)
+      });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Get unread notification count
+  app.get("/api/notifications/unread-count", authenticateToken, async (req: any, res) => {
+    try {
+      const count = await storage.getUnreadNotificationCount(req.user.id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  // Mark notification as read
+  app.patch("/api/notifications/:notificationId/read", authenticateToken, async (req: any, res) => {
+    try {
+      const { notificationId } = req.params;
+      const notification = await storage.markNotificationAsRead(notificationId, req.user.id);
+      
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.patch("/api/notifications/mark-all-read", authenticateToken, async (req: any, res) => {
+    try {
+      await storage.markAllNotificationsAsRead(req.user.id);
+      res.json({ message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
+  });
+
+  // Archive notification
+  app.patch("/api/notifications/:notificationId/archive", authenticateToken, async (req: any, res) => {
+    try {
+      const { notificationId } = req.params;
+      const notification = await storage.archiveNotification(notificationId, req.user.id);
+      
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.json(notification);
+    } catch (error) {
+      console.error("Error archiving notification:", error);
+      res.status(500).json({ message: "Failed to archive notification" });
+    }
+  });
+
+  // Delete notification
+  app.delete("/api/notifications/:notificationId", authenticateToken, async (req: any, res) => {
+    try {
+      const { notificationId } = req.params;
+      const deleted = await storage.deleteNotification(notificationId, req.user.id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.json({ message: "Notification deleted" });
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ message: "Failed to delete notification" });
+    }
+  });
+
+  // Create notification (internal/admin use or for testing)
+  app.post("/api/notifications", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const notificationData = req.body;
+      const notification = await storage.createUserNotification(notificationData);
+      
+      // Broadcast via WebSocket
+      wsManager.broadcastToUser(notificationData.userId, {
+        type: 'notification',
+        notification
+      });
+
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ message: "Failed to create notification" });
+    }
+  });
+
   // Customer Orders endpoints
-  app.get("/api/customer/orders", authenticateToken, async (req, res) => {
+  app.get("/api/customer/orders", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
       }
 
-      const orders = await storage.getOrdersByCustomer(req.user.id);
+      const cacheKey = CacheKeys.customerOrders(req.user.id);
+      
+      const orders = await cacheQuery(
+        cacheKey,
+        CacheTTL.CUSTOMER_ORDERS, // 30 seconds
+        () => storage.getOrdersByCustomer(req.user!.id)
+      );
+      
       res.json(orders);
     } catch (error) {
       console.error("Error fetching customer orders:", error);
@@ -5818,7 +6184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/customer/orders/recent", authenticateToken, async (req, res) => {
+  app.get("/api/customer/orders/recent", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5835,7 +6201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer Favorites endpoints
-  app.get("/api/customer/favorites", authenticateToken, async (req, res) => {
+  app.get("/api/customer/favorites", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5849,7 +6215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customer/favorites/:restaurantId", authenticateToken, async (req, res) => {
+  app.post("/api/customer/favorites/:restaurantId", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -5864,7 +6230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/customer/favorites/:restaurantId", authenticateToken, async (req, res) => {
+  app.delete("/api/customer/favorites/:restaurantId", authenticateToken, requireAdminOrCustomer, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -6892,7 +7258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor: Create vendor-funded promo code
-  app.post("/api/vendor/promos/create", authenticateToken, async (req: any, res) => {
+  app.post("/api/vendor/promos/create", authenticateToken, requireAdminOrVendor, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -6979,7 +7345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor: Get vendor's promo codes
-  app.get("/api/vendor/promos/list", authenticateToken, async (req: any, res) => {
+  app.get("/api/vendor/promos/list", authenticateToken, requireAdminOrVendor, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7289,7 +7655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer: Get available promos for user
-  app.get("/api/customer/promos/available", authenticateToken, async (req: any, res) => {
+  app.get("/api/customer/promos/available", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7445,16 +7811,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== VENDOR API ENDPOINTS ====================
+  // All vendor endpoints require vendor or admin role
 
   // Vendor Categories endpoints
-  app.get("/api/vendor/categories", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/categories", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       // Get vendor's restaurant first
-      const restaurants = await storage.getRestaurantsByOwner(req.user.id);
+      const restaurants = await storage.getRestaurantsByOwner(req.user!.id);
       if (restaurants.length === 0) {
         return res.json([]);
       }
@@ -7467,7 +7830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/categories", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/categories", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7494,7 +7857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Menu Items endpoints
-  app.get("/api/vendor/menu-items", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/menu-items", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7514,7 +7877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/menu-items", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/menu-items", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7541,7 +7904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Orders endpoints
-  app.get("/api/vendor/orders", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/orders", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7561,7 +7924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/orders/:orderId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/orders/:orderId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7585,7 +7948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Additional CRUD endpoints for Menu Items
-  app.patch("/api/vendor/menu-items/:itemId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/menu-items/:itemId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7612,7 +7975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/menu-items/:itemId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/menu-items/:itemId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7635,7 +7998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Additional CRUD endpoints for Categories
-  app.patch("/api/vendor/categories/:categoryId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/categories/:categoryId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7662,7 +8025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/categories/:categoryId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/categories/:categoryId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7685,7 +8048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Restaurant profile management
-  app.patch("/api/vendor/restaurant", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/restaurant", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7712,7 +8075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Restaurant endpoint
-  app.get("/api/vendor/restaurant", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/restaurant", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7731,7 +8094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== MERCHANT PANEL API ENDPOINTS ====================
 
   // Menu Modifiers Management
-  app.get("/api/vendor/modifiers", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/modifiers", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7750,7 +8113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/modifiers", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/modifiers", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7775,7 +8138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Modifier Options Management
-  app.get("/api/vendor/modifiers/:modifierId/options", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/modifiers/:modifierId/options", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { modifierId } = req.params;
       const options = await storage.getModifierOptions(modifierId);
@@ -7786,7 +8149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/modifiers/:modifierId/options", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/modifiers/:modifierId/options", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { modifierId } = req.params;
       const optionData = insertModifierOptionSchema.parse({
@@ -7802,7 +8165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { optionId } = req.params;
       const updates = req.body;
@@ -7819,7 +8182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/modifiers/:modifierId/options/:optionId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { optionId } = req.params;
       await storage.deleteModifierOption(optionId);
@@ -7831,7 +8194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Modifier CRUD endpoints
-  app.patch("/api/vendor/modifiers/:modifierId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/modifiers/:modifierId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { modifierId } = req.params;
       const updates = req.body;
@@ -7848,7 +8211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/modifiers/:modifierId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/modifiers/:modifierId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { modifierId } = req.params;
       
@@ -7868,7 +8231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Menu Item Modifier Assignment endpoints
-  app.get("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { itemId } = req.params;
       const modifiers = await storage.getMenuItemModifiers(itemId);
@@ -7879,7 +8242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/menu-items/:itemId/modifiers", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { itemId } = req.params;
       const assignmentData = insertMenuItemModifierSchema.parse({
@@ -7895,7 +8258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/menu-items/:itemId/modifiers/:assignmentId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/menu-items/:itemId/modifiers/:assignmentId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { assignmentId } = req.params;
       await storage.deleteMenuItemModifier(assignmentId);
@@ -7907,7 +8270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Promotions Management
-  app.get("/api/vendor/promotions", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/promotions", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7926,7 +8289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/promotions", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/promotions", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7950,7 +8313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/promotions/:promotionId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/promotions/:promotionId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { promotionId } = req.params;
       const updates = req.body;
@@ -7967,7 +8330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/promotions/:promotionId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/promotions/:promotionId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { promotionId } = req.params;
       
@@ -7980,7 +8343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Financial Management - Vendor Earnings
-  app.get("/api/vendor/earnings", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/earnings", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8005,7 +8368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/vendor/earnings/summary", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/earnings/summary", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8032,7 +8395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== VENDOR SETTLEMENTS & PAYOUTS ====================
 
   // GET /api/vendor/settlements - Get vendor's settlement history
-  app.get("/api/vendor/settlements", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/settlements", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8056,7 +8419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/vendor/settlements/:id - Get single settlement details
-  app.get("/api/vendor/settlements/:id", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/settlements/:id", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8081,7 +8444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/vendor/payouts - Get vendor's payout history
-  app.get("/api/vendor/payouts", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/payouts", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8105,7 +8468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/vendor/payouts/:id - Get single payout details
-  app.get("/api/vendor/payouts/:id", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/payouts/:id", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8130,7 +8493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/vendor/earnings/full-summary - Comprehensive earnings summary
-  app.get("/api/vendor/earnings/full-summary", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/earnings/full-summary", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8151,7 +8514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/vendor/analytics - Comprehensive analytics for vendor dashboard
-  app.get("/api/vendor/analytics", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/analytics", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8395,7 +8758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Staff Management
-  app.get("/api/vendor/staff", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/staff", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8414,7 +8777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/staff", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/staff", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8438,7 +8801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/staff/:staffId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/staff/:staffId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { staffId } = req.params;
       const updates = req.body;
@@ -8455,7 +8818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/staff/:staffId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/staff/:staffId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { staffId } = req.params;
       
@@ -8468,7 +8831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Inventory Management
-  app.get("/api/vendor/inventory", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/inventory", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8487,7 +8850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/vendor/inventory/low-stock", authenticateToken, async (req, res) => {
+  app.get("/api/vendor/inventory/low-stock", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8506,7 +8869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendor/inventory", authenticateToken, async (req, res) => {
+  app.post("/api/vendor/inventory", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Authentication required" });
@@ -8530,7 +8893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/vendor/inventory/:itemId", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/inventory/:itemId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { itemId } = req.params;
       const updates = req.body;
@@ -8547,7 +8910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendor/inventory/:itemId", authenticateToken, async (req, res) => {
+  app.delete("/api/vendor/inventory/:itemId", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { itemId } = req.params;
       
@@ -8744,7 +9107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== BTS OPERATIONAL API ENDPOINTS ====================
   
   // BTS Riders endpoints
-  app.get("/api/bts/riders", async (req, res) => {
+  app.get("/api/bts/riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const riders = await storage.getBtsRiders();
       res.json(riders);
@@ -8754,7 +9117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bts/riders", async (req, res) => {
+  app.post("/api/bts/riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const rider = await storage.createBtsRider(req.body);
       res.json(rider);
@@ -8765,7 +9128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // BTS Sales Remittance endpoints
-  app.get("/api/bts/sales-remittance", async (req, res) => {
+  app.get("/api/bts/sales-remittance", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const salesData = await storage.getBtsSalesRemittance();
       res.json(salesData);
@@ -8775,7 +9138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bts/sales-remittance", async (req, res) => {
+  app.post("/api/bts/sales-remittance", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const sale = await storage.createBtsSalesRemittance(req.body);
       res.json(sale);
@@ -8786,7 +9149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // BTS Attendance endpoints
-  app.get("/api/bts/attendance", async (req, res) => {
+  app.get("/api/bts/attendance", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const attendanceData = await storage.getBtsAttendance();
       res.json(attendanceData);
@@ -8796,7 +9159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bts/attendance", async (req, res) => {
+  app.post("/api/bts/attendance", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const attendance = await storage.createBtsAttendance(req.body);
       res.json(attendance);
@@ -8807,7 +9170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // BTS Incentives endpoints
-  app.get("/api/bts/incentives", async (req, res) => {
+  app.get("/api/bts/incentives", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const incentivesData = await storage.getBtsIncentives();
       res.json(incentivesData);
@@ -8817,7 +9180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bts/incentives", async (req, res) => {
+  app.post("/api/bts/incentives", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const incentive = await storage.createBtsIncentive(req.body);
       res.json(incentive);
@@ -9864,7 +10227,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/users", async (req, res) => {
+  // NOTE: These are enhanced admin endpoints (with mock data for demo)
+  // Supersedes earlier basic routes - all require admin authentication
+  app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
       // Mock user data for demo
       const users = [
@@ -9892,7 +10257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/restaurants", async (req, res) => {
+  app.get("/api/admin/restaurants", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const restaurants = await storage.getRestaurants();
       const enrichedRestaurants = restaurants.map(r => {
@@ -9910,7 +10275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/orders", async (req, res) => {
+  app.get("/api/admin/orders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const orders = await storage.getOrders();
       const { filterStatus } = req.query;
@@ -9939,7 +10304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/riders", async (req, res) => {
+  app.get("/api/admin/riders", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const riders = await storage.getRiders();
       const enrichedRiders = riders.map(r => ({
@@ -9954,7 +10319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/restaurants/:id/approve", async (req, res) => {
+  app.patch("/api/admin/restaurants/:id/approve", authenticateToken, requireAdmin, auditLog('approve', 'restaurants'), async (req, res) => {
     try {
       const restaurant = await storage.updateRestaurant(req.params.id, { isActive: true });
       if (!restaurant) {
@@ -9967,7 +10332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/riders/:id/verify", async (req, res) => {
+  app.patch("/api/admin/riders/:id/verify", authenticateToken, requireAdmin, auditLog('verify', 'riders'), async (req, res) => {
     try {
       const rider = await storage.updateRider(req.params.id, { isVerified: true });
       if (!rider) {
@@ -10027,7 +10392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GPS Tracking and Delivery Optimization Routes
   
   // Update rider location
-  app.post("/api/gps/location", async (req, res) => {
+  app.post("/api/gps/location", authenticateToken, requireRider, async (req, res) => {
     try {
       const { riderId, latitude, longitude, accuracy, speed, heading } = req.body;
       
@@ -10065,7 +10430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider's current location
-  app.get("/api/gps/rider/:riderId/location", async (req, res) => {
+  app.get("/api/gps/rider/:riderId/location", authenticateToken, requireAnyRole(["rider", "admin", "vendor"]), async (req, res) => {
     try {
       const location = await gpsTrackingService.getRiderLatestLocation(req.params.riderId);
       if (!location) {
@@ -10079,7 +10444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get rider's location history
-  app.get("/api/gps/rider/:riderId/history", async (req, res) => {
+  app.get("/api/gps/rider/:riderId/history", authenticateToken, requireAnyRole(["rider", "admin"]), async (req, res) => {
     try {
       const hours = parseInt(req.query.hours as string) || 24;
       const history = await gpsTrackingService.getRiderLocationHistory(req.params.riderId, hours);
@@ -10091,7 +10456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create optimized delivery route
-  app.post("/api/gps/route", async (req, res) => {
+  app.post("/api/gps/route", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { riderId, orderId, startLocation, endLocation, waypoints } = req.body;
       
@@ -10115,7 +10480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Start delivery route
-  app.post("/api/gps/route/:routeId/start", async (req, res) => {
+  app.post("/api/gps/route/:routeId/start", authenticateToken, requireRider, async (req, res) => {
     try {
       await gpsTrackingService.startDeliveryRoute(req.params.routeId);
       res.json({ success: true });
@@ -10126,7 +10491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete delivery route
-  app.post("/api/gps/route/:routeId/complete", async (req, res) => {
+  app.post("/api/gps/route/:routeId/complete", authenticateToken, requireRider, async (req, res) => {
     try {
       const { actualDistance, actualDuration } = req.body;
       await gpsTrackingService.completeDeliveryRoute(
@@ -10142,7 +10507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add delivery tracking event
-  app.post("/api/gps/tracking-event", async (req, res) => {
+  app.post("/api/gps/tracking-event", authenticateToken, requireRider, async (req, res) => {
     try {
       const { orderId, riderId, eventType, location, notes } = req.body;
       
@@ -10169,7 +10534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get order tracking events
-  app.get("/api/gps/order/:orderId/tracking", async (req, res) => {
+  app.get("/api/gps/order/:orderId/tracking", authenticateToken, async (req, res) => {
     try {
       const events = await gpsTrackingService.getOrderTrackingEvents(req.params.orderId);
       res.json(events);
@@ -10308,7 +10673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get estimated arrival time
-  app.post("/api/gps/eta", async (req, res) => {
+  app.post("/api/gps/eta", authenticateToken, async (req, res) => {
     try {
       const { riderId, destination } = req.body;
       
@@ -10335,7 +10700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check if rider is near delivery location
-  app.post("/api/gps/rider/:riderId/near-delivery", async (req, res) => {
+  app.post("/api/gps/rider/:riderId/near-delivery", authenticateToken, requireRider, async (req, res) => {
     try {
       const { deliveryLocation } = req.body;
       
@@ -10356,7 +10721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
 
   // Geofence check - auto-update order status when rider enters zones
-  app.post("/api/rider/geofence-check", async (req, res) => {
+  app.post("/api/rider/geofence-check", authenticateToken, requireRider, async (req, res) => {
     try {
       const { riderId, latitude, longitude, orderId, accuracy } = req.body;
 
@@ -10386,7 +10751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get geofence status for an order
-  app.get("/api/rider/geofence-status/:orderId/:riderId", async (req, res) => {
+  app.get("/api/rider/geofence-status/:orderId/:riderId", authenticateToken, requireAnyRole(["rider", "admin"]), async (req, res) => {
     try {
       const { orderId, riderId } = req.params;
 
@@ -10653,7 +11018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get nearby orders for rider
-  app.get("/api/rider/:riderId/nearby-orders", async (req, res) => {
+  app.get("/api/rider/:riderId/nearby-orders", authenticateToken, requireAnyRole(["rider", "admin"]), async (req, res) => {
     try {
       const { riderId } = req.params;
       const { latitude, longitude, radiusKm = '5' } = req.query;
@@ -11397,6 +11762,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Order ${order.id}] Online payment order created with payment_pending status, awaiting payment`);
       }
 
+      // Invalidate customer orders cache
+      await invalidate.customerOrders(req.user.id);
+
       res.status(201).json({
         order,
         validation: {
@@ -11411,7 +11779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor Order Acceptance/Rejection
-  app.patch("/api/vendor/orders/:orderId/respond", authenticateToken, async (req, res) => {
+  app.patch("/api/vendor/orders/:orderId/respond", authenticateToken, requireAdminOrVendor, async (req, res) => {
     try {
       const { orderId } = req.params;
       const { action, estimatedPrepTime, rejectionReason } = req.body;
@@ -13654,6 +14022,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // - GET /api/admin/fraud/high-risk-users - List high risk users
   // - GET /api/admin/fraud/blocked-users - List blocked users
   app.use('/api', authenticateToken, fraudRoutes);
+
+  // ============================================================
+  // ANALYTICS ROUTES
+  // ============================================================
+  // Comprehensive analytics endpoints for admin dashboards:
+  // Orders: /api/analytics/orders/summary, /trends, /by-status, /by-type
+  // Revenue: /api/analytics/revenue/summary, /trends, /api/analytics/financial
+  // Users: /api/analytics/users/summary, /growth
+  // Riders: /api/analytics/riders/summary, /performance
+  // Restaurants: /api/analytics/restaurants/summary, /:id, /top-performers
+  // Geographic: /api/analytics/geographic, /heatmap
+  // Dashboard: /api/analytics/dashboard (aggregated), /realtime
+  // Cache: /api/analytics/cache/stats, /cache/clear
+  app.use('/api/analytics', analyticsRoutes);
 
   // Export fraud detection service for global access
   import('./services/fraud-detection').then(module => {

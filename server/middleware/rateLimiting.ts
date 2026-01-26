@@ -2,10 +2,10 @@ import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response, NextFunction } from 'express';
 
-// Rate limiting disabled - set to very high limits
+// General rate limiting - 1000 requests per 15 minutes
 export const generalRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100000, // Effectively disabled
+  max: 1000, // 1000 requests per 15 min window
   message: {
     error: 'Too many requests from this IP',
     message: 'Please try again after 15 minutes',
@@ -24,10 +24,10 @@ export const generalRateLimit = rateLimit({
   }
 });
 
-// Authentication rate limiting - disabled
+// Authentication rate limiting - 10 attempts per 15 minutes
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100000, // Effectively disabled
+  max: 10, // 10 auth attempts per 15 min (strict for security)
   message: {
     error: 'Too many authentication attempts',
     message: 'Please try again after 15 minutes',
@@ -47,10 +47,10 @@ export const authRateLimit = rateLimit({
   }
 });
 
-// Password reset rate limiting - disabled
+// Password reset rate limiting - 3 attempts per hour
 export const passwordResetRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 100000, // Effectively disabled
+  max: 3, // 3 password reset attempts per hour
   message: {
     error: 'Too many password reset attempts',
     message: 'Please try again after 1 hour',
@@ -60,10 +60,10 @@ export const passwordResetRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Order creation rate limiting - disabled
+// Order creation rate limiting - 5 orders per minute
 export const orderRateLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100000, // Effectively disabled
+  max: 5, // 5 orders per minute max
   message: {
     error: 'Order creation rate limit exceeded',
     message: 'Please wait before creating another order',
@@ -73,10 +73,10 @@ export const orderRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Upload rate limiting - disabled
+// Upload rate limiting - 50 uploads per 15 minutes
 export const uploadRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100000, // Effectively disabled
+  max: 50, // 50 uploads per 15 min
   message: {
     error: 'Upload rate limit exceeded',
     message: 'Too many file uploads. Please try again later.',
@@ -86,12 +86,12 @@ export const uploadRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Slow down middleware - disabled
+// Slow down middleware - start delaying after 100 requests
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  delayAfter: 100000, // Effectively disabled
-  delayMs: () => 0, // No delay
-  maxDelayMs: 0, // No delay
+  delayAfter: 100, // Start slowing after 100 requests
+  delayMs: (hits) => hits * 100, // Incrementally delay
+  maxDelayMs: 5000, // Max 5 second delay
 });
 
 // Account lockout tracking
@@ -106,9 +106,39 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes
 const ATTEMPT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
-// Account lockout middleware - disabled
+// Account lockout middleware - enabled with 5 failed attempts trigger
 export const accountLockoutMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Disabled - just pass through
+  // Get identifier from request (email, username, or IP)
+  const identifier = req.body?.email || req.body?.username || req.ip || 'unknown';
+  const attempt = loginAttempts.get(identifier);
+  const now = new Date();
+  
+  if (attempt) {
+    // Check if currently locked out
+    if (attempt.lockoutUntil && attempt.lockoutUntil > now) {
+      const remainingMs = attempt.lockoutUntil.getTime() - now.getTime();
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      return res.status(423).json({
+        error: 'Account locked',
+        message: `Too many failed login attempts. Account is locked for ${remainingMinutes} more minute(s).`,
+        lockedUntil: attempt.lockoutUntil.toISOString(),
+        retryAfter: Math.ceil(remainingMs / 1000)
+      });
+    }
+    
+    // Clear old lockout if expired
+    if (attempt.lockoutUntil && attempt.lockoutUntil <= now) {
+      loginAttempts.delete(identifier);
+    }
+    
+    // Check if attempts window has expired
+    if (now.getTime() - attempt.lastAttempt.getTime() > ATTEMPT_WINDOW) {
+      loginAttempts.delete(identifier);
+    }
+  }
+  
+  // Store identifier for later tracking
+  req.accountLockoutIdentifier = identifier;
   next();
 };
 

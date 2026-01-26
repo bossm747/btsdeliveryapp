@@ -21,6 +21,13 @@ import {
 import { Package, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAdminToast } from "@/hooks";
+import {
+  AdminPageWrapper,
+  AdminStatsSkeleton,
+  AdminTableSkeleton,
+  NoOrdersEmptyState,
+} from "@/components/admin";
 
 interface Order {
   id: string;
@@ -33,6 +40,7 @@ interface Order {
 }
 
 export default function AdminOrders() {
+  const adminToast = useAdminToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -90,11 +98,22 @@ export default function AdminOrders() {
         />
 
         {/* Page Content */}
-        <main className="p-6">
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+        <AdminPageWrapper
+          pageTitle="Order Management"
+          pageDescription="Monitor and manage all platform orders"
+          refreshQueryKeys={[
+            "/api/admin/orders",
+            "/api/admin/stats",
+          ]}
+        >
+          <main className="p-6">
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              {statsLoading ? (
+                <AdminStatsSkeleton count={4} />
+              ) : (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -145,9 +164,10 @@ export default function AdminOrders() {
                   </div>
                 </CardContent>
               </Card>
-            </div>
+              </div>
+              )}
 
-            <Card className="shadow-sm">
+              <Card className="shadow-sm">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Recent Orders</CardTitle>
@@ -182,21 +202,32 @@ export default function AdminOrders() {
                   </TableHeader>
                   <TableBody>
                     {ordersLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
-                          Loading orders...
-                        </TableCell>
-                      </TableRow>
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                          <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-28" /></TableCell>
+                          <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-32" /></TableCell>
+                          <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-16" /></TableCell>
+                          <TableCell><div className="h-6 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                          <TableCell><div className="h-8 bg-gray-200 rounded animate-pulse w-16" /></TableCell>
+                        </TableRow>
+                      ))
                     ) : ordersError ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-red-600">
-                          Error loading orders
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="flex flex-col items-center text-red-600">
+                            <AlertCircle className="h-8 w-8 mb-2" />
+                            <p>Error loading orders</p>
+                            <Button variant="outline" size="sm" className="mt-2" onClick={() => window.location.reload()}>
+                              Try Again
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : orders.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                          No orders found
+                        <TableCell colSpan={6} className="p-0">
+                          <NoOrdersEmptyState />
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -221,8 +252,9 @@ export default function AdminOrders() {
                 </Table>
               </CardContent>
             </Card>
-          </div>
-        </main>
+            </div>
+          </main>
+        </AdminPageWrapper>
       </div>
     </div>
   );

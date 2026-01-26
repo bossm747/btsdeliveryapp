@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   Wifi, WifiOff, CircleDot, Plus, Minus, MessageCircle
 } from "lucide-react";
 import { useRiderToast } from "@/hooks/use-rider-toast";
+import { useRiderWebSocket } from "@/hooks/use-websocket";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -32,13 +33,14 @@ import OrderChat, { ChatButton } from "@/components/order-chat";
 export default function RiderDashboard() {
   const { user, logout } = useAuth();
   const riderToast = useRiderToast();
+  const localQueryClient = useQueryClient();
   const [, navigate] = useLocation();
   const [isOnline, setIsOnline] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [chatOrderId, setChatOrderId] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Fetch rider data
   const { data: riderData = {}, isLoading: riderLoading } = useQuery<{
@@ -51,10 +53,49 @@ export default function RiderDashboard() {
     enabled: true
   });
 
-  // Fetch active deliveries
+  // WebSocket connection for real-time order alerts and updates
+  const {
+    status: wsStatus,
+    isAuthenticated: wsAuthenticated,
+    latestAlert,
+    newOrderAlerts,
+    acknowledgeAlert,
+    sendRiderLocation,
+  } = useRiderWebSocket(riderData?.id, {
+    onConnect: () => setWsConnected(true),
+    onDisconnect: () => setWsConnected(false),
+    onVendorAlert: (alert) => {
+      // Handle new order assignments in real-time
+      if (alert.type === 'new_order' || alert.type === 'rider_assigned') {
+        // Invalidate pending assignments to refresh
+        localQueryClient.invalidateQueries({ queryKey: [`/api/riders/${riderData?.id}/pending-assignments`] });
+        
+        // Show toast notification
+        riderToast.newOrderAvailable(alert.orderNumber || alert.orderId);
+      }
+    },
+    onOrderStatusUpdate: (update) => {
+      // Invalidate active deliveries when order status changes
+      localQueryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries/active"] });
+    },
+    onMessage: (message) => {
+      // Handle rider-specific messages
+      if (message.type === 'new_assignment' || message.type === 'order_assigned') {
+        localQueryClient.invalidateQueries({ queryKey: [`/api/riders/${riderData?.id}/pending-assignments`] });
+        riderToast.newOrderAvailable(message.orderNumber || message.orderId);
+      }
+    },
+  });
+
+  // Update wsConnected state when WebSocket status changes
+  useEffect(() => {
+    setWsConnected(wsStatus === 'connected' || wsStatus === 'authenticated');
+  }, [wsStatus]);
+
+  // Fetch active deliveries - reduced polling when WebSocket is connected
   const { data: activeDeliveries = [], isLoading: deliveriesLoading } = useQuery<any[]>({
     queryKey: ["/api/rider/deliveries/active"],
-    refetchInterval: 10000
+    refetchInterval: wsConnected ? 60000 : 10000
   });
 
   // Fetch delivery history
@@ -62,12 +103,35 @@ export default function RiderDashboard() {
     queryKey: ["/api/rider/deliveries/history"]
   });
 
-  // Fetch pending assignments
+  // Fetch pending assignments - reduced polling when WebSocket is connected
   const { data: pendingAssignments = [] } = useQuery<any[]>({
     queryKey: [`/api/riders/${riderData?.id}/pending-assignments`],
     enabled: !!riderData?.id,
-    refetchInterval: 5000
+    refetchInterval: wsConnected ? 30000 : 5000
   });
+
+  // Send location updates via WebSocket when online
+  const sendLocationUpdate = useCallback(() => {
+    if (wsConnected && wsAuthenticated && currentLocation && isOnline) {
+      sendRiderLocation({
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+      });
+    }
+  }, [wsConnected, wsAuthenticated, currentLocation, isOnline, sendRiderLocation]);
+
+  // Send location updates periodically when online
+  useEffect(() => {
+    if (!isOnline || !currentLocation) return;
+
+    // Send initial location
+    sendLocationUpdate();
+
+    // Send location every 10 seconds
+    const interval = setInterval(sendLocationUpdate, 10000);
+
+    return () => clearInterval(interval);
+  }, [isOnline, currentLocation, sendLocationUpdate]);
 
   // Update online status
   const updateStatusMutation = useMutation({
@@ -150,6 +214,15 @@ export default function RiderDashboard() {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* WebSocket Status Indicator */}
+          <div className="flex items-center" title={wsConnected ? 'Real-time updates active' : 'Connecting...'}>
+            {wsConnected ? (
+              <Wifi className="w-4 h-4 text-green-500" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-gray-400" />
+            )}
+          </div>
+
           {/* Online Status Toggle */}
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />

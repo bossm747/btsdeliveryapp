@@ -38,8 +38,14 @@ import {
   Eye, ChevronUp, ChevronDown, AlertCircle, User, Phone, Mail,
   Shield, Car, FileCheck, AlertTriangle, Bike
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useAdminToast } from "@/hooks";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  AdminPageWrapper,
+  AdminRidersSkeleton,
+  NoPendingVerificationEmptyState,
+  NoRidersEmptyState,
+} from "@/components/admin";
 
 // Types
 interface RiderDocument {
@@ -97,7 +103,7 @@ const DOCUMENT_REQUIREMENTS = [
 ];
 
 export default function RiderVerification() {
-  const { toast } = useToast();
+  const adminToast = useAdminToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -135,20 +141,13 @@ export default function RiderVerification() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/pending-verification"] });
-      toast({
-        title: variables.action === "approve" ? "Document Approved" : "Document Rejected",
-        description: `The document has been ${variables.action === "approve" ? "approved" : "rejected"} successfully.`,
-      });
+      adminToast.success(`Document has been ${variables.action === "approve" ? "approved" : "rejected"} successfully.`);
       setRejectDocumentDialogOpen(false);
       setSelectedDocument(null);
       setRejectionReason("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to verify document",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to verify document");
     },
   });
 
@@ -161,19 +160,12 @@ export default function RiderVerification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/pending-verification"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/verification-stats"] });
-      toast({
-        title: "Rider Verified",
-        description: "The rider has been fully verified and can now accept deliveries.",
-      });
+      adminToast.riderVerified(selectedRider ? `${selectedRider.firstName} ${selectedRider.lastName}` : undefined);
       setDetailsOpen(false);
       setSelectedRider(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to complete verification",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to complete verification");
     },
   });
 
@@ -186,21 +178,14 @@ export default function RiderVerification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/pending-verification"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/verification-stats"] });
-      toast({
-        title: "Rider Rejected",
-        description: "The rider application has been rejected.",
-      });
+      adminToast.riderRejected(selectedRider ? `${selectedRider.firstName} ${selectedRider.lastName}` : undefined);
       setRejectDialogOpen(false);
       setDetailsOpen(false);
       setSelectedRider(null);
       setRejectionReason("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reject rider",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to reject rider");
     },
   });
 
@@ -212,17 +197,10 @@ export default function RiderVerification() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/riders/pending-verification"] });
-      toast({
-        title: "Background Check Initiated",
-        description: "The background check process has been started.",
-      });
+      adminToast.success("Background check process has been started.");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to initiate background check",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to initiate background check");
     },
   });
 
@@ -391,14 +369,22 @@ export default function RiderVerification() {
         />
 
         {/* Page Content */}
-        <main className="p-6">
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
+        <AdminPageWrapper
+          pageTitle="Rider Verification"
+          pageDescription="Review and verify rider documents and background checks"
+          refreshQueryKeys={[
+            "/api/admin/riders/pending-verification",
+            "/api/admin/riders/verification-stats",
+          ]}
+        >
+          <main className="p-6">
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
                       <p className="text-yellow-100 text-sm font-medium">Pending Review</p>
                       <p className="text-3xl font-bold">{(stats as any)?.pendingCount || riders.filter(r => r.status === 'pending' || r.status === 'documents_review').length}</p>
                       <p className="text-yellow-100 text-sm">Awaiting verification</p>
@@ -519,14 +505,18 @@ export default function RiderVerification() {
                     </TableHeader>
                     <TableBody>
                       {isLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
-                            <div className="flex items-center justify-center">
-                              <div className="animate-spin w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full mr-2" />
-                              Loading applications...
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-28" /></TableCell>
+                            <TableCell><div className="h-8 bg-gray-200 rounded animate-pulse w-36" /></TableCell>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-24" /></TableCell>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-24" /></TableCell>
+                            <TableCell><div className="h-6 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                            <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-28" /></TableCell>
+                            <TableCell><div className="h-6 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                            <TableCell><div className="h-8 bg-gray-200 rounded animate-pulse w-20" /></TableCell>
+                          </TableRow>
+                        ))
                       ) : isError ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-8">
@@ -541,9 +531,8 @@ export default function RiderVerification() {
                         </TableRow>
                       ) : filteredRiders.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                            <Truck className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                            <p>No rider applications found</p>
+                          <TableCell colSpan={8} className="p-0">
+                            <NoPendingVerificationEmptyState />
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -621,8 +610,9 @@ export default function RiderVerification() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </main>
+            </div>
+          </main>
+        </AdminPageWrapper>
       </div>
 
       {/* Rider Details Dialog */}

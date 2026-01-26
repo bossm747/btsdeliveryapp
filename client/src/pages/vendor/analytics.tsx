@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VendorPageWrapper, NoAnalyticsDataEmptyState, VendorStatsSkeleton, VendorChartSkeleton } from "@/components/vendor";
+import { useVendorToast } from "@/hooks/use-vendor-toast";
 import {
   TrendingUp,
   TrendingDown,
@@ -246,19 +247,29 @@ export default function VendorAnalytics() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
+      <VendorPageWrapper 
+        refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/analytics", "/api/vendor/orders"]}
+        pageTitle="Analytics Dashboard"
+        pageDescription="Track your restaurant performance and insights"
+      >
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+              <div className="h-4 w-64 bg-gray-200 dark:bg-slate-700 rounded animate-pulse mt-2" />
+            </div>
+            <div className="flex gap-3">
+              <div className="h-10 w-36 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+              <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            </div>
+          </div>
+          <VendorStatsSkeleton count={4} />
+          <div className="grid lg:grid-cols-2 gap-6">
+            <VendorChartSkeleton height={350} />
+            <VendorChartSkeleton height={350} />
+          </div>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Skeleton className="h-96" />
-          <Skeleton className="h-96" />
-        </div>
-      </div>
+      </VendorPageWrapper>
     );
   }
 
@@ -270,6 +281,11 @@ export default function VendorAnalytics() {
   const totalOrders = revenueData.reduce((sum, d) => sum + d.orders, 0);
 
   return (
+    <VendorPageWrapper 
+      refreshQueryKeys={["/api/vendor/restaurant", "/api/vendor/analytics", "/api/vendor/orders"]}
+      pageTitle="Analytics Dashboard"
+      pageDescription="Track your restaurant performance and insights"
+    >
     <div className="space-y-6" data-testid="vendor-analytics-page">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -703,5 +719,6 @@ export default function VendorAnalytics() {
         </CardContent>
       </Card>
     </div>
+    </VendorPageWrapper>
   );
 }

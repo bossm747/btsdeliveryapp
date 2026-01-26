@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -27,9 +26,14 @@ import {
   Heart,
   Bike,
   Timer,
-  Users
+  Users,
+  AlertCircle
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { RiderPageWrapper } from "@/components/rider/rider-page-wrapper";
+import { RiderPerformanceSkeleton } from "@/components/rider/rider-skeletons";
+import { NoPerformanceDataEmptyState, RiderErrorState } from "@/components/rider/rider-empty-states";
+import { useRiderToast } from "@/hooks/use-rider-toast";
 
 // Types
 interface PerformanceData {
@@ -283,25 +287,12 @@ const ReviewCard = ({ review }: { review: Review }) => (
   </Card>
 );
 
-// Loading skeleton
-const PerformanceSkeleton = () => (
-  <div className="space-y-4 px-4 py-4">
-    <Skeleton className="h-40 w-full" />
-    <div className="grid grid-cols-2 gap-3">
-      <Skeleton className="h-28" />
-      <Skeleton className="h-28" />
-      <Skeleton className="h-28" />
-      <Skeleton className="h-28" />
-    </div>
-    <Skeleton className="h-48 w-full" />
-  </div>
-);
-
 export default function RiderPerformance() {
   const [, navigate] = useLocation();
+  const riderToast = useRiderToast();
 
   // Fetch performance data
-  const { data: performance, isLoading, error } = useQuery<PerformanceData>({
+  const { data: performance, isLoading, error, refetch } = useQuery<PerformanceData>({
     queryKey: ["/api/rider/performance"],
   });
 
@@ -340,15 +331,50 @@ export default function RiderPerformance() {
     return false;
   };
 
+  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <PerformanceSkeleton />
-      </div>
+      <RiderPageWrapper
+        pageTitle="Performance"
+        pageDescription="View your rider stats and achievements"
+        refreshQueryKeys={["/api/rider/performance"]}
+      >
+        <div className="min-h-screen bg-gray-50 px-4 py-4">
+          <RiderPerformanceSkeleton />
+        </div>
+      </RiderPageWrapper>
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <RiderPageWrapper
+        pageTitle="Performance"
+        pageDescription="View your rider stats and achievements"
+        refreshQueryKeys={["/api/rider/performance"]}
+      >
+        <div className="min-h-screen bg-gray-50 px-4 py-4">
+          <RiderErrorState
+            title="Hindi Na-load ang Performance Data"
+            description="May problema sa pag-load ng iyong stats, pre. Subukan ulit."
+            onRetry={() => refetch()}
+          />
+        </div>
+      </RiderPageWrapper>
+    );
+  }
+
+  // Check if no performance data at all (new rider)
+  const hasNoPerformanceData = performanceData.metrics.totalDeliveries === 0 &&
+                                performanceData.rating.totalReviews === 0;
+
   return (
+    <RiderPageWrapper
+      pageTitle="Performance"
+      pageDescription="View your rider stats and achievements"
+      refreshQueryKeys={["/api/rider/performance"]}
+    >
     <div className="min-h-screen bg-gray-50" data-testid="rider-performance-page">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
@@ -542,5 +568,6 @@ export default function RiderPerformance() {
         </Card>
       </div>
     </div>
+    </RiderPageWrapper>
   );
 }

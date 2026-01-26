@@ -11,6 +11,7 @@ import RestaurantCard from "@/components/restaurant-card";
 import RestaurantFilters from "@/components/restaurant-filters";
 import FeaturedCarousel from "@/components/customer/featured-carousel";
 import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
 import type { Restaurant } from "@shared/schema";
 
 // Quick category pills for filtering
@@ -172,9 +173,14 @@ export default function Restaurants() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8" data-testid="restaurants-page">
-      {/* Customer Header */}
-      <CustomerHeader title="Restaurants" showBack backPath="/customer-dashboard" />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/restaurants"]}
+      pageTitle="Restaurants"
+      pageDescription="Browse and discover restaurants in Batangas"
+    >
+      <div className="min-h-screen bg-background pb-20 md:pb-8" data-testid="restaurants-page">
+        {/* Customer Header */}
+        <CustomerHeader title="Restaurants" showBack backPath="/customer-dashboard" />
 
       {/* Sticky Category Pills */}
       <div className="sticky top-14 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
@@ -360,6 +366,7 @@ export default function Restaurants() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </CustomerPageWrapper>
   );
 }

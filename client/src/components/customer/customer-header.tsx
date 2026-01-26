@@ -5,13 +5,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
-  Menu, User, MapPin, Heart, LogOut, ArrowLeft, Bell,
+  Menu, User, MapPin, Heart, LogOut, ArrowLeft,
   Wallet, Gift, ShoppingCart
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/stores/cart-store";
+import { NotificationCenter } from "@/components/notification-center";
 import btsLogo from "@assets/bts-logo-transparent.png";
 
 interface CustomerHeaderProps {
@@ -103,10 +104,12 @@ export default function CustomerHeader({
           </Button>
 
           {/* Notifications */}
-          <Button variant="ghost" size="sm" className={`p-2 relative ${buttonClass}`}>
-            <Bell className="w-5 h-5" />
-            <Badge className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-red-500">3</Badge>
-          </Button>
+          <NotificationCenter
+            variant="ghost"
+            size="sm"
+            className={buttonClass}
+            iconClassName={variant === "green" ? "text-white" : "text-gray-700"}
+          />
 
           {/* Menu Trigger */}
           <Sheet open={showMenu} onOpenChange={setShowMenu}>

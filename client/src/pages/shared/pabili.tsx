@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingBag, Store, Package, Clock, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import CustomerHeader from "@/components/customer/customer-header";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
 
 interface PublicConfig {
   success: boolean;
@@ -55,6 +57,7 @@ export default function Pabili() {
   const serviceFee = configData?.config?.serviceFees?.pabili?.serviceFee ?? DEFAULT_SERVICE_FEE;
   const deliveryFee = configData?.config?.serviceFees?.pabili?.deliveryFee ?? DEFAULT_DELIVERY_FEE;
   const totalFees = serviceFee + deliveryFee;
+  const isConfigLoading = !configData;
 
   const handleSubmitPabili = async () => {
     if (!selectedStore || !items || !deliveryAddress || !estimatedBudget) {
@@ -98,8 +101,13 @@ export default function Pabili() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="page-pabili">
-      <CustomerHeader title="Pabili Service" showBack backPath="/customer-dashboard" />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/config/public"]}
+      pageTitle="Pabili Service"
+      pageDescription="Request shopping assistance - we'll buy and deliver items for you"
+    >
+      <div className="min-h-screen bg-background pb-20" data-testid="page-pabili">
+        <CustomerHeader title="Pabili Service" showBack backPath="/customer-dashboard" />
 
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
@@ -237,32 +245,33 @@ export default function Pabili() {
             </CardContent>
           </Card>
 
-            <Button
-              size="lg"
-              className="w-full bg-orange-600 hover:bg-orange-700"
-              onClick={handleSubmitPabili}
-              disabled={!selectedStore || !items || !deliveryAddress || !estimatedBudget}
-              data-testid="button-submit"
-            >
-              Submit Pabili Request
-            </Button>
+          <Button
+            size="lg"
+            className="w-full bg-orange-600 hover:bg-orange-700"
+            onClick={handleSubmitPabili}
+            disabled={!selectedStore || !items || !deliveryAddress || !estimatedBudget}
+            data-testid="button-submit"
+          >
+            Submit Pabili Request
+          </Button>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h3 className="font-semibold mb-2 flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Paano ito gumagana?
-              </h3>
-              <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Piliin ang store at isulat ang listahan ng bibilhin</li>
-                <li>Magbayad ng estimated cost + fees</li>
-                <li>Ang aming shopper ay bibili para sa inyo</li>
-                <li>I-deliver namin sa inyong address</li>
-                <li>Bibigyan kayo ng resibo at sukli (kung meron)</li>
-              </ol>
-            </div>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Paano ito gumagana?
+            </h3>
+            <ol className="list-decimal list-inside space-y-1 text-sm">
+              <li>Piliin ang store at isulat ang listahan ng bibilhin</li>
+              <li>Magbayad ng estimated cost + fees</li>
+              <li>Ang aming shopper ay bibili para sa inyo</li>
+              <li>I-deliver namin sa inyong address</li>
+              <li>Bibigyan kayo ng resibo at sukli (kung meron)</li>
+            </ol>
+          </div>
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </CustomerPageWrapper>
   );
 }

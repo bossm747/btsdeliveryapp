@@ -14388,3 +14388,2863 @@
   level: 'error',
   message: 'Request error'
 }
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5ma5v7vpde6tl5ubk0s3l',
+  method: 'GET',
+  url: '/health',
+  statusCode: 401,
+  duration: 11,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-26T11:04:03.254Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'dqgvgjoboz9zj37tcnv67',
+  method: 'GET',
+  url: '/health',
+  statusCode: 401,
+  duration: 12,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-26T11:05:14.829Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'qaah2sgwajecputnvgwyl',
+    method: 'GET',
+    url: '/assets/index-C2eGBSS3.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.498Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qaah2sgwajecputnvgwyl',
+  method: 'GET',
+  url: '/assets/index-C2eGBSS3.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.499Z","requestId":"qaah2sgwajecputnvgwyl","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.499Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'm9hjytrfv8iivaqxm91u',
+    method: 'GET',
+    url: '/assets/index-IjBITMBS.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.502Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'm9hjytrfv8iivaqxm91u',
+  method: 'GET',
+  url: '/assets/index-IjBITMBS.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.502Z","requestId":"m9hjytrfv8iivaqxm91u","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.503Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'o31bgwxoqw6o10tj8hoh',
+    method: 'GET',
+    url: '/assets/index-C2eGBSS3.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.505Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'o31bgwxoqw6o10tj8hoh',
+  method: 'GET',
+  url: '/assets/index-C2eGBSS3.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.506Z","requestId":"o31bgwxoqw6o10tj8hoh","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.506Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'pixhripah25369hvw2hqx',
+    method: 'GET',
+    url: '/assets/index-C2eGBSS3.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.508Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'pixhripah25369hvw2hqx',
+  method: 'GET',
+  url: '/assets/index-C2eGBSS3.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.508Z","requestId":"pixhripah25369hvw2hqx","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.509Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'u38hsya4cpjry0hi2t3wuh',
+    method: 'GET',
+    url: '/assets/index-C2eGBSS3.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.511Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'u38hsya4cpjry0hi2t3wuh',
+  method: 'GET',
+  url: '/assets/index-C2eGBSS3.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.511Z","requestId":"u38hsya4cpjry0hi2t3wuh","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.511Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'qn03rxz1rv5adzqrxc389',
+    method: 'GET',
+    url: '/assets/index-IjBITMBS.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.513Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qn03rxz1rv5adzqrxc389',
+  method: 'GET',
+  url: '/assets/index-IjBITMBS.css',
+  statusCode: 500,
+  duration: 3,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.514Z","requestId":"qn03rxz1rv5adzqrxc389","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.515Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'r2p9ps89qwlans04icb9l',
+    method: 'GET',
+    url: '/assets/index-IjBITMBS.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.517Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'r2p9ps89qwlans04icb9l',
+  method: 'GET',
+  url: '/assets/index-IjBITMBS.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.517Z","requestId":"r2p9ps89qwlans04icb9l","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.518Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '0oe4cbnt7iklzwpycz7tcwq',
+    method: 'GET',
+    url: '/assets/index-IjBITMBS.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:07.519Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0oe4cbnt7iklzwpycz7tcwq',
+  method: 'GET',
+  url: '/assets/index-IjBITMBS.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:07.520Z","requestId":"0oe4cbnt7iklzwpycz7tcwq","statusCode":500}',
+  timestamp: '2026-01-26T11:15:07.520Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '0ns0fs29z1nv6ol9hdhrgj',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.342Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0ns0fs29z1nv6ol9hdhrgj',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.342Z","requestId":"0ns0fs29z1nv6ol9hdhrgj","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.342Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '7shbv9rq48vd1pus3qiktf',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.346Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7shbv9rq48vd1pus3qiktf',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.346Z","requestId":"7shbv9rq48vd1pus3qiktf","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.346Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '7x5elr1x47xro5hl8warrk',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.348Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7x5elr1x47xro5hl8warrk',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.348Z","requestId":"7x5elr1x47xro5hl8warrk","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.348Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'x2tju1glargr94l2buo',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.350Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'x2tju1glargr94l2buo',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.350Z","requestId":"x2tju1glargr94l2buo","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.351Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'm4dnlxwdl9h5pg203s9iq',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.355Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'm4dnlxwdl9h5pg203s9iq',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.356Z","requestId":"m4dnlxwdl9h5pg203s9iq","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.356Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'zbue98a1hpqcv9vdbx40o',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.364Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zbue98a1hpqcv9vdbx40o',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.364Z","requestId":"zbue98a1hpqcv9vdbx40o","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.365Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 't6zs1e8kr1l0uba0i40e1j',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.385Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 't6zs1e8kr1l0uba0i40e1j',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.386Z","requestId":"t6zs1e8kr1l0uba0i40e1j","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.386Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'is4y5wlvdz3kfc5u4jqon',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:34.388Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'is4y5wlvdz3kfc5u4jqon',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:34.388Z","requestId":"is4y5wlvdz3kfc5u4jqon","statusCode":500}',
+  timestamp: '2026-01-26T11:15:34.388Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'kor4jebwzwlg9bcfh6urwu',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:40.637Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kor4jebwzwlg9bcfh6urwu',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:40.637Z","requestId":"kor4jebwzwlg9bcfh6urwu","statusCode":500}',
+  timestamp: '2026-01-26T11:15:40.637Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 't8n57x836or9w4v6rmde',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:40.639Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 't8n57x836or9w4v6rmde',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:40.639Z","requestId":"t8n57x836or9w4v6rmde","statusCode":500}',
+  timestamp: '2026-01-26T11:15:40.639Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'jakypidbmyjmjmanbiio',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:41.122Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jakypidbmyjmjmanbiio',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:41.123Z","requestId":"jakypidbmyjmjmanbiio","statusCode":500}',
+  timestamp: '2026-01-26T11:15:41.123Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'xkqkd8vg7dla49q4c0rzjo',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:15:41.124Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'xkqkd8vg7dla49q4c0rzjo',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 0,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:15:41.124Z","requestId":"xkqkd8vg7dla49q4c0rzjo","statusCode":500}',
+  timestamp: '2026-01-26T11:15:41.124Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'oh8gbmiah68cmczxtl8317',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:16:01.881Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'oh8gbmiah68cmczxtl8317',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:16:01.881Z","requestId":"oh8gbmiah68cmczxtl8317","statusCode":500}',
+  timestamp: '2026-01-26T11:16:01.882Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '5c54hlpkcaj01a8z3z4c8jo',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:16:01.884Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5c54hlpkcaj01a8z3z4c8jo',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 3,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:16:01.885Z","requestId":"5c54hlpkcaj01a8z3z4c8jo","statusCode":500}',
+  timestamp: '2026-01-26T11:16:01.885Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'lnruh62xlcqvk8h7pxrt59',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:16:53.728Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'lnruh62xlcqvk8h7pxrt59',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:16:53.728Z","requestId":"lnruh62xlcqvk8h7pxrt59","statusCode":500}',
+  timestamp: '2026-01-26T11:16:53.728Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'yse9mrn2qt3ny0alqjbr4',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:16:53.731Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'yse9mrn2qt3ny0alqjbr4',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:16:53.731Z","requestId":"yse9mrn2qt3ny0alqjbr4","statusCode":500}',
+  timestamp: '2026-01-26T11:16:53.731Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ing48wn3yawkdhhpmmlr8',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:17:39.492Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ing48wn3yawkdhhpmmlr8',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:17:39.493Z","requestId":"ing48wn3yawkdhhpmmlr8","statusCode":500}',
+  timestamp: '2026-01-26T11:17:39.493Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'e2fr3831q555lvyo561yy7',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:17:39.494Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'e2fr3831q555lvyo561yy7',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:17:39.495Z","requestId":"e2fr3831q555lvyo561yy7","statusCode":500}',
+  timestamp: '2026-01-26T11:17:39.495Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'oo3l898jrbhlf1j892kr4',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:18:36.576Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'oo3l898jrbhlf1j892kr4',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:18:36.576Z","requestId":"oo3l898jrbhlf1j892kr4","statusCode":500}',
+  timestamp: '2026-01-26T11:18:36.576Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'b2q3hnqsi9rru8idn02fdn',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:18:36.577Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'b2q3hnqsi9rru8idn02fdn',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:18:36.577Z","requestId":"b2q3hnqsi9rru8idn02fdn","statusCode":500}',
+  timestamp: '2026-01-26T11:18:36.578Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'nml49flpr29ff1441qw2uo',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:19:42.476Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'nml49flpr29ff1441qw2uo',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:19:42.476Z","requestId":"nml49flpr29ff1441qw2uo","statusCode":500}',
+  timestamp: '2026-01-26T11:19:42.476Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'zszalilnw2g23nyfnku7ra',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:19:42.477Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zszalilnw2g23nyfnku7ra',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 0,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:19:42.477Z","requestId":"zszalilnw2g23nyfnku7ra","statusCode":500}',
+  timestamp: '2026-01-26T11:19:42.477Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'o80t2ehql3ltm4e0j9k4e',
+  method: 'GET',
+  url: '/api/admin/users',
+  statusCode: 401,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-26T11:21:26.495Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'irmwcz4i1sjtpwwie2dwl',
+  method: 'GET',
+  url: '/api/orders',
+  statusCode: 401,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-26T11:21:26.497Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '8cegl1w992ci435ayjizip',
+  method: 'GET',
+  url: '/api/admin/stats',
+  statusCode: 401,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-26T11:21:26.502Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'yzt6x1fpgzcnh55s6c6iii',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.748Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'yzt6x1fpgzcnh55s6c6iii',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.749Z","requestId":"yzt6x1fpgzcnh55s6c6iii","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.749Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'q6dfqcvtmjlmmga5fxiqv7',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.750Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'q6dfqcvtmjlmmga5fxiqv7',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.751Z","requestId":"q6dfqcvtmjlmmga5fxiqv7","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.751Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '9d9r51x3692cng1yiycmj',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.772Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9d9r51x3692cng1yiycmj',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.773Z","requestId":"9d9r51x3692cng1yiycmj","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.773Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'o0fhw6foxsms50ifttmou',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.774Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'o0fhw6foxsms50ifttmou',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.774Z","requestId":"o0fhw6foxsms50ifttmou","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.776Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'kwngcn5op2k51g1u3d2x9c',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.784Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kwngcn5op2k51g1u3d2x9c',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 5,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.787Z","requestId":"kwngcn5op2k51g1u3d2x9c","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.787Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'kjq4cmikrpnzzrw1huu3m',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.794Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kjq4cmikrpnzzrw1huu3m',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 5,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.794Z","requestId":"kjq4cmikrpnzzrw1huu3m","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.795Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ut2b27wzrnbb0sioonw0yo',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.819Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ut2b27wzrnbb0sioonw0yo',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 4,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.820Z","requestId":"ut2b27wzrnbb0sioonw0yo","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.820Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'jsiez75ivswxttwsdrwvo',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:26.823Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jsiez75ivswxttwsdrwvo',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:26.823Z","requestId":"jsiez75ivswxttwsdrwvo","statusCode":500}',
+  timestamp: '2026-01-26T11:21:26.824Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'vj4crbebiflgnz9a4tnnyp',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:28.994Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'vj4crbebiflgnz9a4tnnyp',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:28.994Z","requestId":"vj4crbebiflgnz9a4tnnyp","statusCode":500}',
+  timestamp: '2026-01-26T11:21:28.994Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'qidq0j9epg2sc40g8y79q',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:28.995Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qidq0j9epg2sc40g8y79q',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:28.996Z","requestId":"qidq0j9epg2sc40g8y79q","statusCode":500}',
+  timestamp: '2026-01-26T11:21:28.996Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'v2akfgvjxczmou61veje',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:28.998Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'v2akfgvjxczmou61veje',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:28.998Z","requestId":"v2akfgvjxczmou61veje","statusCode":500}',
+  timestamp: '2026-01-26T11:21:28.998Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '6ogt2slc8ftm6mkoi9xlpj',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:28.999Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '6ogt2slc8ftm6mkoi9xlpj',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:28.999Z","requestId":"6ogt2slc8ftm6mkoi9xlpj","statusCode":500}',
+  timestamp: '2026-01-26T11:21:28.999Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '0czp760q71fmloseuan54v',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:29.012Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0czp760q71fmloseuan54v',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:29.013Z","requestId":"0czp760q71fmloseuan54v","statusCode":500}',
+  timestamp: '2026-01-26T11:21:29.013Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '1udjjv6skmhkzinwbcv4p',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:29.015Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '1udjjv6skmhkzinwbcv4p',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:29.015Z","requestId":"1udjjv6skmhkzinwbcv4p","statusCode":500}',
+  timestamp: '2026-01-26T11:21:29.015Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '2e6pctyqhr5hxpuj5we85',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:29.050Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '2e6pctyqhr5hxpuj5we85',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:29.051Z","requestId":"2e6pctyqhr5hxpuj5we85","statusCode":500}',
+  timestamp: '2026-01-26T11:21:29.051Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'e6o2k27e0ued1vii5drygk',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:29.053Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'e6o2k27e0ued1vii5drygk',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:29.053Z","requestId":"e6o2k27e0ued1vii5drygk","statusCode":500}',
+  timestamp: '2026-01-26T11:21:29.053Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'al68c5ffkbt656hjfl1yvu',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.213Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'al68c5ffkbt656hjfl1yvu',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.214Z","requestId":"al68c5ffkbt656hjfl1yvu","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.214Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ljor57h8q9fq0pnmts99yn',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.216Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ljor57h8q9fq0pnmts99yn',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.216Z","requestId":"ljor57h8q9fq0pnmts99yn","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.216Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'vlvwkb9rrqes5xfibeeqp',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.250Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'vlvwkb9rrqes5xfibeeqp',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.250Z","requestId":"vlvwkb9rrqes5xfibeeqp","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.251Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ar45xteq3qdozy9xoaiqka',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.252Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ar45xteq3qdozy9xoaiqka',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.252Z","requestId":"ar45xteq3qdozy9xoaiqka","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.252Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'qns0bl1aybbgp7yif0io6i',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.260Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qns0bl1aybbgp7yif0io6i',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.260Z","requestId":"qns0bl1aybbgp7yif0io6i","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.260Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '0zfdu012ijqpfawiv38zn',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.262Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0zfdu012ijqpfawiv38zn',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.262Z","requestId":"0zfdu012ijqpfawiv38zn","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.262Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'yfaqh4e71zc7ldoyq1c07s',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.301Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'yfaqh4e71zc7ldoyq1c07s',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.301Z","requestId":"yfaqh4e71zc7ldoyq1c07s","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.301Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'aumc30vycmjn66qkgqala',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:31.305Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'aumc30vycmjn66qkgqala',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:31.306Z","requestId":"aumc30vycmjn66qkgqala","statusCode":500}',
+  timestamp: '2026-01-26T11:21:31.306Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'rc3i2gehw5crzhpgtzsg2d',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.411Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rc3i2gehw5crzhpgtzsg2d',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.411Z","requestId":"rc3i2gehw5crzhpgtzsg2d","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.412Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'lpkg869jmvmoc2yuw2o7g',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.413Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'lpkg869jmvmoc2yuw2o7g',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 0,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.413Z","requestId":"lpkg869jmvmoc2yuw2o7g","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.414Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'kjmzp8gvu4n5hx2e5yexi2',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.477Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kjmzp8gvu4n5hx2e5yexi2',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.477Z","requestId":"kjmzp8gvu4n5hx2e5yexi2","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.477Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '01rntc3a1pjfbwbg5gmeod4',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.479Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '01rntc3a1pjfbwbg5gmeod4',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.479Z","requestId":"01rntc3a1pjfbwbg5gmeod4","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.479Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'k74j2vh36h08mfnynrqhnd',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.481Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'k74j2vh36h08mfnynrqhnd',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.481Z","requestId":"k74j2vh36h08mfnynrqhnd","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.481Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'rt1j00hsx5cv3ep6ijha',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.482Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rt1j00hsx5cv3ep6ijha',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.483Z","requestId":"rt1j00hsx5cv3ep6ijha","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.483Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'lwknog8hsd1g8s2nwhdbz',
+    method: 'GET',
+    url: '/assets/index-oj_EMNsD.js',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.544Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'lwknog8hsd1g8s2nwhdbz',
+  method: 'GET',
+  url: '/assets/index-oj_EMNsD.js',
+  statusCode: 500,
+  duration: 2,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.544Z","requestId":"lwknog8hsd1g8s2nwhdbz","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.545Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: 'Not allowed by CORS',
+    stack: 'Error: Not allowed by CORS\n' +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:37048:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:36982:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '52thhbfx6o2zs68puzicg',
+    method: 'GET',
+    url: '/assets/index-BB4J0vfL.css',
+    ip: '127.0.0.1',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.4 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-26T11:21:33.547Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '52thhbfx6o2zs68puzicg',
+  method: 'GET',
+  url: '/assets/index-BB4J0vfL.css',
+  statusCode: 500,
+  duration: 1,
+  ip: '127.0.0.1',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-26T11:21:33.548Z","requestId":"52thhbfx6o2zs68puzicg","statusCode":500}',
+  timestamp: '2026-01-26T11:21:33.548Z',
+  level: 'error',
+  message: 'Request error'
+}
