@@ -10,7 +10,7 @@ BTS Delivery is a multi-service delivery platform for Batangas Province, Philipp
 
 ```bash
 # Development
-npm run dev        # Start development server (tsx with hot-reload, port 5000)
+npm run dev        # Start development server (tsx with hot-reload, port 5001)
 npm run build      # Build for production (Vite + esbuild)
 npm run start      # Run production build
 npm run check      # TypeScript type checking
@@ -78,6 +78,15 @@ All backend routes are under `/api/*`. Key prefixes:
 - `/api/auth/*` - Authentication (login, register, password reset)
 - `/api/customer/*`, `/api/vendor/*`, `/api/rider/*`, `/api/admin/*` - Role-specific endpoints
 - `/api/analytics/*` - Analytics and reporting
+- `/api/routing/*` - Map routing, geocoding, delivery estimates (public, no auth)
+- `/api/docs` - **Swagger UI** (interactive API documentation)
+
+### API Documentation
+Swagger UI is available at `/api/docs` when the server is running. It provides:
+- Complete endpoint reference with schemas
+- Request/response examples
+- Live API testing capability
+- Authentication flow documentation
 
 ### Database
 - Schema defined in `shared/schema.ts` (large file, use grep to find specific tables)
@@ -101,6 +110,22 @@ Auth middleware: `authenticateToken`, `requireRole`, `requireAdmin`, `requireAdm
 - `server/services/notification-service.ts` - Multi-channel notifications (email, SMS, push)
 - `server/services/chat-service.ts` - Real-time customer-rider messaging
 - `server/services/websocket-manager.ts` - WebSocket connection management
+- `server/services/fraud-detection.ts` - Transaction fraud scoring and alerts
+- `server/services/audit-logger.ts` - Admin action audit logging
+- `server/services/cache-service.ts` - Query result caching
+- `server/services/dispatch-service.ts` - Rider assignment and batching
+- `server/services/financial-analytics.ts` - Revenue and commission analytics
+- `server/services/refund-service.ts` - Order refund processing
+- `server/integrations/maps.ts` - Maps service (OpenRouteService primary, Google Maps fallback)
+- `server/integrations/openrouteservice.ts` - OpenRouteService client for routing
+- `server/routes/routing.ts` - Public routing API endpoints
+
+### Map & Tracking Components
+Frontend uses Leaflet (free) with OpenStreetMap tiles:
+- `client/src/lib/leaflet-utils.ts` - Shared utilities, markers, polyline decoder
+- `client/src/components/shared/leaflet-tracking-map.tsx` - Order tracking for customers
+- `client/src/components/shared/leaflet-live-tracking-map.tsx` - Multi-order tracking for admin/vendor
+- `client/src/components/rider/leaflet-rider-map-tracking.tsx` - Rider navigation and delivery tracking
 
 ### Real-time Features
 WebSocket server runs alongside Express for:
@@ -114,6 +139,7 @@ WebSocket server runs alongside Express for:
 - `PUBLIC_APP_URL` - Public URL for webhooks and emails
 - `SENDGRID_API_KEY` - Email service (optional)
 - `NEXUSPAY_*` - Payment gateway credentials
+- `OPENROUTE_API_KEY` - OpenRouteService API key for routing (free tier: 2,000 req/day)
 
 ### AI Service Configuration
 - `OPENROUTER_API_KEY` - OpenRouter API key (primary AI provider, multi-model access)

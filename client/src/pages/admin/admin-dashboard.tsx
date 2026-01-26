@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import {
   Users, Store, Package, DollarSign, TrendingUp, AlertCircle,
-  Search, CheckCircle, BarChart3
+  Search, CheckCircle, BarChart3, Activity
 } from "lucide-react";
 import { useAdminToast } from "@/hooks";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,6 +29,8 @@ import AdminAnalytics from "@/components/admin/admin-analytics";
 import DispatchConsole from "@/components/admin/dispatch-console";
 import AdminHeader from "@/components/admin/admin-header";
 import AdminSidebar from "@/components/admin/admin-sidebar";
+import LiveOrderTracker from "@/components/shared/live-order-tracker";
+import LeafletLiveTrackingMap from "@/components/shared/leaflet-live-tracking-map";
 import {
   AdminPageWrapper,
   AdminDashboardSkeleton,
@@ -134,7 +136,20 @@ export default function AdminDashboard() {
   const renderTabContent = () => {
     switch (activeTab) {
       case "dispatch":
-        return <DispatchConsole />;
+        return (
+          <div className="space-y-6">
+            {/* Live Tracking Map with rider locations */}
+            <LeafletLiveTrackingMap
+              userRole="admin"
+              apiEndpoint="/api/admin/orders"
+              title="Live Delivery Tracking"
+              showList={true}
+              height="450px"
+            />
+            {/* Dispatch Console for manual intervention */}
+            <DispatchConsole />
+          </div>
+        );
       case "analytics":
         return <AdminAnalytics stats={stats} />;
       case "orders":

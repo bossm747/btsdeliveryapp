@@ -58,6 +58,7 @@ import {
   orderStatusHistory,
   riderDocuments,
   riderVerificationStatus,
+  reviews,
   RIDER_DOC_TYPES,
   RIDER_DOC_STATUSES,
   RIDER_VERIFICATION_STATUSES,
@@ -80,7 +81,7 @@ import {
   insertCustomerPaymentMethodSchema,
   type CustomerPaymentMethod
 } from "@shared/schema";
-import { eq, sql, and, isNull, inArray, desc } from "drizzle-orm";
+import { eq, sql, and, isNull, inArray, desc, gte, lte, or } from "drizzle-orm";
 import { db, pool } from "./db";
 import { z } from "zod";
 import { nexusPayService, NEXUSPAY_CODES } from "./services/nexuspay";
@@ -109,9 +110,19 @@ import { cacheQuery, CacheKeys, CacheTTL, invalidate } from './services/cache';
 import { registerNexusPayRoutes } from './routes/nexuspay';
 import { chatService } from './services/chat-service';
 import analyticsRoutes from './routes/analytics';
+import routingRoutes from './routes/routing';
 import multer from 'multer';
 import { LocalStorageService } from './services/local-storage';
 import { analyzeMenuImage, analyzeImage, createMenuFromAnalysis } from './services/ai-vision';
+import {
+  parseMenuFile,
+  enrichMenuItems,
+  generateImagePrompts,
+  createMenuItemsFromParsed,
+  type ParsedMenuItem,
+  type MenuParseResult,
+  type MenuCreationResult
+} from './services/menu-file-parser';
 
 // Configure multer for memory storage (for AI processing)
 const upload = multer({
@@ -147,28 +158,8 @@ if (!JWT_SECRET) {
 }
 
 
-// Extend Express Request interface to include user property
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        role: string;
-        email: string;
-        firstName?: string;
-        lastName?: string;
-        phone?: string;
-        profileImageUrl?: string;
-        status: string;
-        permissions?: any;
-        preferences?: any;
-        createdAt?: Date;
-        updatedAt?: Date;
-      };
-      sessionId?: string;
-    }
-  }
-}
+// Note: Express Request interface is extended in middleware/auth.ts
+// Do not redeclare here to avoid type conflicts
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -869,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/orders", authenticateToken, async (req: any, res) => {
     try {
       const { customerId, restaurantId } = req.query;
-      let orders;
+      let orders: Awaited<ReturnType<typeof storage.getOrders>> = [];
       
       // Admin can see all orders with optional filters
       if (req.user.role === 'admin') {
@@ -1165,9 +1156,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY: Order creation requires authentication
   app.post("/api/orders", authenticateToken, async (req: any, res) => {
     try {
+      // Convert numeric fields to strings (PostgreSQL decimal fields require strings)
+      const body = req.body;
+
+      // baseAmount validation: Required field representing the order's item cost before fees.
+      // Accepts either 'baseAmount' or 'subtotal' field name for backward compatibility.
+      // This is the pre-fee/pre-discount item total that pricing calculations depend on.
+      const baseAmountValue = body.baseAmount ?? body.subtotal;
+
+      if (baseAmountValue === undefined || baseAmountValue === null) {
+        return res.status(400).json({
+          message: "Missing required field: baseAmount. The order must include a baseAmount (or subtotal) representing the item total before fees and discounts.",
+          code: "MISSING_BASE_AMOUNT"
+        });
+      }
+
+      const parsedBaseAmount = parseFloat(baseAmountValue);
+      if (isNaN(parsedBaseAmount) || parsedBaseAmount < 0) {
+        return res.status(400).json({
+          message: "Invalid baseAmount: Must be a valid non-negative number representing the order's item total.",
+          code: "INVALID_BASE_AMOUNT"
+        });
+      }
+
+      // Generate temporary orderNumber for schema validation (will be overwritten by storage.createOrder)
+      const tempOrderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+
+      const normalizedBody = {
+        ...body,
+        orderNumber: tempOrderNumber, // Required by schema, generated server-side
+        // Use validated baseAmount as subtotal (the database field name)
+        subtotal: parsedBaseAmount.toString(),
+        deliveryFee: body.deliveryFee?.toString(),
+        serviceFee: body.serviceFee?.toString(),
+        tax: body.tax?.toString(),
+        tip: body.tip?.toString(),
+        discount: body.discount?.toString(),
+        totalAmount: body.totalAmount?.toString(),
+        promoDiscount: body.promoDiscount?.toString(),
+        loyaltyDiscount: body.loyaltyDiscount?.toString(),
+      };
+
       // Force customerId to be the authenticated user (prevent impersonation)
       const orderData = insertOrderSchema.parse({
-        ...req.body,
+        ...normalizedBody,
         customerId: req.user.id
       });
 
@@ -1193,16 +1225,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // PAYMENT-ORDER RACE CONDITION FIX:
-      // For online payment methods, create order with 'payment_pending' status
-      // This prevents vendor notification before payment is confirmed
-      // For COD (cash on delivery), use normal 'pending' status
+      // RIDER-FIRST ORDER FLOW:
+      // 1. Order created with 'awaiting_rider' status (COD) or 'payment_pending' (online)
+      // 2. After payment confirmed (online) or immediately (COD), order goes to rider queue
+      // 3. Rider accepts -> order status becomes 'confirmed' -> vendor notified
+      // 4. Vendor prepares while rider travels to pickup (parallel tracking)
       const paymentMethod = orderData.paymentMethod?.toLowerCase() || 'cash';
       const paymentProvider = orderData.paymentProvider?.toLowerCase() || 'cash';
       const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod' || paymentProvider === 'cod';
 
       // Set initial status based on payment method
-      const initialStatus = isCOD ? 'pending' : 'payment_pending';
+      // COD: awaiting_rider (go straight to rider queue)
+      // Online: payment_pending (wait for payment, then go to rider queue)
+      const initialStatus = isCOD ? 'awaiting_rider' : 'payment_pending';
       const orderDataWithStatus = {
         ...orderData,
         status: initialStatus,
@@ -1211,13 +1246,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const order = await storage.createOrder(orderDataWithStatus);
 
-      // Only notify vendor immediately for COD orders
-      // Online payment orders will notify vendor after payment confirmation
+      // For COD orders, immediately trigger rider assignment
+      // Vendor will NOT be notified until a rider accepts the order
       if (isCOD) {
-        console.log(`[Order ${order.id}] COD order created, notifying vendor immediately`);
-        // Note: Vendor notification happens via WebSocket broadcast in the enhanced order endpoint
+        console.log(`[Order ${order.id}] COD order created with awaiting_rider status, triggering rider assignment`);
+
+        // Get restaurant location for rider assignment
+        const restaurant = await storage.getRestaurant(order.restaurantId);
+        const restaurantAddress = restaurant?.address as any;
+        const deliveryAddr = order.deliveryAddress as any;
+
+        if (restaurant && restaurantAddress?.coordinates) {
+          // Trigger rider assignment asynchronously
+          const { riderAssignmentService } = await import('./riderAssignmentService.js');
+          riderAssignmentService.createAssignment({
+            orderId: order.id,
+            restaurantLocation: {
+              lat: restaurantAddress.coordinates.lat || restaurantAddress.coordinates.latitude,
+              lng: restaurantAddress.coordinates.lng || restaurantAddress.coordinates.longitude
+            },
+            deliveryLocation: deliveryAddr?.coordinates || { lat: 0, lng: 0 },
+            priority: 1,
+            estimatedValue: parseFloat(order.totalAmount) || 0,
+            maxDistance: 10
+          }).then(assignmentId => {
+            if (assignmentId) {
+              console.log(`[Order ${order.id}] Rider assignment created: ${assignmentId}`);
+            } else {
+              console.log(`[Order ${order.id}] No riders available, order queued for assignment`);
+            }
+          }).catch(err => {
+            console.error(`[Order ${order.id}] Rider assignment failed:`, err);
+          });
+        } else {
+          console.log(`[Order ${order.id}] Restaurant location not available for rider assignment`);
+        }
       } else {
-        console.log(`[Order ${order.id}] Online payment order created with payment_pending status, waiting for payment confirmation`);
+        console.log(`[Order ${order.id}] Online payment order created with payment_pending status, waiting for payment before rider assignment`);
       }
 
       // Invalidate customer orders cache
@@ -1730,23 +1795,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!rider) {
         return res.status(403).json({ message: "Rider profile not found" });
       }
-      
-      // Update and get the assignment
-      // TODO: Add getRiderAssignment to storage to verify ownership BEFORE update
-      // For now, we verify after the update and the assignment table has assignedRiderId
+
+      // Verify assignment exists and belongs to this rider BEFORE updating
+      const existingAssignment = await storage.getRiderAssignment(req.params.assignmentId);
+
+      if (!existingAssignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      // Verify the assignment belongs to this rider
+      if (existingAssignment.assignedRiderId !== rider.id) {
+        return res.status(403).json({ message: "This assignment is not for you" });
+      }
+
+      // Now safe to update the assignment
       const assignment = await storage.updateRiderAssignmentStatus(
         req.params.assignmentId,
         status,
         rejectionReason
       );
-      
+
       if (!assignment) {
-        return res.status(404).json({ message: "Assignment not found" });
-      }
-      
-      // Verify the assignment belongs to this rider
-      if (assignment.assignedRiderId !== rider.id) {
-        return res.status(403).json({ message: "This assignment is not for you" });
+        return res.status(500).json({ message: "Failed to update assignment" });
       }
       
       // Broadcast status update
@@ -2104,10 +2174,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
 
-        // PAYMENT-ORDER RACE CONDITION FIX:
-        // Now that payment is confirmed, transition from payment_pending to pending
+        // RIDER-FIRST ORDER FLOW:
+        // Payment confirmed -> transition to awaiting_rider -> trigger rider assignment
+        // Vendor will NOT be notified until a rider accepts the order
         const wasPaymentPending = order.status === 'payment_pending';
-        const newStatus = wasPaymentPending ? 'pending' : order.status;
+        const newStatus = wasPaymentPending ? 'awaiting_rider' : order.status;
 
         // Update order payment status AND order status
         await storage.updateOrder(order.id, {
@@ -2117,9 +2188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: newStatus,
         });
 
-        // If order was payment_pending, NOW notify the vendor
+        // If order was payment_pending, trigger RIDER ASSIGNMENT (not vendor notification)
         if (wasPaymentPending) {
-          console.log(`[Order ${order.id}] Payment confirmed, transitioning from payment_pending to pending`);
+          console.log(`[Order ${order.id}] Payment confirmed, transitioning to awaiting_rider for rider assignment`);
 
           // Create SLA tracking now that order is active
           try {
@@ -2134,43 +2205,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`[Order ${order.id}] Failed to create SLA tracking:`, slaError);
           }
 
-          // NOW notify the vendor via WebSocket - this is the key fix!
-          broadcastToSubscribers('new_order', {
-            orderId: order.id,
-            restaurantId: order.restaurantId,
-            orderType: order.orderType,
-            totalAmount: order.totalAmount,
-            paymentConfirmed: true
-          });
-
-          // Send vendor alert via WebSocket manager
+          // RIDER-FIRST: Trigger rider assignment, NOT vendor notification
+          // Vendor will be notified when a rider accepts the order
           const restaurant = await storage.getRestaurant(order.restaurantId);
-          if (restaurant) {
-            wsManager.broadcastVendorAlert({
-              type: 'new_order',
+          const restaurantAddress = restaurant?.address as any;
+          const deliveryAddr = order.deliveryAddress as any;
+
+          if (restaurant && restaurantAddress?.coordinates) {
+            const { riderAssignmentService } = await import('./riderAssignmentService.js');
+            riderAssignmentService.createAssignment({
               orderId: order.id,
-              orderNumber: order.orderNumber || order.id,
-              vendorId: restaurant.id,
-              data: {
-                orderType: order.orderType,
-                totalAmount: order.totalAmount,
-                items: order.items,
-                paymentMethod: order.paymentMethod,
-                paymentStatus: 'paid',
-                deliveryAddress: order.deliveryAddress
+              restaurantLocation: {
+                lat: restaurantAddress.coordinates.lat || restaurantAddress.coordinates.latitude,
+                lng: restaurantAddress.coordinates.lng || restaurantAddress.coordinates.longitude
               },
-              urgency: 'high',
-              timestamp: new Date().toISOString()
+              deliveryLocation: deliveryAddr?.coordinates || { lat: 0, lng: 0 },
+              priority: 1,
+              estimatedValue: parseFloat(order.totalAmount) || 0,
+              maxDistance: 10
+            }).then(assignmentId => {
+              if (assignmentId) {
+                console.log(`[Order ${order.id}] Rider assignment created: ${assignmentId}`);
+              } else {
+                console.log(`[Order ${order.id}] No riders available, order queued for assignment`);
+              }
+            }).catch(err => {
+              console.error(`[Order ${order.id}] Rider assignment failed:`, err);
             });
-            console.log(`[Order ${order.id}] Vendor ${restaurant.id} notified of new order`);
           }
 
-          // Notify customer that payment was successful and order is now active
+          // Notify customer that payment was successful and looking for rider
           wsManager.broadcastToChannel(`order:${order.id}`, {
-            type: 'order_activated',
+            type: 'order_status_update',
             orderId: order.id,
-            status: 'pending',
-            message: 'Payment confirmed! Your order is now being processed.',
+            status: 'awaiting_rider',
+            previousStatus: 'payment_pending',
+            message: 'Payment confirmed! Finding a rider for your order...',
             timestamp: new Date().toISOString()
           });
         }
@@ -2502,7 +2572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const isOwner = order.userId === req.user?.id;
+      const isOwner = order.customerId === req.user?.id;
       const isAdmin = req.user?.role === 'admin';
 
       if (!isOwner && !isAdmin) {
@@ -2531,7 +2601,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update order status
       await storage.updateOrder(orderId, {
         paymentStatus: refundResult.status === 'succeeded' ? 'refunded' : 'refund_pending',
-        refundedAt: refundResult.status === 'succeeded' ? new Date().toISOString() : undefined,
       });
 
       res.json({
@@ -2824,7 +2893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           perKilometerRate: parseFloat(zone.perKilometerRate),
           minimumFee: parseFloat(zone.minimumFee),
           maximumDistance: parseFloat(zone.maximumDistance),
-          surchargeMultiplier: parseFloat(zone.surchargeMultiplier),
+          surchargeMultiplier: parseFloat(zone.surchargeMultiplier || '1.0'),
           serviceTypes: zone.serviceTypes,
           isActive: zone.isActive
         },
@@ -3194,45 +3263,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = createWithPricingSchema.parse(req.body);
       
-      // 1. Calculate comprehensive pricing first
-      const now = new Date();
-      const isPeakHour = (now.getHours() >= 11 && now.getHours() <= 14) || 
-                        (now.getHours() >= 18 && now.getHours() <= 21);
-      
-      const pricingCalculation = await pricingService.calculatePricing({
-        orderType: validatedData.orderType,
-        baseAmount: validatedData.baseAmount,
-        city: validatedData.city,
-        distance: validatedData.distance,
-        weight: validatedData.weight,
-        isInsured: validatedData.isInsured,
-        isPeakHour,
-        loyaltyPoints: validatedData.loyaltyPoints,
-        promoCode: validatedData.promoCode,
-        tip: validatedData.tip,
-      });
-
-      // 2. Validate pricing calculation
-      const validation = pricingService.validatePricing(pricingCalculation);
-      if (!validation.isValid) {
-        return res.status(400).json({
+      // Get the order to use its already-calculated totalAmount
+      const order = await storage.getOrder(validatedData.orderId);
+      if (!order) {
+        return res.status(404).json({
           success: false,
-          message: "Pricing calculation failed",
-          errors: validation.errors
+          message: "Order not found"
         });
       }
 
-      // 3. Create payment with calculated pricing
-      const finalAmount = pricingCalculation.finalTotal;
+      // Use the order's totalAmount instead of recalculating
+      // This ensures the payment amount matches what was shown to the customer
+      const finalAmount = parseFloat(order.totalAmount);
       const enhancedMetadata = {
         orderId: validatedData.orderId,
         userId: req.user?.id,
         userEmail: req.user?.email,
         orderType: validatedData.orderType,
-        baseAmount: validatedData.baseAmount,
-        pricingBreakdown: JSON.stringify(pricingCalculation.breakdown),
-        serviceFees: JSON.stringify(pricingCalculation.serviceFees),
-        discounts: JSON.stringify(pricingCalculation.discounts),
+        baseAmount: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        serviceFee: order.serviceFee,
         finalAmount,
         calculatedAt: new Date().toISOString(),
         ...validatedData.metadata
@@ -3257,15 +3307,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enhancedMetadata
       );
 
-      // Store comprehensive order info
+      // Store payment info in order
       await storage.updateOrder(validatedData.orderId, {
         paymentTransactionId: paymentResult.transactionId,
         paymentStatus: 'pending',
         paymentProvider: 'nexuspay',
-        totalAmount: finalAmount.toString(),
-        deliveryFee: pricingCalculation.serviceFees.deliveryFee.toString(),
-        serviceFee: pricingCalculation.serviceFees.serviceFee.toString(),
-        tax: pricingCalculation.serviceFees.tax.toString(),
       });
 
       res.json({
@@ -3273,7 +3319,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentProvider: 'nexuspay',
         paymentLink: paymentResult.link,
         transactionId: paymentResult.transactionId,
-        pricing: pricingCalculation,
         finalAmount,
         currency: 'PHP'
       });
@@ -3506,22 +3551,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get active deliveries for the authenticated rider
       const rider = await storage.getRiderByUserId(req.user.id);
-      
+
       if (!rider) {
         return res.json([]);
       }
-      
+
+      // Include all active delivery statuses for the full workflow
+      const activeStatuses = [
+        "confirmed",      // Rider accepted, vendor notified
+        "assigned",       // Order assigned to rider
+        "en_route_pickup", // Rider heading to restaurant
+        "at_restaurant",  // Rider arrived at restaurant
+        "preparing",      // Vendor preparing (rider waiting)
+        "ready",          // Ready for pickup
+        "picked_up",      // Rider picked up the order
+        "en_route_delivery", // Rider heading to customer
+        "at_customer",    // Rider arrived at customer
+        "in_transit"      // Legacy status - on the way
+      ];
+
       const activeDeliveries = await db
         .select()
         .from(orders)
         .where(
           and(
-            eq(orders.riderId, rider.id),
-            inArray(orders.status, ["assigned", "picked_up", "in_transit"])
+            eq(orders.riderId, req.user.id), // Use user ID since riderId stores user ID
+            inArray(orders.status, activeStatuses)
           )
-        );
-      
-      res.json(activeDeliveries);
+        )
+        .orderBy(desc(orders.createdAt));
+
+      // Enrich deliveries with restaurant and customer data
+      const enrichedDeliveries = await Promise.all(
+        activeDeliveries.map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          const customer = await db.select().from(users).where(eq(users.id, order.customerId)).limit(1);
+
+          const deliveryAddr = order.deliveryAddress as any;
+          const restaurantAddr = restaurant?.address as any;
+
+          return {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            totalAmount: order.totalAmount,
+            deliveryFee: order.deliveryFee,
+            createdAt: order.createdAt,
+            items: order.items,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+            specialInstructions: order.specialInstructions,
+            deliveryType: order.deliveryType,
+            contactlessInstructions: order.contactlessInstructions,
+
+            // Restaurant data
+            restaurant: {
+              id: restaurant?.id,
+              name: restaurant?.name || 'Restaurant',
+              phone: restaurant?.phone || '',
+              address: restaurantAddr?.street || restaurantAddr?.address || restaurant?.name || 'Restaurant Address',
+              location: restaurantAddr?.coordinates || { lat: 13.7565, lng: 121.0583 },
+              imageUrl: restaurant?.imageUrl,
+              pickupInstructions: restaurant?.pickupInstructions
+            },
+
+            // Customer data
+            customer: {
+              id: customer[0]?.id,
+              name: customer[0] ? `${customer[0].firstName || ''} ${customer[0].lastName || ''}`.trim() || 'Customer' : 'Customer',
+              phone: customer[0]?.phone || '',
+              address: [
+                deliveryAddr?.street || deliveryAddr?.address,
+                deliveryAddr?.barangay,
+                deliveryAddr?.city || 'Batangas City'
+              ].filter(Boolean).join(', ') || 'Delivery Address',
+              location: deliveryAddr?.coordinates || { lat: 13.7565, lng: 121.0583 },
+              profileImageUrl: customer[0]?.profileImageUrl,
+              deliveryInstructions: order.specialInstructions
+            },
+
+            // Delivery details
+            delivery: {
+              estimatedPickupTime: order.estimatedPickupTime,
+              actualPickupTime: order.actualPickupTime,
+              estimatedDeliveryTime: order.estimatedDeliveryTime,
+              actualDeliveryTime: order.actualDeliveryTime,
+              distance: 5, // Default estimate
+              estimatedDuration: 30, // Default 30 minutes
+              deliveryFee: parseFloat(order.deliveryFee || '0'),
+              tips: parseFloat(order.tip || '0')
+            },
+
+            // Verification data
+            verification: {
+              pickupPhotos: order.pickupPhotos || [],
+              deliveryPhotos: order.deliveryPhotos || [],
+              customerSignature: order.customerSignature,
+              codReceived: order.codReceived,
+              codPhotoUrl: order.codPhotoUrl,
+              customerRating: order.riderRating,
+              deliveryNotes: order.deliveryNotes
+            }
+          };
+        })
+      );
+
+      res.json(enrichedDeliveries);
     } catch (error) {
       console.error("Error fetching active deliveries:", error);
       res.status(500).json({ message: "Failed to fetch active deliveries" });
@@ -3596,9 +3731,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get available orders for rider to accept
+  // RIDER-FIRST FLOW: Include 'awaiting_rider' status for orders that need rider acceptance first
   app.get("/api/rider/available-orders", authenticateToken, async (req, res) => {
     try {
-      // Get orders that are ready for pickup and don't have a rider assigned
+      // Get orders that are awaiting rider (new flow) or ready for pickup (legacy flow)
+      // 'awaiting_rider' = new order, rider needs to accept before vendor sees it
+      // 'ready' = order is prepared and ready for pickup
+      // 'confirmed' = legacy flow, order confirmed but no rider yet
       const availableOrders = await db
         .select({
           id: orders.id,
@@ -3615,7 +3754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(orders)
         .where(
           and(
-            inArray(orders.status, ['ready', 'confirmed']),
+            inArray(orders.status, ['awaiting_rider', 'ready', 'confirmed']),
             isNull(orders.riderId)
           )
         )
@@ -3623,6 +3762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .limit(20);
 
       // Enrich with restaurant and customer data
+      // Response format matches frontend AvailableOrder interface
       const enrichedOrders = await Promise.all(
         availableOrders.map(async (order) => {
           const restaurant = await storage.getRestaurant(order.restaurantId);
@@ -3631,33 +3771,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const deliveryAddr = order.deliveryAddress as any;
           const restaurantAddr = restaurant?.address as any;
 
+          // Calculate earnings (delivery fee + potential tip)
+          const deliveryFee = parseFloat(order.deliveryFee || '0');
+          const basePay = deliveryFee > 0 ? deliveryFee : 35; // Base pay minimum 35
+          const tip = 0; // Tips are shown after delivery
+          const estimatedEarnings = basePay + tip;
+
+          // Build full address strings
+          const restaurantAddress = restaurantAddr?.street || restaurantAddr?.address || restaurant?.name || 'Restaurant Address';
+          const deliveryAddressStr = [
+            deliveryAddr?.street || deliveryAddr?.address,
+            deliveryAddr?.barangay,
+            deliveryAddr?.city || 'Batangas City'
+          ].filter(Boolean).join(', ') || 'Delivery Address';
+
+          // Get customer name
+          const customerName = customer[0]
+            ? `${customer[0].firstName || ''} ${customer[0].lastName || ''}`.trim() || 'Customer'
+            : 'Customer';
+
+          // Calculate timeout (2 minutes from now for assigned, or 5 minutes for new orders)
+          const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+
+          // Determine priority based on status
+          let priority: 'normal' | 'high' | 'urgent' = 'normal';
+          if (order.status === 'ready') priority = 'high';
+          if (order.status === 'awaiting_rider') priority = 'normal';
+
           return {
             id: order.id,
-            orderNumber: order.orderNumber,
-            totalAmount: parseFloat(order.totalAmount),
-            deliveryFee: parseFloat(order.deliveryFee || '0'),
-            status: order.status,
-            createdAt: order.createdAt,
-            itemCount: Array.isArray(order.items) ? order.items.length : 1,
-            customer: {
-              name: customer[0] ? `${customer[0].firstName} ${customer[0].lastName}` : "Customer",
-              phone: customer[0]?.phone || "",
-            },
-            deliveryAddress: {
-              street: deliveryAddr?.street || deliveryAddr?.address || "Delivery Address",
-              barangay: deliveryAddr?.barangay || "",
-              city: deliveryAddr?.city || "Batangas City",
-              coordinates: deliveryAddr?.coordinates || { lat: 13.7565, lng: 121.0583 }
-            },
-            restaurant: {
-              id: restaurant?.id,
-              name: restaurant?.name || "Restaurant",
-              address: restaurantAddr?.street || restaurantAddr?.address || restaurant?.name,
-              coordinates: restaurantAddr?.coordinates || { lat: 13.7600, lng: 121.0600 }
-            },
-            estimatedDistance: 5, // Default estimate
+            orderNumber: order.orderNumber || `ORD-${order.id.slice(-6)}`,
+            restaurantName: restaurant?.name || 'Restaurant',
+            restaurantAddress: restaurantAddress,
+            deliveryAddress: deliveryAddressStr,
+            estimatedEarnings: estimatedEarnings,
+            basePay: basePay,
+            tip: tip,
+            distance: 5, // Default estimate in km
             estimatedTime: 30, // Default 30 minutes
-            priority: order.status === 'ready' ? 'high' : 'normal'
+            expiresAt: expiresAt,
+            items: Array.isArray(order.items) ? order.items.length : 1,
+            customerName: customerName,
+            serviceType: 'food' as const, // Default to food delivery
+            priority: priority
           };
         })
       );
@@ -3707,7 +3863,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderId,
         status: order.status === 'ready' ? 'picked_up' : 'confirmed',
         riderId,
-        message: 'Rider has accepted the order'
+        message: 'Rider has accepted the order',
+        timestamp: new Date().toISOString()
       });
 
       res.json({ success: true, message: "Order accepted successfully" });
@@ -4092,7 +4249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const batchOffers = [];
 
       // Group by restaurant to find multi-order batches from same restaurant
-      const ordersByRestaurant: Record<number, typeof pendingOrders> = {};
+      const ordersByRestaurant: Record<string, typeof pendingOrders> = {};
       for (const po of pendingOrders) {
         if (po.restaurant?.id) {
           if (!ordersByRestaurant[po.restaurant.id]) {
@@ -4400,8 +4557,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter orders by status and time
       const deliveredOrders = allOrders.filter(o => o.status === 'delivered');
       const cancelledOrders = allOrders.filter(o => o.status === 'cancelled' && o.riderId);
-      const thisWeekOrders = deliveredOrders.filter(o => o.deliveredAt && new Date(o.deliveredAt) >= thisWeekStart);
-      const thisMonthOrders = deliveredOrders.filter(o => o.deliveredAt && new Date(o.deliveredAt) >= thisMonthStart);
+      const thisWeekOrders = deliveredOrders.filter(o => o.actualDeliveryTime && new Date(o.actualDeliveryTime) >= thisWeekStart);
+      const thisMonthOrders = deliveredOrders.filter(o => o.actualDeliveryTime && new Date(o.actualDeliveryTime) >= thisMonthStart);
 
       // Calculate rates
       const totalAssigned = allOrders.length;
@@ -4409,33 +4566,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // On-time calculation (assuming delivery should be within estimated time)
       const onTimeDeliveries = deliveredOrders.filter(o => {
-        if (!o.deliveredAt || !o.createdAt) return false;
-        const deliveryMinutes = (new Date(o.deliveredAt).getTime() - new Date(o.createdAt).getTime()) / 60000;
+        if (!o.actualDeliveryTime || !o.createdAt) return false;
+        const deliveryMinutes = (new Date(o.actualDeliveryTime).getTime() - new Date(o.createdAt).getTime()) / 60000;
         return deliveryMinutes <= 45; // Consider on-time if delivered within 45 minutes
       });
       const onTimeRate = deliveredOrders.length > 0 ? Math.round((onTimeDeliveries.length / deliveredOrders.length) * 100) : 100;
 
       // Average delivery time
       const deliveryTimes = deliveredOrders
-        .filter(o => o.deliveredAt && o.createdAt)
-        .map(o => (new Date(o.deliveredAt!).getTime() - new Date(o.createdAt!).getTime()) / 60000);
+        .filter(o => o.actualDeliveryTime && o.createdAt)
+        .map(o => (new Date(o.actualDeliveryTime!).getTime() - new Date(o.createdAt!).getTime()) / 60000);
       const averageDeliveryTime = deliveryTimes.length > 0
         ? Math.round(deliveryTimes.reduce((sum, t) => sum + t, 0) / deliveryTimes.length)
         : 30;
 
-      // Get rider reviews (from rider_reviews or order reviews)
+      // Get rider reviews from the reviews table
       const reviewsList = await db
         .select()
-        .from(riderReviews)
-        .where(eq(riderReviews.riderId, rider.id))
-        .orderBy(desc(riderReviews.createdAt))
+        .from(reviews)
+        .where(eq(reviews.riderId, rider.id))
+        .orderBy(desc(reviews.createdAt))
         .limit(10);
 
       // Calculate rating breakdown
       const ratingCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
       let totalRating = 0;
       for (const review of reviewsList) {
-        const rating = review.rating || 5;
+        const rating = review.riderRating || 5;
         if (rating >= 1 && rating <= 5) {
           ratingCounts[rating as keyof typeof ratingCounts]++;
           totalRating += rating;
@@ -4447,13 +4604,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate streak (days with deliveries)
       const sortedDeliveries = deliveredOrders
-        .filter(o => o.deliveredAt)
-        .sort((a, b) => new Date(b.deliveredAt!).getTime() - new Date(a.deliveredAt!).getTime());
+        .filter(o => o.actualDeliveryTime)
+        .sort((a, b) => new Date(b.actualDeliveryTime!).getTime() - new Date(a.actualDeliveryTime!).getTime());
 
       let currentStreak = 0;
       let lastDate: Date | null = null;
       for (const order of sortedDeliveries) {
-        const orderDate = new Date(order.deliveredAt!);
+        const orderDate = new Date(order.actualDeliveryTime!);
         orderDate.setHours(0, 0, 0, 0);
 
         if (!lastDate) {
@@ -4474,7 +4631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const recentReviews = reviewsList.slice(0, 3).map(review => ({
         id: String(review.id),
         customerName: 'Customer',
-        rating: review.rating || 5,
+        rating: review.riderRating || 5,
         comment: review.comment || '',
         date: review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Recently',
         orderId: review.orderId ? `ORD-${review.orderId}` : 'N/A',
@@ -4567,7 +4724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         streak: {
           currentDays: currentStreak,
           longestDays: currentStreak, // Would need historical tracking
-          lastActive: sortedDeliveries[0]?.deliveredAt || new Date().toISOString()
+          lastActive: sortedDeliveries[0]?.actualDeliveryTime?.toISOString() || new Date().toISOString()
         }
       });
     } catch (error) {
@@ -4668,13 +4825,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use authenticated rider's ID instead of body param for security
       const riderId = req.user.id;
 
-      const success = await riderAssignmentService.acceptAssignment(assignmentId, riderId);
-      
-      if (!success) {
+      const result = await riderAssignmentService.acceptAssignment(assignmentId, riderId);
+
+      if (!result.success) {
         return res.status(400).json({ message: "Failed to accept assignment" });
       }
 
-      res.json({ message: "Assignment accepted successfully" });
+      // RIDER-FIRST FLOW: Now notify the vendor that a rider accepted
+      // This is when the vendor first learns about the order
+      if (result.order) {
+        const order = result.order;
+        const restaurant = await storage.getRestaurant(order.restaurantId);
+
+        if (restaurant) {
+          console.log(`[Rider-First] Notifying vendor ${restaurant.id} about order ${order.id}`);
+
+          // WebSocket notification to vendor
+          wsManager.broadcastVendorAlert({
+            type: 'new_order',
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            vendorId: restaurant.id,
+            data: {
+              status: order.status,
+              totalAmount: order.totalAmount,
+              items: order.items,
+              deliveryAddress: order.deliveryAddress,
+              specialInstructions: order.specialInstructions,
+              paymentMethod: order.paymentMethod,
+              paymentStatus: order.paymentStatus,
+              riderId: riderId,
+              riderAssigned: true,
+              message: 'Rider has accepted - please start preparing!'
+            },
+            urgency: 'high',
+            timestamp: new Date().toISOString()
+          });
+
+          // Broadcast order status update to customer
+          wsManager.broadcastOrderStatusUpdate({
+            orderId: order.id,
+            status: 'confirmed',
+            previousStatus: 'awaiting_rider',
+            riderId: riderId,
+            message: 'A rider has accepted your order! Restaurant will start preparing.',
+            timestamp: new Date().toISOString()
+          });
+
+          // TODO: Send email/SMS notification to vendor
+          // notificationService.notifyVendorNewOrder(order, restaurant);
+        }
+      }
+
+      res.json({
+        message: "Assignment accepted successfully",
+        order: result.order ? {
+          id: result.order.id,
+          orderNumber: result.order.orderNumber,
+          status: result.order.status,
+          restaurantId: result.order.restaurantId
+        } : null
+      });
     } catch (error) {
       console.error("Error accepting assignment:", error);
       res.status(500).json({ message: "Failed to accept assignment" });
@@ -4757,6 +4968,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating category images:", error);
       res.status(500).json({ message: "Failed to generate category images" });
+    }
+  });
+
+  // Generate restaurant cover images using AI
+  app.post("/api/admin/generate-restaurant-covers", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { restaurantId } = req.body;
+
+      // Get restaurants to update
+      let restaurantsToUpdate: any[] = [];
+
+      if (restaurantId) {
+        // Generate for specific restaurant
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (restaurant) {
+          restaurantsToUpdate = [restaurant];
+        }
+      } else {
+        // Generate for all restaurants
+        restaurantsToUpdate = await db.select().from(restaurants);
+      }
+
+      if (restaurantsToUpdate.length === 0) {
+        return res.status(404).json({ message: "No restaurants found" });
+      }
+
+      const results: any[] = [];
+
+      for (const restaurant of restaurantsToUpdate) {
+        try {
+          console.log(`[AI] Generating cover for: ${restaurant.name} (${restaurant.category || 'General'})`);
+
+          // Generate the cover image
+          const imageUrl = await aiServices.generateRestaurantCoverImage(
+            restaurant.name,
+            restaurant.category || 'Filipino',
+            restaurant.description,
+            restaurant.id
+          );
+
+          // Update the restaurant record
+          await db.update(restaurants)
+            .set({
+              imageUrl: imageUrl,
+              updatedAt: new Date()
+            })
+            .where(eq(restaurants.id, restaurant.id));
+
+          results.push({
+            id: restaurant.id,
+            name: restaurant.name,
+            imageUrl: imageUrl,
+            success: true
+          });
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+        } catch (error: any) {
+          console.error(`[AI] Failed to generate cover for ${restaurant.name}:`, error.message);
+          results.push({
+            id: restaurant.id,
+            name: restaurant.name,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      res.json({
+        success: true,
+        message: `Generated ${successCount}/${restaurantsToUpdate.length} restaurant cover images`,
+        results
+      });
+
+    } catch (error: any) {
+      console.error("Error generating restaurant cover images:", error);
+      res.status(500).json({ message: "Failed to generate restaurant cover images", error: error.message });
     }
   });
 
@@ -5314,12 +5604,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const addressData = {
         userId: req.user.id,
-        street: req.body.street,
+        title: req.body.title || "Home",
+        streetAddress: req.body.street || req.body.streetAddress,
         barangay: req.body.barangay,
         city: req.body.city,
         province: req.body.province || "Batangas",
-        postalCode: req.body.postalCode,
-        isDefault: req.body.isDefault || true,
+        zipCode: req.body.postalCode || req.body.zipCode,
+        isDefault: req.body.isDefault ?? true,
         deliveryInstructions: req.body.deliveryInstructions
       };
 
@@ -5942,22 +6233,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const progress = await storage.getUserOnboardingProgress(req.user.id);
       
+      // Get full user data to check email verification and onboarding status
+      const fullUser = await storage.getUser(req.user.id);
+
       // Check completion status for each step
       const stepStatus = {
         personal_info: { completed: true, completedAt: req.user.createdAt }, // Completed when user is created
         address: progress.find(p => p.step === "address")?.isCompleted || false,
         dietary_preferences: progress.find(p => p.step === "dietary_preferences")?.isCompleted || false,
         notification_preferences: progress.find(p => p.step === "notification_preferences")?.isCompleted || false,
-        email_verification: !!req.user.emailVerifiedAt
+        email_verification: !!fullUser?.emailVerifiedAt
       };
 
-      const allCompleted = Object.values(stepStatus).every(step => 
+      const allCompleted = Object.values(stepStatus).every(step =>
         typeof step === 'object' ? step.completed : step
       );
 
       // Update user onboarding completion status if all steps are done
-      if (allCompleted && !req.user.onboardingCompleted) {
-        await storage.updateUser(req.user.id, { 
+      if (allCompleted && fullUser && !fullUser.onboardingCompleted) {
+        await storage.updateUser(req.user.id, {
           onboardingCompleted: true,
           onboardingStep: "completed"
         });
@@ -6170,14 +6464,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const cacheKey = CacheKeys.customerOrders(req.user.id);
-      
+
       const orders = await cacheQuery(
         cacheKey,
         CacheTTL.CUSTOMER_ORDERS, // 30 seconds
         () => storage.getOrdersByCustomer(req.user!.id)
       );
-      
-      res.json(orders);
+
+      // Enrich orders with restaurant data
+      const enrichedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          return {
+            ...order,
+            restaurant: restaurant ? {
+              id: restaurant.id,
+              name: restaurant.name,
+              imageUrl: restaurant.imageUrl,
+              logoUrl: restaurant.logoUrl
+            } : null,
+            restaurantName: restaurant?.name || 'Unknown Restaurant'
+          };
+        })
+      );
+
+      res.json(enrichedOrders);
     } catch (error) {
       console.error("Error fetching customer orders:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
@@ -6191,9 +6502,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const orders = await storage.getOrdersByCustomer(req.user.id);
-      // Return only the 10 most recent orders
+      // Return only the 10 most recent orders, enriched with restaurant data
       const recentOrders = orders.slice(0, 10);
-      res.json(recentOrders);
+
+      // Enrich orders with restaurant data
+      const enrichedOrders = await Promise.all(
+        recentOrders.map(async (order) => {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          return {
+            ...order,
+            restaurant: restaurant ? {
+              id: restaurant.id,
+              name: restaurant.name,
+              imageUrl: restaurant.imageUrl,
+              logoUrl: restaurant.logoUrl
+            } : null,
+            restaurantName: restaurant?.name || 'Unknown Restaurant'
+          };
+        })
+      );
+
+      res.json(enrichedOrders);
     } catch (error) {
       console.error("Error fetching recent orders:", error);
       res.status(500).json({ message: "Failed to fetch recent orders" });
@@ -7916,8 +8245,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      const orders = await storage.getOrdersByRestaurant(restaurants[0].id);
-      res.json(orders);
+      const rawOrders = await storage.getOrdersByRestaurant(restaurants[0].id);
+
+      // Enrich orders with customer and rider data
+      const enrichedOrders = await Promise.all(
+        rawOrders.map(async (order) => {
+          // Get customer info
+          const customer = await db.select().from(users).where(eq(users.id, order.customerId)).limit(1);
+          const customerData = customer[0];
+
+          // Get rider info if assigned
+          let riderData = null;
+          if (order.riderId) {
+            const rider = await db.select().from(riders).where(eq(riders.id, order.riderId)).limit(1);
+            if (rider[0]) {
+              const riderUser = await db.select().from(users).where(eq(users.id, rider[0].userId)).limit(1);
+              riderData = {
+                id: rider[0].id,
+                name: riderUser[0] ? `${riderUser[0].firstName || ''} ${riderUser[0].lastName || ''}`.trim() : 'Rider',
+                phone: riderUser[0]?.phone || rider[0].phone || '',
+                vehicleType: rider[0].vehicleType,
+                currentLocation: rider[0].currentLocation
+              };
+            }
+          }
+
+          // Format delivery address
+          const deliveryAddr = order.deliveryAddress as any;
+          const formattedDeliveryAddress = deliveryAddr ? [
+            deliveryAddr.street || deliveryAddr.address,
+            deliveryAddr.barangay,
+            deliveryAddr.city || 'Batangas City'
+          ].filter(Boolean).join(', ') : 'Delivery Address';
+
+          return {
+            ...order,
+            customer: {
+              id: customerData?.id,
+              name: customerData ? `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim() || 'Customer' : 'Customer',
+              phone: customerData?.phone || '',
+              email: customerData?.email || ''
+            },
+            rider: riderData,
+            formattedDeliveryAddress,
+            // Calculate time since order
+            minutesAgo: Math.floor((Date.now() - new Date(order.createdAt!).getTime()) / 60000)
+          };
+        })
+      );
+
+      res.json(enrichedOrders);
     } catch (error) {
       console.error("Error fetching vendor orders:", error);
       res.status(500).json({ error: "Failed to fetch orders" });
@@ -8571,7 +8948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return orderDate >= date && orderDate < nextDate;
         });
 
-        const dayRevenue = dayOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+        const dayRevenue = dayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
 
         dailyData.push({
           date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -8594,7 +8971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return orderDate >= weekStart && orderDate < weekEnd;
         });
 
-        const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+        const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
 
         weeklyData.push({
           week: `Week ${12 - i}`,
@@ -8617,7 +8994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return orderDate >= monthStart && orderDate < monthEnd;
         });
 
-        const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+        const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
 
         monthlyData.push({
           month: monthStart.toLocaleDateString('en-US', { month: 'short' }),
@@ -8629,7 +9006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate order volume stats
       const completedOrders = orders.filter(o => o.status === 'delivered');
       const cancelledOrders = orders.filter(o => o.status === 'cancelled');
-      const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total || '0'), 0);
+      const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
       const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
 
       // Calculate growth (compare this period to previous period)
@@ -8676,7 +9053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const order of orders) {
         const hour = new Date(order.createdAt || '').getHours();
         hourCounts[hour].orders++;
-        hourCounts[hour].revenue += parseFloat(order.total || '0');
+        hourCounts[hour].revenue += parseFloat(order.totalAmount || '0');
       }
       const peakHours = Array.from({ length: 24 }, (_, hour) => ({
         hour,
@@ -8698,7 +9075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         }
         customerOrders[customerId].orders++;
-        customerOrders[customerId].spent += parseFloat(order.total || '0');
+        customerOrders[customerId].spent += parseFloat(order.totalAmount || '0');
       }
 
       const customerList = Object.values(customerOrders);
@@ -9397,6 +9774,216 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ success: false, error: "Failed to analyze menu image" });
     }
   });
+
+  // ============================================================================
+  // MENU FILE PARSER ENDPOINTS
+  // Supports: images, PDFs, CSVs, Excel files
+  // ============================================================================
+
+  /**
+   * Parse a menu file (auto-detects format: image, PDF, CSV, Excel)
+   * Returns extracted menu items with metadata
+   */
+  app.post("/api/ai/parse-menu-file", upload.single("file"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+
+      console.log(`[API] Parsing menu file: ${file.originalname} (${file.mimetype})`);
+
+      // Parse the file
+      const parseResult = await parseMenuFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype
+      );
+
+      // Save the uploaded file
+      const saveResult = await LocalStorageService.saveFile(
+        file.buffer,
+        file.originalname,
+        "ai-uploads"
+      );
+
+      res.json({
+        success: parseResult.success,
+        items: parseResult.items,
+        categories: parseResult.categories,
+        restaurantInfo: parseResult.restaurantInfo,
+        metadata: {
+          ...parseResult.metadata,
+          uploadedFileUrl: saveResult.url
+        },
+        error: parseResult.error
+      });
+    } catch (error: any) {
+      console.error("[API] Error parsing menu file:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to parse menu file"
+      });
+    }
+  });
+
+  /**
+   * Parse a menu file and create menu items in the database
+   * Optionally generates images and enriches descriptions
+   */
+  app.post("/api/ai/create-menu-from-file",
+    authenticateToken,
+    requireAdminOrVendor,
+    upload.single("file"),
+    async (req: any, res) => {
+      try {
+        const file = req.file;
+        if (!file) {
+          return res.status(400).json({ success: false, error: "No file uploaded" });
+        }
+
+        const { restaurantId, generateImages, enrichDescriptions, createCategories } = req.body;
+
+        if (!restaurantId) {
+          return res.status(400).json({ success: false, error: "restaurantId is required" });
+        }
+
+        // Verify user has access to this restaurant
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ success: false, error: "Restaurant not found" });
+        }
+
+        // Check ownership (unless admin)
+        if (req.user.role !== "admin" && restaurant.ownerId !== req.user.id) {
+          return res.status(403).json({ success: false, error: "Not authorized for this restaurant" });
+        }
+
+        console.log(`[API] Creating menu from file: ${file.originalname} for restaurant ${restaurantId}`);
+
+        // Parse the file
+        const parseResult = await parseMenuFile(
+          file.buffer,
+          file.originalname,
+          file.mimetype
+        );
+
+        if (!parseResult.success || parseResult.items.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: parseResult.error || "No menu items found in file",
+            parseResult
+          });
+        }
+
+        // Create menu items in database
+        const createResult = await createMenuItemsFromParsed(
+          restaurantId,
+          parseResult.items,
+          {
+            generateImages: generateImages === "true" || generateImages === true,
+            enrichDescriptions: enrichDescriptions !== "false" && enrichDescriptions !== false,
+            createCategories: createCategories !== "false" && createCategories !== false
+          }
+        );
+
+        // Save the uploaded file
+        const saveResult = await LocalStorageService.saveFile(
+          file.buffer,
+          file.originalname,
+          "documents"
+        );
+
+        res.json({
+          success: createResult.success,
+          created: createResult.created,
+          failed: createResult.failed,
+          items: createResult.items,
+          errors: createResult.errors,
+          parseMetadata: parseResult.metadata,
+          uploadedFileUrl: saveResult.url
+        });
+      } catch (error: any) {
+        console.error("[API] Error creating menu from file:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "Failed to create menu from file"
+        });
+      }
+    }
+  );
+
+  /**
+   * Enrich parsed menu items with AI-generated descriptions
+   * Takes an array of menu items and returns enriched versions
+   */
+  app.post("/api/ai/enrich-menu-items", async (req, res) => {
+    try {
+      const { items, restaurantInfo } = req.body;
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "items array is required"
+        });
+      }
+
+      console.log(`[API] Enriching ${items.length} menu items`);
+
+      const enrichedItems = await enrichMenuItems(items as ParsedMenuItem[], restaurantInfo);
+
+      res.json({
+        success: true,
+        items: enrichedItems,
+        enrichedCount: enrichedItems.filter((item, i) =>
+          item.description !== items[i]?.description ||
+          item.tags !== items[i]?.tags
+        ).length
+      });
+    } catch (error: any) {
+      console.error("[API] Error enriching menu items:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to enrich menu items"
+      });
+    }
+  });
+
+  /**
+   * Generate image prompts for parsed menu items
+   * Returns items with imagePrompt field added
+   */
+  app.post("/api/ai/generate-menu-prompts", async (req, res) => {
+    try {
+      const { items, cuisine } = req.body;
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "items array is required"
+        });
+      }
+
+      console.log(`[API] Generating image prompts for ${items.length} menu items`);
+
+      const itemsWithPrompts = generateImagePrompts(items as ParsedMenuItem[], cuisine);
+
+      res.json({
+        success: true,
+        items: itemsWithPrompts
+      });
+    } catch (error: any) {
+      console.error("[API] Error generating menu prompts:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to generate menu prompts"
+      });
+    }
+  });
+
+  // ============================================================================
+  // END MENU FILE PARSER ENDPOINTS
+  // ============================================================================
 
   // Optimize delivery route
   app.post("/api/ai/optimize-route", async (req, res) => {
@@ -10149,12 +10736,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : 0;
 
       // Calculate average delivery time (in minutes) from delivered orders
-      const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.createdAt && o.deliveredAt);
+      const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.createdAt && o.actualDeliveryTime);
       let averageDeliveryTime = 30; // default
       if (deliveredOrders.length > 0) {
         const totalMinutes = deliveredOrders.reduce((sum, o) => {
           const created = new Date(o.createdAt!);
-          const delivered = new Date(o.deliveredAt!);
+          const delivered = new Date(o.actualDeliveryTime!);
           return sum + Math.round((delivered.getTime() - created.getTime()) / 60000);
         }, 0);
         averageDeliveryTime = Math.round(totalMinutes / deliveredOrders.length);
@@ -10166,8 +10753,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .filter(o => o.createdAt && new Date(o.createdAt) >= thisMonth)
         .reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0);
 
-      // Restaurant stats
-      const pendingApplications = restaurants.filter(r => !r.isActive && !r.isRejected).length;
+      // Restaurant stats (restaurants without isActive flag are pending)
+      const pendingApplications = restaurants.filter(r => !r.isActive).length;
       const avgRestaurantRating = restaurants.length > 0
         ? (restaurants.reduce((sum, r) => sum + parseFloat(r.rating || '0'), 0) / restaurants.length).toFixed(1)
         : '0';
@@ -11713,9 +12300,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     paymentMethod.toLowerCase() === 'cod' ||
                     paymentProvider?.toLowerCase() === 'cod';
 
-      // For online payments, start with 'payment_pending' status
-      // For COD, use 'pending' (visible to vendor immediately)
-      const initialStatus = isCOD ? 'pending' : 'payment_pending';
+      // RIDER-FIRST FLOW:
+      // For COD: 'awaiting_rider' (rider must accept first, then vendor notified)
+      // For online: 'payment_pending' (wait for payment, then go to rider queue)
+      const initialStatus = isCOD ? 'awaiting_rider' : 'payment_pending';
 
       // Create the order
       const orderNumber = `BTS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
@@ -11748,16 +12336,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pickupTimeSla: 10 * 60 // 10 minutes
         });
 
-        // Broadcast order creation for COD orders only
-        // Online payment orders will be broadcast after payment confirmation
-        broadcastToSubscribers('new_order', {
+        // RIDER-FIRST FLOW: Trigger rider assignment instead of vendor notification
+        // Vendor will be notified AFTER a rider accepts the order
+        console.log(`[Order ${order.id}] COD order created with awaiting_rider status, triggering rider assignment`);
+
+        // Get restaurant for location data
+        const restaurantData = await storage.getRestaurant(restaurantId);
+        const restaurantAddr = restaurantData?.address as any;
+        const deliveryAddr = deliveryAddress as any;
+
+        // Trigger rider assignment
+        const { riderAssignmentService } = await import('./riderAssignmentService.js');
+        riderAssignmentService.createAssignment({
+          orderId: order.id,
+          restaurantLocation: restaurantAddr?.coordinates || { lat: 13.7565, lng: 121.0583 },
+          deliveryLocation: deliveryAddr?.coordinates || { lat: 13.7565, lng: 121.0583 },
+          priority: 1,
+          estimatedValue: totalAmount,
+          maxDistance: 10
+        });
+
+        // Broadcast to riders that new order is available
+        broadcastToSubscribers('rider_order_available', {
           orderId: order.id,
           restaurantId,
           orderType: order.orderType,
           totalAmount: order.totalAmount
         });
-
-        console.log(`[Order ${order.id}] COD order placed, vendor notified immediately`);
       } else {
         console.log(`[Order ${order.id}] Online payment order created with payment_pending status, awaiting payment`);
       }
@@ -11804,10 +12409,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newStatus = 'confirmed';
         notes = `Accepted by vendor. Estimated prep time: ${estimatedPrepTime || 20} minutes`;
         
-        // Update SLA tracking
+        // Update SLA tracking with vendor acceptance time
         await storage.updateOrderSlaTracking(orderId, {
-          vendorAcceptedAt: new Date(),
-          estimatedPreparationCompletionAt: new Date(Date.now() + (estimatedPrepTime || 20) * 60000)
+          vendorAcceptanceTime: 0, // Accepted immediately
+          preparationTime: estimatedPrepTime ? estimatedPrepTime * 60 : 1200 // Convert to seconds
         });
       } else if (action === 'reject') {
         newStatus = 'cancelled';
@@ -11874,19 +12479,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Either riderId or location coordinates required" });
       }
       
-      // Create rider assignment
+      // Get restaurant location
+      const restaurant = await storage.getRestaurant(order.restaurantId);
+
+      // Create rider assignment with required location data
       const assignment = await storage.createRiderAssignment({
         orderId,
         assignedRiderId: assignedRider.id,
         assignmentStatus: 'assigned',
-        assignedAt: new Date()
+        assignedAt: new Date(),
+        restaurantLocation: restaurant?.address || { lat: 0, lng: 0 },
+        deliveryLocation: order.deliveryAddress as any || { lat: 0, lng: 0 }
       });
-      
+
       // Update order with rider
-      await storage.updateOrder(orderId, { riderId: assignedRider.id });
-      
-      // Update SLA tracking
-      await storage.updateOrderSlaTracking(orderId, {
+      await storage.updateOrder(orderId, {
+        riderId: assignedRider.id,
         riderAssignedAt: new Date()
       });
       
@@ -12028,11 +12636,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           if (refundAmount > 0) {
-            // Process refund (this would use the existing refund endpoint logic)
+            // Process refund - update payment status only (refund details stored in refunds table)
             await storage.updateOrder(orderId, {
-              paymentStatus: 'refund_pending',
-              refundAmount: refundAmount.toString(),
-              refundReason: reason
+              paymentStatus: 'refund_pending'
             });
             
             refundResult = {
@@ -12047,10 +12653,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Update SLA tracking
+      // Update SLA tracking - mark as breached due to cancellation
       await storage.updateOrderSlaTracking(orderId, {
-        cancelledAt: new Date(),
-        cancellationReason: reason
+        deliverySlaBreached: true
       });
       
       // Broadcast cancellation
@@ -12126,11 +12731,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createOrderNotification({
         orderId,
         recipientId: order.customerId,
-        recipientType: 'customer',
-        notificationType: 'order_status_update',
-        title: 'Order Update',
-        message,
-        isRead: false
+        recipientRole: 'customer',
+        notificationType: 'push',
+        trigger: 'status_changed',
+        subject: 'Order Update',
+        message
       });
       
       // Broadcast with enhanced data
@@ -13006,15 +13611,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/financial/commission-rules", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { serviceType, userType, percentage, fixedFee, minAmount, maxAmount, isActive } = req.body;
-      
+      const { name, serviceType, ruleType, value, minOrderValue, maxOrderValue, isActive } = req.body;
+
       const rule = await storage.createCommissionRule({
+        name: name || 'Default Commission Rule',
         serviceType,
-        userType,
-        percentage,
-        fixedFee,
-        minAmount,
-        maxAmount,
+        ruleType: ruleType || 'percentage',
+        value: value || '0',
+        minOrderValue,
+        maxOrderValue,
         isActive,
         createdBy: req.user!.id
       });
@@ -13404,16 +14009,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/config/delivery-zones", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { name, coordinates, baseFee, perKmFee, maxDistance, isActive } = req.body;
-      
+      const { name, code, type, boundaries, deliveryFee, minimumOrder, surgeMultiplier, isActive } = req.body;
+
       const zone = await storage.createDeliveryZone({
         name,
-        coordinates,
-        baseFee,
-        perKmFee,
-        maxDistance,
-        isActive,
-        createdBy: req.user!.id
+        code: code || name.toLowerCase().replace(/\s+/g, '-'),
+        type: type || 'city',
+        boundaries: boundaries || [],
+        deliveryFee: deliveryFee || '50',
+        minimumOrder,
+        surgeMultiplier,
+        isActive
       });
 
       res.status(201).json(zone);
@@ -13779,17 +14385,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message, 
         targetAudience, 
         deliveryMethod,
-        scheduleFor,
-        isUrgent = false 
+        scheduledAt,
+        priority = 'normal',
+        messageType = 'announcement'
       } = req.body;
-      
+
       const broadcast = await storage.createBroadcastMessage({
         title,
         message,
+        messageType,
         targetAudience,
-        deliveryMethod,
-        scheduleFor,
-        isUrgent,
+        deliveryMethod: deliveryMethod || { push: true, in_app: true },
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+        priority,
         createdBy: req.user!.id
       });
 
@@ -13955,6 +14563,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // - GET /api/admin/riders/pending-verification - Get all riders pending verification
   app.use('/api/rider', riderVerificationRoutes);
   app.use('/api', riderVerificationRoutes);
+
+  // ============================================================
+  // REGISTER ROUTING API ROUTES (PUBLIC - before auth-required routes)
+  // ============================================================
+  // Routing endpoints (uses MapsService with OpenRouteService/Google Maps):
+  // - POST /api/routing/directions - Calculate route between two points
+  // - POST /api/routing/distance-matrix - Calculate distances for multiple points
+  // - POST /api/routing/optimize - Optimize route for multiple stops
+  // - POST /api/routing/geocode - Geocode address to coordinates
+  // - POST /api/routing/reverse-geocode - Reverse geocode coordinates
+  // - GET /api/routing/provider - Get current maps provider info
+  // - POST /api/routing/delivery-estimate - Get delivery fee and time estimate
+  // - POST /api/routing/check-delivery-zone - Check if location is within delivery zone
+  // NOTE: Registered BEFORE wallet/tax/fraud routes to avoid authenticateToken middleware
+  app.use('/api', routingRoutes);
 
   // ============================================================
   // REGISTER CUSTOMER WALLET ROUTES

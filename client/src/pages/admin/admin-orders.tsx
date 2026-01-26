@@ -28,6 +28,7 @@ import {
   AdminTableSkeleton,
   NoOrdersEmptyState,
 } from "@/components/admin";
+import LeafletLiveTrackingMap from "@/components/shared/leaflet-live-tracking-map";
 
 interface Order {
   id: string;
@@ -166,6 +167,15 @@ export default function AdminOrders() {
               </Card>
               </div>
               )}
+
+              {/* Live Tracking Map */}
+              <LeafletLiveTrackingMap
+                userRole="admin"
+                apiEndpoint="/api/admin/orders"
+                title="Live Order Tracking"
+                showList={true}
+                height="400px"
+              />
 
               <Card className="shadow-sm">
               <CardHeader>

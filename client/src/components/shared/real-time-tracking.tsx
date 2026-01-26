@@ -17,8 +17,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-// Lazy load the Google Maps tracking component
-const GoogleMapsTracking = lazy(() => import("./google-maps-tracking"));
+// Lazy load the Leaflet tracking component (replaced Google Maps)
+const LeafletTrackingMap = lazy(() => import("./leaflet-tracking-map"));
 
 interface Location {
   lat: number;
@@ -79,19 +79,33 @@ interface RealTimeTrackingProps {
 
 // Status configurations with colors and icons
 const statusConfig = {
-  pending: { 
-    label: "Order Placed", 
-    color: "bg-gray-500", 
-    icon: Clock, 
+  payment_pending: {
+    label: "Payment Pending",
+    color: "bg-yellow-500",
+    icon: Clock,
+    progress: 5,
+    description: "Waiting for payment confirmation..."
+  },
+  pending: {
+    label: "Order Placed",
+    color: "bg-gray-500",
+    icon: Clock,
     progress: 10,
     description: "Your order has been placed and is waiting for confirmation."
   },
-  confirmed: { 
-    label: "Order Confirmed", 
-    color: "bg-blue-500", 
-    icon: CheckCircle, 
+  awaiting_rider: {
+    label: "Finding Rider",
+    color: "bg-orange-500",
+    icon: Bike,
+    progress: 15,
+    description: "Looking for an available rider to deliver your order..."
+  },
+  confirmed: {
+    label: "Rider Accepted",
+    color: "bg-blue-500",
+    icon: CheckCircle,
     progress: 25,
-    description: "Restaurant has confirmed your order and started preparation."
+    description: "A rider accepted your order! Restaurant is now preparing your food."
   },
   preparing: { 
     label: "Preparing Food", 
@@ -153,26 +167,71 @@ export default function RealTimeTracking({
   const [notifications, setNotifications] = useState<string[]>([]);
   
   // Fetch initial tracking data
-  const { data: initialData, isLoading, refetch } = useQuery<OrderTracking>({
+  const { data: rawTrackingData, isLoading, refetch, error: trackingError } = useQuery<any>({
     queryKey: [`/api/orders/${orderId}/tracking`],
     enabled: !!orderId,
     refetchInterval: 30000, // Fallback polling every 30 seconds
+    retry: 2,
   });
+
+  // Transform API response to component's expected format
+  const initialData: OrderTracking | null = rawTrackingData ? {
+    orderId: rawTrackingData.order?.id || orderId,
+    orderNumber: rawTrackingData.order?.orderNumber || '',
+    status: rawTrackingData.order?.status || rawTrackingData.tracking?.currentStatus || 'pending',
+    estimatedTime: rawTrackingData.eta?.estimatedMinutes || 0,
+    actualDeliveryTime: rawTrackingData.order?.actualDeliveryTime,
+    distance: 0, // Not in API response, calculated separately
+    customer: {
+      name: '',
+      phone: '',
+      address: typeof rawTrackingData.order?.deliveryAddress === 'object'
+        ? `${rawTrackingData.order.deliveryAddress.street || ''}, ${rawTrackingData.order.deliveryAddress.barangay || ''}, ${rawTrackingData.order.deliveryAddress.city || ''}`
+        : (rawTrackingData.order?.deliveryAddress || ''),
+      location: rawTrackingData.order?.deliveryAddress?.coordinates || { lat: 0, lng: 0 }
+    },
+    restaurant: {
+      id: rawTrackingData.restaurant?.id || '',
+      name: rawTrackingData.restaurant?.name || '',
+      phone: rawTrackingData.restaurant?.phone || '',
+      address: typeof rawTrackingData.restaurant?.address === 'object'
+        ? `${rawTrackingData.restaurant.address.street || ''}, ${rawTrackingData.restaurant.address.city || ''}`
+        : (rawTrackingData.restaurant?.address || ''),
+      location: rawTrackingData.restaurant?.location || { lat: 0, lng: 0 }
+    },
+    rider: rawTrackingData.rider ? {
+      id: rawTrackingData.rider.id,
+      name: `${rawTrackingData.rider.firstName || ''} ${rawTrackingData.rider.lastName || ''}`.trim() || 'Rider',
+      phone: rawTrackingData.rider.phone || '',
+      vehicleType: rawTrackingData.rider.vehicleType || 'motorcycle',
+      rating: parseFloat(rawTrackingData.rider.rating) || 5.0,
+      location: rawTrackingData.riderLocation || undefined,
+      photo: rawTrackingData.rider.photo
+    } : undefined,
+    timeline: (rawTrackingData.tracking?.events || []).map((event: any, index: number) => ({
+      id: `event-${index}`,
+      eventType: event.status,
+      timestamp: event.timestamp,
+      notes: event.notes || event.message
+    })),
+    currentLocation: rawTrackingData.riderLocation || undefined,
+    estimatedArrival: rawTrackingData.eta?.estimatedArrival
+  } : null;
 
   // WebSocket connection for real-time updates
   useEffect(() => {
     if (!orderId) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
+    const wsUrl = `${protocol}//${window.location.host}/ws/v2`;
+
     try {
       wsRef.current = new WebSocket(wsUrl);
-      
+
       wsRef.current.onopen = () => {
         setIsConnected(true);
-        // Send JWT token for authentication first  
-        const token = localStorage.getItem('token') || '';
+        // Send JWT token for authentication first
+        const token = localStorage.getItem('authToken') || '';
         if (token) {
           wsRef.current?.send(JSON.stringify({
             type: "auth",
@@ -182,9 +241,8 @@ export default function RealTimeTracking({
 
         // Subscribe to order tracking updates
         wsRef.current?.send(JSON.stringify({
-          type: "subscribe_order_tracking",
-          orderId,
-          userRole
+          type: "subscribe",
+          channel: `order:${orderId}`
         }));
       };
       
@@ -240,26 +298,25 @@ export default function RealTimeTracking({
           if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
             // Recursive call to reconnect
             const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
+            const wsUrl = `${protocol}//${window.location.host}/ws/v2`;
+
             try {
               wsRef.current = new WebSocket(wsUrl);
               wsRef.current.onopen = () => {
                 setIsConnected(true);
-                
+
                 // Re-authenticate with JWT token
-                const token = localStorage.getItem('token') || '';
+                const token = localStorage.getItem('authToken') || '';
                 if (token) {
                   wsRef.current?.send(JSON.stringify({
-                    type: "auth", 
+                    type: "auth",
                     token: token
                   }));
                 }
-                
+
                 wsRef.current?.send(JSON.stringify({
-                  type: "subscribe_order_tracking",
-                  orderId,
-                  userRole
+                  type: "subscribe",
+                  channel: `order:${orderId}`
                 }));
               };
               // Re-attach all event handlers
@@ -349,18 +406,20 @@ export default function RealTimeTracking({
         <CardContent className="p-8 text-center">
           <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">
-            Unable to Load Tracking
+            {trackingError ? 'Unable to Load Tracking' : 'Loading Tracking Data...'}
           </h3>
           <p className="text-muted-foreground mb-4">
-            We couldn't load the tracking information for this order.
+            {trackingError
+              ? 'We couldn\'t load the tracking information for this order. Please try again.'
+              : 'Please wait while we fetch your order tracking information.'}
           </p>
-          <Button 
-            onClick={() => refetch()} 
+          <Button
+            onClick={() => refetch()}
             variant="outline"
             data-testid="retry-tracking-button"
           >
             <RefreshCw className="mr-2 h-4 w-4" />
-            Try Again
+            {trackingError ? 'Try Again' : 'Refresh'}
           </Button>
         </CardContent>
       </Card>
@@ -444,7 +503,7 @@ export default function RealTimeTracking({
         </CardContent>
       </Card>
 
-      {/* Google Maps Integration */}
+      {/* Live Map Tracking (Leaflet + OpenRouteService) */}
       {showMap && (trackingData.status === 'picked_up' || trackingData.status === 'in_transit') && (
         <Card data-testid="delivery-map">
           <CardHeader>
@@ -455,7 +514,7 @@ export default function RealTimeTracking({
           </CardHeader>
           <CardContent>
             <Suspense fallback={<Skeleton className="h-96 w-full rounded-lg" />}>
-              <GoogleMapsTracking
+              <LeafletTrackingMap
                 orderId={orderId}
                 userRole={userRole === "vendor" ? "merchant" : userRole}
                 onLocationUpdate={(location) => setRiderLocation(location)}

@@ -12,8 +12,8 @@ import {
   Navigation2, Gauge, TrendingUp, AlertCircle
 } from "lucide-react";
 import RealTimeTracking from "@/components/shared/real-time-tracking";
-import RiderMapTracking from "@/components/rider/rider-map-tracking";
-import GoogleMapsTracking from "@/components/shared/google-maps-tracking";
+import LeafletRiderMapTracking from "@/components/rider/leaflet-rider-map-tracking";
+import LeafletTrackingMap from "@/components/shared/leaflet-tracking-map";
 
 export default function MapTrackingDemo() {
   const [selectedTab, setSelectedTab] = useState("google-maps");
@@ -60,7 +60,7 @@ export default function MapTrackingDemo() {
           <TabsList className="grid grid-cols-4 w-full max-w-3xl mx-auto">
             <TabsTrigger value="google-maps" className="flex items-center gap-2">
               <Navigation className="h-4 w-4" />
-              Google Maps
+              Leaflet Map
             </TabsTrigger>
             <TabsTrigger value="customer" className="flex items-center gap-2">
               <User className="h-4 w-4" />
@@ -160,7 +160,7 @@ export default function MapTrackingDemo() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <RiderMapTracking riderId={demoRiderId} />
+                <LeafletRiderMapTracking riderId={demoRiderId} />
               </CardContent>
             </Card>
 
@@ -216,16 +216,16 @@ export default function MapTrackingDemo() {
             </div>
           </TabsContent>
 
-          {/* Google Maps View - Primary */}
+          {/* Leaflet Maps View - Primary */}
           <TabsContent value="google-maps" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Navigation className="h-5 w-5 text-blue-600" />
-                  Google Maps Advanced Tracking
+                  Leaflet + OpenRouteService Tracking
                 </CardTitle>
                 <CardDescription>
-                  Premium tracking with real-time routing, traffic data, turn-by-turn navigation, and distance calculations
+                  Free tracking with real-time routing, OpenStreetMap tiles, and distance calculations via OpenRouteService
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -250,12 +250,12 @@ export default function MapTrackingDemo() {
                     </Badge>
                   </div>
 
-                  {/* Google Maps Component */}
-                  <GoogleMapsTracking 
+                  {/* Leaflet Tracking Map Component */}
+                  <LeafletTrackingMap
                     orderId={demoOrderId}
                     userRole="customer"
                     onLocationUpdate={(location) => {
-                      console.log("Google Maps location update:", location);
+                      console.log("Leaflet location update:", location);
                     }}
                   />
                 </div>

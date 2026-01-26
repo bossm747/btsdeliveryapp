@@ -4,6 +4,7 @@ import { eq, and, desc, gte } from "drizzle-orm";
 import type { InsertRiderLocationHistory, InsertDeliveryRoute, InsertDeliveryTrackingEvent } from "@shared/schema";
 import { geofenceService } from "./services/geofence-service";
 import { wsManager } from "./services/websocket-manager";
+import { mapsService } from "./integrations/maps";
 
 export interface LocationData {
   latitude: number;
@@ -124,55 +125,58 @@ export class GPSTrackingService {
   }
 
   /**
-   * Calculate optimal route using Google Maps Directions API
+   * Calculate optimal route using MapsService (OpenRouteService/Google Maps fallback)
    */
   async calculateOptimalRoute(
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number },
     waypoints?: Array<{ lat: number; lng: number }>
   ): Promise<OptimizedRoute | null> {
-    const apiKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      console.error('Google Maps API key not found');
-      return null;
-    }
-
     try {
-      const waypointsParam = waypoints ? 
-        `&waypoints=optimize:true|${waypoints.map(w => `${w.lat},${w.lng}`).join('|')}` : '';
-      
-      const url = `https://maps.googleapis.com/maps/api/directions/json?` +
-        `origin=${origin.lat},${origin.lng}&` +
-        `destination=${destination.lat},${destination.lng}${waypointsParam}&` +
-        `mode=driving&` +
-        `traffic_model=best_guess&` +
-        `departure_time=now&` +
-        `key=${apiKey}`;
+      // Use MapsService which prioritizes OpenRouteService (FREE) over Google Maps
+      const route = await mapsService.calculateRoute(
+        { lat: origin.lat, lng: origin.lng },
+        { lat: destination.lat, lng: destination.lng }
+      );
 
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.status === 'OK' && data.routes.length > 0) {
-        const route = data.routes[0];
-        const leg = route.legs[0];
-
-        return {
-          distance: leg.distance.value / 1000, // Convert to kilometers
-          duration: Math.ceil(leg.duration.value / 60), // Convert to minutes
-          steps: leg.steps.map((step: any) => ({
-            instruction: step.html_instructions.replace(/<[^>]*>/g, ''), // Strip HTML
-            distance: step.distance.value / 1000,
-            duration: Math.ceil(step.duration.value / 60),
-            startLocation: step.start_location,
-            endLocation: step.end_location,
-          })),
-          overview_polyline: route.overview_polyline.points,
-        };
+      if (!route) {
+        console.error('[GPSTracking] No route found from MapsService');
+        return null;
       }
 
-      return null;
+      // If there are waypoints, optimize the route
+      let optimizedWaypoints = waypoints;
+      if (waypoints && waypoints.length > 0) {
+        const optimized = await mapsService.optimizeRoute(
+          { lat: origin.lat, lng: origin.lng },
+          waypoints.map(w => ({ lat: w.lat, lng: w.lng }))
+        );
+        if (optimized) {
+          optimizedWaypoints = optimized;
+        }
+      }
+
+      // Build the response in the expected format
+      const result: OptimizedRoute = {
+        distance: route.distance / 1000, // Convert meters to kilometers
+        duration: Math.ceil(route.duration / 60), // Convert seconds to minutes
+        steps: [], // Basic steps - detailed steps available in OpenRouteService response
+        overview_polyline: route.polyline || '',
+      };
+
+      // Add basic navigation step
+      result.steps.push({
+        instruction: `Head to destination (${result.distance.toFixed(1)} km)`,
+        distance: result.distance,
+        duration: result.duration,
+        startLocation: origin,
+        endLocation: destination,
+      });
+
+      console.log(`[GPSTracking] Route calculated via ${mapsService.getProviderInfo().primary}: ${result.distance.toFixed(1)}km, ${result.duration}min`);
+      return result;
     } catch (error) {
-      console.error('Error calculating route:', error);
+      console.error('[GPSTracking] Error calculating route:', error);
       return null;
     }
   }

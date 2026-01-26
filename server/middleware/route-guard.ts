@@ -40,10 +40,19 @@ const PUBLIC_ROUTES: { method: string; path: RegExp }[] = [
   
   // Health check
   { method: 'GET', path: /^\/api\/health$/ },
-  
+
   // Swagger/API docs
   { method: 'GET', path: /^\/api-docs/ },
   { method: 'GET', path: /^\/swagger/ },
+
+  // Routing API (public for map/route calculation without client-side API keys)
+  { method: 'POST', path: /^\/api\/routing\/directions$/ },
+  { method: 'POST', path: /^\/api\/routing\/distance-matrix$/ },
+  { method: 'POST', path: /^\/api\/routing\/geocode$/ },
+  { method: 'POST', path: /^\/api\/routing\/reverse-geocode$/ },
+  { method: 'GET', path: /^\/api\/routing\/provider$/ },
+  { method: 'POST', path: /^\/api\/routing\/delivery-estimate$/ },
+  { method: 'POST', path: /^\/api\/routing\/check-delivery-zone$/ },
 ];
 
 // Routes that should NEVER be accessed without auth even if accidentally whitelisted
@@ -149,6 +158,9 @@ export function addPublicRoute(method: string, pathPattern: RegExp): void {
   PUBLIC_ROUTES.push({ method, path: pathPattern });
   logger.info('Added public route to whitelist', { method, pattern: pathPattern.toString() });
 }
+
+// Named export for isPublicRoute
+export { isPublicRoute };
 
 export default {
   globalRouteGuard,

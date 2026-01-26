@@ -26,13 +26,15 @@ import { apiRequest } from "@/lib/queryClient";
 import { OfflineIndicator, useOnlineStatus } from "@/components/OfflineIndicator";
 import { getOrders as getCachedOrders, saveOrders } from "@/lib/offline-storage";
 import { CustomerPageWrapper, CustomerHeader, EmptyState, CustomerOrdersSkeleton } from "@/components/customer";
+import LeafletLiveTrackingMap from "@/components/shared/leaflet-live-tracking-map";
 
 interface Order {
   id: string;
   orderNumber: string;
   restaurantName: string;
   restaurantId: string;
-  status: "pending" | "confirmed" | "preparing" | "ready" | "picked_up" | "in_transit" | "delivered" | "cancelled";
+  restaurant?: { id: string; name: string; imageUrl?: string; logoUrl?: string };
+  status: "pending" | "payment_pending" | "awaiting_rider" | "confirmed" | "assigned" | "en_route_pickup" | "at_restaurant" | "preparing" | "ready" | "picked_up" | "en_route_delivery" | "at_customer" | "in_transit" | "delivered" | "completed" | "cancelled";
   items: Array<{
     id: string;
     name: string;
@@ -272,9 +274,9 @@ export default function CustomerOrders() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
-        order.orderNumber.toLowerCase().includes(query) ||
-        order.restaurantName.toLowerCase().includes(query) ||
-        order.items.some(item => item.name.toLowerCase().includes(query))
+        order.orderNumber?.toLowerCase().includes(query) ||
+        order.restaurantName?.toLowerCase().includes(query) ||
+        order.items?.some(item => item.name?.toLowerCase().includes(query))
       );
     }
     return true;
@@ -430,6 +432,24 @@ export default function CustomerOrders() {
           </CardContent>
         </Card>
 
+        {/* Live Tracking Map - Shows when there are active orders */}
+        {activeOrders.length > 0 && (
+          <div className="mb-6">
+            <LeafletLiveTrackingMap
+              userRole="customer"
+              apiEndpoint="/api/customer/orders/recent"
+              title="Track Your Orders Live"
+              showList={true}
+              height="350px"
+              selectedOrderId={selectedOrder?.id}
+              onOrderSelect={(id) => {
+                const order = activeOrders.find(o => o.id === id);
+                if (order) setSelectedOrder(order);
+              }}
+            />
+          </div>
+        )}
+
         {/* Order Tabs */}
         <Tabs defaultValue="active" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
@@ -452,9 +472,9 @@ export default function CustomerOrders() {
               />
             ) : (
               activeOrders.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={order} 
+                <OrderCard
+                  key={order.id}
+                  order={order}
                   isActive={true}
                   realTimeUpdates={realTimeUpdates}
                   cancelOrderMutation={cancelOrderMutation}
@@ -506,7 +526,7 @@ function OrderCard({ order, isActive, realTimeUpdates, cancelOrderMutation }: {
   const queryClient = useQueryClient();
   
   // Check if order has been reviewed
-  const { data: orderReview } = useQuery({
+  const { data: orderReview } = useQuery<{ id: string; rating: number } | null>({
     queryKey: ["/api/orders", order.id, "review"],
     enabled: order.status === "delivered",
   });

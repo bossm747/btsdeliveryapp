@@ -18,11 +18,38 @@ import {
   Wifi,
   WifiOff,
   Volume2,
-  VolumeX
+  VolumeX,
+  MapPin,
+  Phone,
+  User,
+  Bike,
+  ChefHat,
+  Package,
+  Timer
 } from "lucide-react";
 import { useVendorToast } from "@/hooks/use-vendor-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Order, Restaurant } from "@shared/schema";
+import LeafletLiveTrackingMap from "@/components/shared/leaflet-live-tracking-map";
+
+// Extended order type with enriched data
+interface EnrichedOrder extends Order {
+  customer?: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+  };
+  rider?: {
+    id: string;
+    name: string;
+    phone: string;
+    vehicleType: string;
+    currentLocation?: any;
+  } | null;
+  formattedDeliveryAddress?: string;
+  minutesAgo?: number;
+}
 
 export default function VendorOrders() {
   const vendorToast = useVendorToast();
@@ -143,10 +170,11 @@ export default function VendorOrders() {
     }
   }, [unreadNotifications]);
 
-  // Fetch vendor's orders
-  const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
+  // Fetch vendor's orders (enriched with customer/rider data)
+  const { data: orders, isLoading: ordersLoading } = useQuery<EnrichedOrder[]>({
     queryKey: ["/api/vendor/orders"],
     enabled: !!restaurant,
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Update order status mutation
@@ -280,60 +308,75 @@ export default function VendorOrders() {
 
       {/* Real-time Stats Dashboard */}
       <div className="grid md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="border-l-4 border-l-orange-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">New Orders</CardTitle>
+            <Bell className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="count-pending-orders">
-              {orders?.filter(order => order.status === 'pending').length || 0}
+            <div className="text-2xl font-bold text-orange-600" data-testid="count-pending-orders">
+              {orders?.filter(order => order.status === 'confirmed').length || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Needs immediate attention</p>
+            <p className="text-xs text-muted-foreground">Ready to start preparing</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Preparing</CardTitle>
+            <ChefHat className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="count-active-orders">
-              {orders?.filter(order => ['confirmed', 'preparing'].includes(order.status)).length || 0}
+            <div className="text-2xl font-bold text-blue-600" data-testid="count-active-orders">
+              {orders?.filter(order => order.status === 'preparing').length || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Being prepared</p>
+            <p className="text-xs text-muted-foreground">Being prepared now</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ready Orders</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Ready for Pickup</CardTitle>
+            <Package className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="count-ready-orders">
+            <div className="text-2xl font-bold text-green-600" data-testid="count-ready-orders">
               {orders?.filter(order => order.status === 'ready').length || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Awaiting pickup</p>
+            <p className="text-xs text-muted-foreground">Waiting for rider</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="border-l-4 border-l-purple-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Orders</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Today's Total</CardTitle>
+            <Activity className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="count-today-orders">
-              {orders?.filter(order => 
+            <div className="text-2xl font-bold text-purple-600" data-testid="count-today-orders">
+              {orders?.filter(order =>
                 new Date(order.createdAt!).toDateString() === new Date().toDateString()
               ).length || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Total today</p>
+            <p className="text-xs text-muted-foreground">
+              ₱{orders?.filter(order =>
+                new Date(order.createdAt!).toDateString() === new Date().toDateString()
+              ).reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(0) || 0} revenue
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Live Tracking Map - Shows active orders with rider locations */}
+      {filteredOrders.filter(o => !['delivered', 'cancelled', 'completed'].includes(o.status)).length > 0 && (
+        <LeafletLiveTrackingMap
+          userRole="vendor"
+          apiEndpoint="/api/vendor/orders"
+          title="Live Delivery Tracking"
+          showList={true}
+          height="350px"
+        />
+      )}
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -370,151 +413,250 @@ export default function VendorOrders() {
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/vendor/orders"] })}
           />
         ) : (
-          filteredOrders.map((order) => (
-            <Card 
-              key={order.id} 
-              className={`border-l-4 ${
-                recentOrderIds.has(order.id) 
-                  ? 'border-l-orange-500 bg-orange-50 dark:bg-orange-900/20 animate-pulse' 
-                  : 'border-l-primary/50'
-              }`} 
-              data-testid={`card-order-${order.id.slice(-8)}`}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        Order #{order.orderNumber || order.id.slice(-8)}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Customer Order • ₱{parseFloat(order.totalAmount).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(order.createdAt!).toLocaleDateString()} at {new Date(order.createdAt!).toLocaleTimeString()}
-                      </p>
-                      {order.scheduledFor && (
-                        <p className="text-xs text-blue-600 font-medium flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" />
-                          Scheduled: {new Date(order.scheduledFor).toLocaleDateString()} at {new Date(order.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+          filteredOrders.map((order) => {
+            // Determine border color based on status
+            const borderColor = order.status === 'confirmed' ? 'border-l-orange-500' :
+                               order.status === 'preparing' ? 'border-l-blue-500' :
+                               order.status === 'ready' ? 'border-l-green-500' :
+                               order.status === 'picked_up' || order.status === 'in_transit' ? 'border-l-purple-500' :
+                               'border-l-gray-300';
+
+            const statusBadgeClass = order.status === 'confirmed' ? 'bg-orange-100 text-orange-800' :
+                                    order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
+                                    order.status === 'ready' ? 'bg-green-100 text-green-800' :
+                                    order.status === 'picked_up' || order.status === 'in_transit' ? 'bg-purple-100 text-purple-800' :
+                                    order.status === 'delivered' || order.status === 'completed' ? 'bg-gray-100 text-gray-600' :
+                                    order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800';
+
+            const statusLabel = order.status === 'confirmed' ? 'New Order' :
+                               order.status === 'preparing' ? 'Preparing' :
+                               order.status === 'ready' ? 'Ready for Pickup' :
+                               order.status === 'picked_up' ? 'Picked Up' :
+                               order.status === 'in_transit' ? 'On the Way' :
+                               order.status === 'delivered' ? 'Delivered' :
+                               order.status === 'completed' ? 'Completed' :
+                               order.status;
+
+            return (
+              <Card
+                key={order.id}
+                className={`border-l-4 ${borderColor} ${
+                  recentOrderIds.has(order.id)
+                    ? 'bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-300'
+                    : ''
+                } hover:shadow-md transition-shadow`}
+                data-testid={`card-order-${order.id.slice(-8)}`}
+              >
+                <CardContent className="p-4 md:p-6">
+                  {/* Header Row */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-gray-100 dark:bg-slate-700 p-2 rounded-lg">
+                        <ShoppingBag className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-lg text-gray-900 dark:text-white">
+                            #{order.orderNumber || order.id.slice(-8)}
+                          </p>
+                          <Badge className={statusBadgeClass}>
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <Timer className="h-3 w-3" />
+                          {order.minutesAgo !== undefined ? (
+                            order.minutesAgo < 60 ? `${order.minutesAgo} min ago` : `${Math.floor(order.minutesAgo / 60)}h ago`
+                          ) : (
+                            new Date(order.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-green-600">₱{parseFloat(order.totalAmount).toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">{order.paymentMethod === 'cash' ? 'Cash on Delivery' : order.paymentMethod}</p>
+                    </div>
+                  </div>
+
+                  {/* Customer & Delivery Info */}
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    {/* Customer Info */}
+                    <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Customer</span>
+                      </div>
+                      <p className="font-medium text-gray-900 dark:text-white">{order.customer?.name || 'Customer'}</p>
+                      {order.customer?.phone && (
+                        <a href={`tel:${order.customer.phone}`} className="text-sm text-blue-600 flex items-center gap-1 mt-1 hover:underline">
+                          <Phone className="h-3 w-3" />
+                          {order.customer.phone}
+                        </a>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Badge variant={
-                      order.status === 'pending' ? 'destructive' :
-                      order.status === 'confirmed' || order.status === 'preparing' ? 'default' :
-                      order.status === 'ready' ? 'secondary' : 'outline'
-                    }>
-                      {order.status}
-                    </Badge>
-                  </div>
-                </div>
 
-                {/* Order Items */}
-                <div className="mb-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 mb-2">Order Items:</h4>
-                  {Array.isArray(order.items) && order.items.map((item: any, index: number) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>{item.quantity}x {item.name}</span>
-                      <span>₱{(item.price * item.quantity).toFixed(2)}</span>
+                    {/* Delivery Address */}
+                    <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MapPin className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Delivery To</span>
+                      </div>
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        {order.formattedDeliveryAddress || 'Delivery Address'}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-3">
-                  {order.status === 'pending' && (
-                    <>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          updateOrderStatusMutation.mutate({
-                            orderId: order.id,
-                            status: 'confirmed',
-                            notes: 'Order accepted by restaurant'
-                          });
-                        }}
-                        disabled={updateOrderStatusMutation.isPending}
-                        data-testid={`button-accept-${order.id.slice(-8)}`}
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Accept Order
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => {
-                          updateOrderStatusMutation.mutate({
-                            orderId: order.id,
-                            status: 'cancelled',
-                            notes: 'Order rejected by restaurant'
-                          });
-                        }}
-                        disabled={updateOrderStatusMutation.isPending}
-                        data-testid={`button-reject-${order.id.slice(-8)}`}
-                      >
-                        <XCircle className="mr-2 h-4 w-4" />
-                        Reject
-                      </Button>
-                    </>
-                  )}
-                  
-                  {order.status === 'confirmed' && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        updateOrderStatusMutation.mutate({
-                          orderId: order.id,
-                          status: 'preparing',
-                          notes: 'Order is being prepared'
-                        });
-                      }}
-                      disabled={updateOrderStatusMutation.isPending}
-                      data-testid={`button-preparing-${order.id.slice(-8)}`}
-                    >
-                      Start Preparing
-                    </Button>
+                  {/* Rider Info (if assigned) */}
+                  {order.rider && (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bike className="h-4 w-4 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Rider Assigned</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium text-purple-900 dark:text-purple-100">{order.rider.name}</span>
+                          {order.rider.phone && (
+                            <a href={`tel:${order.rider.phone}`} className="text-purple-600 hover:text-purple-800">
+                              <Phone className="h-4 w-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
 
-                  {order.status === 'preparing' && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        updateOrderStatusMutation.mutate({
-                          orderId: order.id,
-                          status: 'ready',
-                          notes: 'Order is ready for pickup'
-                        });
-                      }}
-                      disabled={updateOrderStatusMutation.isPending}
-                      data-testid={`button-ready-${order.id.slice(-8)}`}
-                    >
-                      Mark Ready
-                    </Button>
-                  )}
+                  {/* Order Items */}
+                  <div className="mb-4 p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Order Items ({Array.isArray(order.items) ? order.items.length : 0})
+                    </h4>
+                    <div className="space-y-1">
+                      {Array.isArray(order.items) && order.items.map((item: any, index: number) => (
+                        <div key={index} className="flex justify-between text-sm py-1 border-b border-gray-100 dark:border-slate-700 last:border-0">
+                          <span className="text-gray-700 dark:text-gray-300">
+                            <span className="font-medium">{item.quantity}x</span> {item.name}
+                            {item.notes && <span className="text-xs text-gray-500 ml-1">({item.notes})</span>}
+                          </span>
+                          <span className="font-medium">₱{(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {order.specialInstructions && (
+                      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <p className="text-xs text-gray-500">Special Instructions:</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300">{order.specialInstructions}</p>
+                      </div>
+                    )}
+                  </div>
 
-                  {order.status === 'ready' && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        updateOrderStatusMutation.mutate({
-                          orderId: order.id,
-                          status: 'completed',
-                          notes: 'Order has been completed'
-                        });
-                      }}
-                      disabled={updateOrderStatusMutation.isPending}
-                      data-testid={`button-complete-${order.id.slice(-8)}`}
-                    >
-                      Complete Order
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* New orders - show Accept and Reject buttons */}
+                    {order.status === 'confirmed' && (
+                      <>
+                        <Button
+                          size="lg"
+                          className="flex-1 md:flex-none bg-green-600 hover:bg-green-700"
+                          onClick={() => {
+                            updateOrderStatusMutation.mutate({
+                              orderId: order.id,
+                              status: 'preparing',
+                              notes: 'Order accepted and being prepared'
+                            });
+                          }}
+                          disabled={updateOrderStatusMutation.isPending}
+                          data-testid={`button-accept-${order.id.slice(-8)}`}
+                        >
+                          <CheckCircle className="mr-2 h-5 w-5" />
+                          Accept Order
+                        </Button>
+                        <Button
+                          size="lg"
+                          variant="destructive"
+                          className="flex-1 md:flex-none"
+                          onClick={() => {
+                            updateOrderStatusMutation.mutate({
+                              orderId: order.id,
+                              status: 'cancelled',
+                              notes: 'Order rejected by restaurant'
+                            });
+                          }}
+                          disabled={updateOrderStatusMutation.isPending}
+                          data-testid={`button-reject-${order.id.slice(-8)}`}
+                        >
+                          <XCircle className="mr-2 h-5 w-5" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
+
+                    {/* Preparing status - show Ready for Pickup button */}
+                    {order.status === 'preparing' && (
+                      <div className="w-full">
+                        <div className="flex items-center gap-2 mb-3 text-blue-600">
+                          <ChefHat className="h-5 w-5 animate-pulse" />
+                          <span className="font-medium">Currently preparing...</span>
+                        </div>
+                        <Button
+                          size="lg"
+                          className="w-full md:w-auto bg-green-600 hover:bg-green-700"
+                          onClick={() => {
+                            updateOrderStatusMutation.mutate({
+                              orderId: order.id,
+                              status: 'ready',
+                              notes: 'Order is ready for pickup'
+                            });
+                          }}
+                          disabled={updateOrderStatusMutation.isPending}
+                          data-testid={`button-ready-${order.id.slice(-8)}`}
+                        >
+                          <Package className="mr-2 h-5 w-5" />
+                          Ready for Pickup
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Ready status - waiting for rider */}
+                    {order.status === 'ready' && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-700 dark:text-green-300">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="font-medium">Ready! Waiting for rider to pick up</span>
+                      </div>
+                    )}
+
+                    {/* Picked up or in transit */}
+                    {(order.status === 'picked_up' || order.status === 'in_transit') && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-700 dark:text-purple-300">
+                        <Bike className="h-5 w-5" />
+                        <span className="font-medium">Rider picked up - delivering to customer</span>
+                      </div>
+                    )}
+
+                    {/* Delivered or completed */}
+                    {(order.status === 'delivered' || order.status === 'completed') && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="font-medium">Order completed successfully</span>
+                      </div>
+                    )}
+
+                    {/* Cancelled */}
+                    {order.status === 'cancelled' && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-700 dark:text-red-300">
+                        <XCircle className="h-5 w-5" />
+                        <span className="font-medium">Order was cancelled</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </div>

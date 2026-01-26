@@ -129,6 +129,22 @@ All errors follow this format:
       name: 'Tracking',
       description: 'Real-time order and rider tracking',
     },
+    {
+      name: 'Analytics',
+      description: 'Platform analytics and reporting (Admin)',
+    },
+    {
+      name: 'Notifications',
+      description: 'Push notifications and notification management',
+    },
+    {
+      name: 'Vendor Onboarding',
+      description: 'Vendor registration and KYC verification',
+    },
+    {
+      name: 'Routing',
+      description: 'Map routing, geocoding, and delivery estimation (public endpoints)',
+    },
   ],
   components: {
     securitySchemes: {
@@ -693,6 +709,261 @@ All errors follow this format:
           activeRiders: { type: 'integer' },
           activeVendors: { type: 'integer' },
           pendingApprovals: { type: 'integer' },
+        },
+      },
+
+      // ==================== ANALYTICS SCHEMAS ====================
+      AnalyticsOrderSummary: {
+        type: 'object',
+        properties: {
+          totalOrders: { type: 'integer', example: 1250 },
+          completedOrders: { type: 'integer', example: 1150 },
+          cancelledOrders: { type: 'integer', example: 50 },
+          pendingOrders: { type: 'integer', example: 50 },
+          averageOrderValue: { type: 'number', example: 285.50 },
+          totalRevenue: { type: 'number', example: 356875.00 },
+          completionRate: { type: 'number', example: 92.0 },
+        },
+      },
+      AnalyticsRevenueSummary: {
+        type: 'object',
+        properties: {
+          totalRevenue: { type: 'number', example: 356875.00 },
+          deliveryFees: { type: 'number', example: 61250.00 },
+          serviceFees: { type: 'number', example: 31250.00 },
+          commissions: { type: 'number', example: 35687.50 },
+          netRevenue: { type: 'number', example: 128187.50 },
+          growth: {
+            type: 'object',
+            properties: {
+              percentage: { type: 'number', example: 15.5 },
+              trend: { type: 'string', enum: ['up', 'down', 'stable'] },
+            },
+          },
+        },
+      },
+      AnalyticsDashboard: {
+        type: 'object',
+        properties: {
+          orders: { $ref: '#/components/schemas/AnalyticsOrderSummary' },
+          revenue: { $ref: '#/components/schemas/AnalyticsRevenueSummary' },
+          users: {
+            type: 'object',
+            properties: {
+              totalUsers: { type: 'integer' },
+              newUsers: { type: 'integer' },
+              activeUsers: { type: 'integer' },
+              byRole: {
+                type: 'object',
+                properties: {
+                  customers: { type: 'integer' },
+                  vendors: { type: 'integer' },
+                  riders: { type: 'integer' },
+                },
+              },
+            },
+          },
+          riders: {
+            type: 'object',
+            properties: {
+              totalRiders: { type: 'integer' },
+              activeRiders: { type: 'integer' },
+              averageDeliveryTime: { type: 'number' },
+              averageRating: { type: 'number' },
+            },
+          },
+          restaurants: {
+            type: 'object',
+            properties: {
+              totalRestaurants: { type: 'integer' },
+              activeRestaurants: { type: 'integer' },
+              topPerformers: { type: 'array', items: { type: 'object' } },
+            },
+          },
+        },
+      },
+      AnalyticsRealtime: {
+        type: 'object',
+        properties: {
+          orders: {
+            type: 'object',
+            properties: {
+              total: { type: 'integer' },
+              pending: { type: 'integer' },
+              preparing: { type: 'integer' },
+              inDelivery: { type: 'integer' },
+              delivered: { type: 'integer' },
+              cancelled: { type: 'integer' },
+            },
+          },
+          revenue: { type: 'number' },
+          activeRiders: { type: 'integer' },
+          timestamp: { type: 'string', format: 'date-time' },
+        },
+      },
+
+      // ==================== NOTIFICATION SCHEMAS ====================
+      NotificationPreferences: {
+        type: 'object',
+        properties: {
+          emailNotifications: { type: 'boolean', example: true },
+          smsNotifications: { type: 'boolean', example: true },
+          pushNotifications: { type: 'boolean', example: true },
+          orderUpdates: { type: 'boolean', example: true },
+          promotionalEmails: { type: 'boolean', example: false },
+          restaurantUpdates: { type: 'boolean', example: true },
+          loyaltyRewards: { type: 'boolean', example: true },
+          securityAlerts: { type: 'boolean', example: true },
+          weeklyDigest: { type: 'boolean', example: false },
+          quietHoursStart: { type: 'string', example: '22:00' },
+          quietHoursEnd: { type: 'string', example: '08:00' },
+        },
+      },
+      PushSubscription: {
+        type: 'object',
+        required: ['subscription'],
+        properties: {
+          subscription: {
+            type: 'object',
+            properties: {
+              endpoint: { type: 'string', format: 'uri' },
+              keys: {
+                type: 'object',
+                properties: {
+                  p256dh: { type: 'string' },
+                  auth: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+      NotificationCampaign: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          name: { type: 'string', example: 'Weekend Promo' },
+          description: { type: 'string' },
+          type: { type: 'string', enum: ['promotional', 'announcement', 'alert'] },
+          channels: { type: 'array', items: { type: 'string', enum: ['email', 'sms', 'push'] } },
+          targetAudience: {
+            type: 'object',
+            properties: {
+              roles: { type: 'array', items: { type: 'string' } },
+              locations: { type: 'array', items: { type: 'string' } },
+            },
+          },
+          templateData: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              content: { type: 'string' },
+              imageUrl: { type: 'string', format: 'uri' },
+              ctaText: { type: 'string' },
+              ctaUrl: { type: 'string', format: 'uri' },
+            },
+          },
+          status: { type: 'string', enum: ['draft', 'scheduled', 'sending', 'sent', 'cancelled'] },
+          scheduledFor: { type: 'string', format: 'date-time' },
+          totalRecipients: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+
+      // ==================== VENDOR KYC SCHEMAS ====================
+      VendorRegistrationRequest: {
+        type: 'object',
+        required: ['firstName', 'lastName', 'email', 'phone', 'password', 'businessName', 'businessType', 'businessAddress'],
+        properties: {
+          firstName: { type: 'string', example: 'Maria' },
+          lastName: { type: 'string', example: 'Santos' },
+          email: { type: 'string', format: 'email', example: 'maria@lomiking.ph' },
+          phone: { type: 'string', example: '+639171234567' },
+          password: { type: 'string', minLength: 6 },
+          businessName: { type: 'string', example: 'Lomi King Batangas' },
+          businessType: {
+            type: 'string',
+            enum: ['restaurant', 'food_stall', 'catering', 'bakery', 'grocery', 'convenience_store', 'other'],
+          },
+          businessAddress: { $ref: '#/components/schemas/Address' },
+          businessCategory: { type: 'string', example: 'Filipino Food' },
+          businessDescription: { type: 'string' },
+        },
+      },
+      VendorOnboardingStatus: {
+        type: 'object',
+        properties: {
+          currentStep: { type: 'string', enum: ['kyc_documents', 'bank_account', 'review', 'completed'] },
+          kycStatus: { type: 'string', enum: ['not_started', 'in_progress', 'pending_review', 'approved', 'rejected'] },
+          kycSubmittedAt: { type: 'string', format: 'date-time' },
+          kycReviewedAt: { type: 'string', format: 'date-time' },
+          kycRejectionReason: { type: 'string' },
+          requiredDocuments: { type: 'array', items: { type: 'string' } },
+          submittedDocuments: { type: 'array', items: { type: 'string' } },
+          bankAccountAdded: { type: 'boolean' },
+          bankAccountVerified: { type: 'boolean' },
+          businessProfileComplete: { type: 'boolean' },
+          isOnboardingComplete: { type: 'boolean' },
+          onboardingCompletedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      VendorKycDocument: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          docType: {
+            type: 'string',
+            enum: ['business_permit', 'dti_registration', 'sec_registration', 'bir_registration', 'mayors_permit', 'sanitary_permit', 'food_handler_certificate', 'valid_id', 'proof_of_address', 'other'],
+          },
+          documentUrl: { type: 'string', format: 'uri' },
+          documentName: { type: 'string' },
+          status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+          rejectionReason: { type: 'string' },
+          expiryDate: { type: 'string', format: 'date' },
+          verifiedAt: { type: 'string', format: 'date-time' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      VendorBankAccount: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          bankName: { type: 'string', example: 'BDO' },
+          bankCode: { type: 'string' },
+          accountName: { type: 'string', example: 'Maria Santos' },
+          accountNumber: { type: 'string', example: '****5678' },
+          accountType: { type: 'string', enum: ['savings', 'checking'] },
+          branchName: { type: 'string' },
+          isDefault: { type: 'boolean' },
+          isVerified: { type: 'boolean' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      VendorKycUploadRequest: {
+        type: 'object',
+        required: ['docType', 'documentUrl'],
+        properties: {
+          docType: {
+            type: 'string',
+            enum: ['business_permit', 'dti_registration', 'sec_registration', 'bir_registration', 'mayors_permit', 'sanitary_permit', 'food_handler_certificate', 'valid_id', 'proof_of_address', 'other'],
+          },
+          documentUrl: { type: 'string', format: 'uri' },
+          documentName: { type: 'string' },
+          expiryDate: { type: 'string', format: 'date' },
+        },
+      },
+      BankAccountRequest: {
+        type: 'object',
+        required: ['bankName', 'accountName', 'accountNumber'],
+        properties: {
+          bankName: { type: 'string', example: 'BDO' },
+          bankCode: { type: 'string' },
+          accountName: { type: 'string', example: 'Maria Santos' },
+          accountNumber: { type: 'string', example: '1234567890' },
+          accountType: { type: 'string', enum: ['savings', 'checking'], default: 'savings' },
+          branchName: { type: 'string' },
+          branchCode: { type: 'string' },
+          isDefault: { type: 'boolean' },
         },
       },
     },
@@ -2532,6 +2803,1570 @@ Package sizes and rates:
               },
             },
           },
+        },
+      },
+    },
+
+    // ==================== ANALYTICS ENDPOINTS ====================
+    '/api/analytics/orders/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get order analytics summary',
+        description: 'Get order summary statistics including totals, completion rates, and averages. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Start date for analytics period' },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'End date for analytics period' },
+        ],
+        responses: {
+          200: {
+            description: 'Order analytics',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/AnalyticsOrderSummary' },
+                    period: {
+                      type: 'object',
+                      properties: {
+                        startDate: { type: 'string', format: 'date-time' },
+                        endDate: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          403: { $ref: '#/components/responses/ForbiddenError' },
+        },
+      },
+    },
+    '/api/analytics/orders/trends': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get order trends',
+        description: 'Get order trend analysis over time. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Order trends data' },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          403: { $ref: '#/components/responses/ForbiddenError' },
+        },
+      },
+    },
+    '/api/analytics/orders/by-status': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get orders by status',
+        description: 'Get order breakdown by status (pending, preparing, delivered, etc.). **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'Orders by status',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
+                        totalOrders: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/orders/by-type': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get orders by type',
+        description: 'Get order breakdown by type (food, pabili, pabayad, parcel). **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'period', in: 'query', schema: { type: 'string', enum: ['day', 'week', 'month'] } },
+          { name: 'orderType', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Orders by type data' },
+        },
+      },
+    },
+    '/api/analytics/revenue/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get revenue summary',
+        description: 'Get revenue summary including fees, commissions, and net revenue. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'Revenue summary',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/AnalyticsRevenueSummary' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/revenue/trends': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get revenue trends',
+        description: 'Get revenue trend analysis over time. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Revenue trends data' },
+        },
+      },
+    },
+    '/api/analytics/financial': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get comprehensive financial analytics',
+        description: 'Get detailed financial analytics including profit margins and projections. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'timeRange', in: 'query', schema: { type: 'string', default: '30d' }, description: 'Time range (7d, 30d, 90d, 1y)' },
+        ],
+        responses: {
+          200: { description: 'Financial analytics data' },
+        },
+      },
+    },
+    '/api/analytics/users/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get user statistics',
+        description: 'Get user statistics and growth metrics. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'User analytics' },
+        },
+      },
+    },
+    '/api/analytics/users/growth': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get user growth trends',
+        description: 'Get daily user growth by role (customers, vendors, riders). **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'User growth data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        dailyGrowth: { type: 'object' },
+                        totalNew: { type: 'integer' },
+                        byRole: {
+                          type: 'object',
+                          properties: {
+                            customers: { type: 'integer' },
+                            vendors: { type: 'integer' },
+                            riders: { type: 'integer' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/riders/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get rider performance summary',
+        description: 'Get rider performance statistics. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Rider analytics' },
+        },
+      },
+    },
+    '/api/analytics/riders/performance': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get individual rider performance',
+        description: 'Get performance metrics for all riders (deliveries, ratings). **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Rider performance data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          riderId: { type: 'string' },
+                          name: { type: 'string' },
+                          totalDeliveries: { type: 'integer' },
+                          avgRating: { type: 'number' },
+                          isOnline: { type: 'boolean' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/restaurants/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get restaurant statistics',
+        description: 'Get restaurant performance statistics. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Restaurant analytics' },
+        },
+      },
+    },
+    '/api/analytics/restaurants/{id}': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get specific restaurant analytics',
+        description: 'Get analytics for a specific restaurant. Vendors can access their own restaurant data.',
+        'x-roles': ['admin', 'vendor'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'days', in: 'query', schema: { type: 'integer', default: 30 } },
+        ],
+        responses: {
+          200: { description: 'Restaurant analytics data' },
+          403: { $ref: '#/components/responses/ForbiddenError' },
+        },
+      },
+    },
+    '/api/analytics/restaurants/top-performers': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get top performing restaurants',
+        description: 'Get restaurants ranked by revenue and orders. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: {
+            description: 'Top performers',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string' },
+                          name: { type: 'string' },
+                          totalOrders: { type: 'integer' },
+                          revenue: { type: 'number' },
+                          avgRating: { type: 'number' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/geographic': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get geographic analytics',
+        description: 'Get order distribution by geographic area. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Geographic analytics data' },
+        },
+      },
+    },
+    '/api/analytics/geographic/heatmap': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get order heatmap data',
+        description: 'Get coordinate data for order heatmap visualization. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'Heatmap data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          lat: { type: 'number' },
+                          lng: { type: 'number' },
+                          weight: { type: 'number' },
+                        },
+                      },
+                    },
+                    totalPoints: { type: 'integer' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/dashboard': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get aggregated dashboard data',
+        description: 'Get all key metrics in a single call for admin dashboard. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'Dashboard analytics',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/AnalyticsDashboard' },
+                    period: { type: 'object' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/realtime': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get real-time statistics',
+        description: 'Get real-time metrics with minimal caching. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Real-time data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/AnalyticsRealtime' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/analytics/cache/stats': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get cache statistics',
+        description: 'Get analytics cache statistics for monitoring. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Cache statistics' },
+        },
+      },
+    },
+    '/api/analytics/cache/clear': {
+      post: {
+        tags: ['Analytics'],
+        summary: 'Clear analytics cache',
+        description: 'Clear analytics cache entries. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  pattern: { type: 'string', description: 'Optional pattern to clear specific entries' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cache cleared' },
+        },
+      },
+    },
+
+    // ==================== NOTIFICATION ENDPOINTS ====================
+    '/api/notifications/vapid-public-key': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Get VAPID public key',
+        description: 'Get the VAPID public key for push notification subscription.',
+        responses: {
+          200: {
+            description: 'VAPID public key',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    publicKey: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/notifications/subscribe': {
+      post: {
+        tags: ['Notifications'],
+        summary: 'Subscribe to push notifications',
+        description: 'Register a push subscription for the authenticated user.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/PushSubscription' },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Successfully subscribed' },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+        },
+      },
+    },
+    '/api/notifications/unsubscribe': {
+      post: {
+        tags: ['Notifications'],
+        summary: 'Unsubscribe from push notifications',
+        description: 'Remove a push subscription.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['endpoint'],
+                properties: {
+                  endpoint: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Successfully unsubscribed' },
+        },
+      },
+    },
+    '/api/notifications/test': {
+      post: {
+        tags: ['Notifications'],
+        summary: 'Send test notification',
+        description: 'Send a test push notification to the authenticated user.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Test notification sent' },
+        },
+      },
+    },
+    '/api/notifications/preferences': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Get notification preferences',
+        description: 'Get the authenticated user\'s notification preferences.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Notification preferences',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/NotificationPreferences' },
+              },
+            },
+          },
+        },
+      },
+      put: {
+        tags: ['Notifications'],
+        summary: 'Update notification preferences',
+        description: 'Update the authenticated user\'s notification preferences.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/NotificationPreferences' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Preferences updated',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/NotificationPreferences' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/notifications/analytics': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Get notification analytics',
+        description: 'Get notification engagement analytics for the authenticated user.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Notification analytics' },
+        },
+      },
+    },
+    '/api/notifications/track/{notificationId}/{action}': {
+      post: {
+        tags: ['Notifications'],
+        summary: 'Track notification interaction',
+        description: 'Track when a notification is opened or clicked.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'notificationId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'action', in: 'path', required: true, schema: { type: 'string', enum: ['opened', 'clicked'] } },
+        ],
+        responses: {
+          200: { description: 'Interaction tracked' },
+        },
+      },
+    },
+    '/api/notifications/campaigns': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'List notification campaigns',
+        description: 'Get all notification campaigns. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Campaigns list',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/NotificationCampaign' },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ['Notifications'],
+        summary: 'Create notification campaign',
+        description: 'Create a new notification campaign. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'type', 'channels', 'templateData'],
+                properties: {
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  type: { type: 'string', enum: ['promotional', 'announcement', 'alert'] },
+                  channels: { type: 'array', items: { type: 'string', enum: ['email', 'sms', 'push'] } },
+                  targetAudience: { type: 'object' },
+                  templateData: {
+                    type: 'object',
+                    properties: {
+                      title: { type: 'string' },
+                      content: { type: 'string' },
+                      imageUrl: { type: 'string' },
+                      ctaText: { type: 'string' },
+                      ctaUrl: { type: 'string' },
+                    },
+                  },
+                  scheduledFor: { type: 'string', format: 'date-time' },
+                },
+              },
+              example: {
+                name: 'Weekend Promo',
+                description: 'Free delivery this weekend',
+                type: 'promotional',
+                channels: ['push', 'email'],
+                targetAudience: { roles: ['customer'] },
+                templateData: {
+                  title: '🎉 Free Delivery Weekend!',
+                  content: 'Enjoy free delivery on all orders this weekend. Use code WEEKEND2024.',
+                  ctaText: 'Order Now',
+                  ctaUrl: '/order'
+                }
+              }
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Campaign created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/NotificationCampaign' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/notifications/campaigns/{id}': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Get campaign details',
+        description: 'Get details of a specific notification campaign. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: {
+            description: 'Campaign details',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/NotificationCampaign' },
+              },
+            },
+          },
+          404: { $ref: '#/components/responses/NotFoundError' },
+        },
+      },
+    },
+    '/api/notifications/campaigns/{id}/send': {
+      post: {
+        tags: ['Notifications'],
+        summary: 'Send notification campaign',
+        description: 'Execute/send a notification campaign to target recipients. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: {
+            description: 'Campaign queued for delivery',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    totalRecipients: { type: 'integer' },
+                    channels: { type: 'array', items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Campaign cannot be sent in current status' },
+          404: { $ref: '#/components/responses/NotFoundError' },
+        },
+      },
+    },
+
+    // ==================== VENDOR ONBOARDING ENDPOINTS ====================
+    '/api/vendor/register': {
+      post: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Register as a vendor',
+        description: `Register a new vendor account with business information.
+
+**Registration Flow:**
+1. Submit registration with business details
+2. Verify email
+3. Upload required KYC documents
+4. Add bank account for settlements
+5. Wait for admin approval
+6. Start accepting orders
+
+**Required Documents (varies by business type):**
+- Valid ID
+- Business Permit
+- BIR Registration
+- Sanitary Permit (food businesses)
+- Food Handler Certificate (food businesses)`,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VendorRegistrationRequest' },
+              example: {
+                firstName: 'Maria',
+                lastName: 'Santos',
+                email: 'maria@lomiking.ph',
+                phone: '+639171234567',
+                password: 'SecurePass123!',
+                businessName: 'Lomi King Batangas',
+                businessType: 'restaurant',
+                businessAddress: {
+                  street: '123 P. Burgos Street',
+                  barangay: 'Poblacion',
+                  city: 'Batangas City',
+                  province: 'Batangas',
+                  zipCode: '4200'
+                },
+                businessCategory: 'Filipino Food',
+                businessDescription: 'Authentic Batangas lomi and local delicacies'
+              }
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Vendor registered successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    user: { $ref: '#/components/schemas/User' },
+                    restaurant: { $ref: '#/components/schemas/Restaurant' },
+                    onboardingStatus: { $ref: '#/components/schemas/VendorOnboardingStatus' },
+                    token: { type: 'string' },
+                    requiresEmailVerification: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/vendor/kyc/upload-documents': {
+      post: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Upload KYC document',
+        description: 'Upload a KYC document for verification. Vendors must upload all required documents.',
+        security: [{ BearerAuth: [] }],
+        'x-roles': ['vendor'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VendorKycUploadRequest' },
+              example: {
+                docType: 'business_permit',
+                documentUrl: 'https://storage.btsdelivery.ph/docs/vendor-123/business-permit.pdf',
+                documentName: 'Business Permit 2024',
+                expiryDate: '2024-12-31'
+              }
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Document uploaded',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    document: { $ref: '#/components/schemas/VendorKycDocument' },
+                    progress: {
+                      type: 'object',
+                      properties: {
+                        submittedDocuments: { type: 'array', items: { type: 'string' } },
+                        requiredDocuments: { type: 'array', items: { type: 'string' } },
+                        allDocsSubmitted: { type: 'boolean' },
+                        kycStatus: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          403: { $ref: '#/components/responses/ForbiddenError' },
+        },
+      },
+    },
+    '/api/vendor/kyc/status': {
+      get: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Get KYC status',
+        description: 'Get current KYC approval status and document status.',
+        security: [{ BearerAuth: [] }],
+        'x-roles': ['vendor'],
+        responses: {
+          200: {
+            description: 'KYC status',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    onboardingStatus: { $ref: '#/components/schemas/VendorOnboardingStatus' },
+                    documents: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/VendorKycDocument' },
+                    },
+                    bankAccounts: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/VendorBankAccount' },
+                    },
+                    restaurant: { $ref: '#/components/schemas/Restaurant' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          403: { $ref: '#/components/responses/ForbiddenError' },
+        },
+      },
+    },
+    '/api/vendor/kyc/bank-account': {
+      post: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Add bank account',
+        description: 'Add a bank account for settlement payments.',
+        security: [{ BearerAuth: [] }],
+        'x-roles': ['vendor'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/BankAccountRequest' },
+              example: {
+                bankName: 'BDO',
+                accountName: 'Maria Santos',
+                accountNumber: '1234567890',
+                accountType: 'savings',
+                branchName: 'Batangas City Branch',
+                isDefault: true
+              }
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Bank account added',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    bankAccount: { $ref: '#/components/schemas/VendorBankAccount' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/admin/vendors/pending': {
+      get: {
+        tags: ['Vendor Onboarding'],
+        summary: 'List pending vendor applications',
+        description: 'Get all vendor applications pending KYC review. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Pending vendors list',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    vendors: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          vendor: { $ref: '#/components/schemas/User' },
+                          onboarding: { $ref: '#/components/schemas/VendorOnboardingStatus' },
+                          documents: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/VendorKycDocument' },
+                          },
+                          restaurant: { $ref: '#/components/schemas/Restaurant' },
+                        },
+                      },
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        page: { type: 'integer' },
+                        limit: { type: 'integer' },
+                        total: { type: 'integer' },
+                        totalPages: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/admin/vendor/{id}': {
+      get: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Get vendor details',
+        description: 'Get detailed information about a vendor including documents and bank accounts. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: {
+            description: 'Vendor details',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    vendor: { $ref: '#/components/schemas/User' },
+                    onboarding: { $ref: '#/components/schemas/VendorOnboardingStatus' },
+                    documents: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/VendorKycDocument' },
+                    },
+                    bankAccounts: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/VendorBankAccount' },
+                    },
+                    restaurant: { $ref: '#/components/schemas/Restaurant' },
+                  },
+                },
+              },
+            },
+          },
+          404: { $ref: '#/components/responses/NotFoundError' },
+        },
+      },
+    },
+    '/api/admin/vendor/{id}/approve': {
+      post: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Approve vendor application',
+        description: 'Approve a vendor KYC application, activating their account and restaurant. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  adminNotes: { type: 'string', description: 'Internal notes for the approval' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Vendor approved',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    vendor: { $ref: '#/components/schemas/User' },
+                    kycStatus: { type: 'string', example: 'approved' },
+                    isOnboardingComplete: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          404: { $ref: '#/components/responses/NotFoundError' },
+        },
+      },
+    },
+    '/api/admin/vendor/{id}/reject': {
+      post: {
+        tags: ['Vendor Onboarding'],
+        summary: 'Reject vendor application',
+        description: 'Reject a vendor KYC application with reason. **Admin only.**',
+        'x-roles': ['admin'],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['rejectionReason'],
+                properties: {
+                  rejectionReason: { type: 'string', description: 'Reason for rejection' },
+                  rejectedDocuments: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        docType: { type: 'string' },
+                        reason: { type: 'string' },
+                      },
+                    },
+                    description: 'Specific documents that were rejected',
+                  },
+                  adminNotes: { type: 'string', description: 'Internal notes' },
+                },
+              },
+              example: {
+                rejectionReason: 'Business permit is expired. Please upload a valid permit.',
+                rejectedDocuments: [
+                  { docType: 'business_permit', reason: 'Document has expired' }
+                ]
+              }
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Vendor rejected',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string' },
+                    vendor: { $ref: '#/components/schemas/User' },
+                    kycStatus: { type: 'string', example: 'rejected' },
+                    rejectionReason: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Rejection reason is required' },
+          404: { $ref: '#/components/responses/NotFoundError' },
+        },
+      },
+    },
+
+    // ==================== ROUTING API ENDPOINTS ====================
+    '/api/routing/directions': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Calculate route between two points',
+        description: `Calculate the route between an origin and destination using OpenRouteService.
+
+**Public endpoint** - No authentication required.
+
+Returns distance, duration, and an encoded polyline for map display.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['origin', 'destination'],
+                properties: {
+                  origin: { $ref: '#/components/schemas/Coordinates' },
+                  destination: { $ref: '#/components/schemas/Coordinates' },
+                  waypoints: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/Coordinates' },
+                    description: 'Optional waypoints to include in route',
+                  },
+                },
+              },
+              example: {
+                origin: { lat: 13.7565, lng: 121.0583 },
+                destination: { lat: 13.7465, lng: 121.0683 },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Route calculated successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    route: {
+                      type: 'object',
+                      properties: {
+                        distance: { type: 'number', description: 'Distance in meters', example: 2498 },
+                        duration: { type: 'number', description: 'Duration in seconds', example: 373 },
+                        polyline: { type: 'string', description: 'Encoded polyline for map display' },
+                        distanceKm: { type: 'string', example: '2.50' },
+                        durationMinutes: { type: 'number', example: 7 },
+                      },
+                    },
+                    optimizedWaypoints: { type: 'array', nullable: true },
+                    provider: { type: 'string', example: 'OpenRouteService' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/routing/distance-matrix': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Calculate distances for multiple destinations',
+        description: `Calculate distances from one origin to multiple destinations.
+
+**Public endpoint** - No authentication required.
+
+Useful for finding the nearest restaurant or rider.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['origin', 'destinations'],
+                properties: {
+                  origin: { $ref: '#/components/schemas/Coordinates' },
+                  destinations: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/Coordinates' },
+                    minItems: 1,
+                    maxItems: 25,
+                  },
+                },
+              },
+              example: {
+                origin: { lat: 13.7565, lng: 121.0583 },
+                destinations: [
+                  { lat: 13.7465, lng: 121.0683 },
+                  { lat: 13.7365, lng: 121.0783 },
+                ],
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Distance matrix calculated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    results: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          destinationIndex: { type: 'number' },
+                          distance: { type: 'number', description: 'Distance in meters' },
+                          duration: { type: 'number', description: 'Duration in seconds' },
+                          distanceKm: { type: 'string' },
+                          durationMinutes: { type: 'number' },
+                        },
+                      },
+                    },
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/routing/geocode': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Geocode an address to coordinates',
+        description: `Convert a text address to geographic coordinates.
+
+**Public endpoint** - No authentication required.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['address'],
+                properties: {
+                  address: { type: 'string', minLength: 3, maxLength: 500 },
+                },
+              },
+              example: {
+                address: '123 Rizal Street, Batangas City, Batangas, Philippines',
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Address geocoded successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    location: { $ref: '#/components/schemas/Coordinates' },
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          404: { description: 'Address not found' },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/routing/reverse-geocode': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Reverse geocode coordinates to address',
+        description: `Convert geographic coordinates to a human-readable address.
+
+**Public endpoint** - No authentication required.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['lat', 'lng'],
+                properties: {
+                  lat: { type: 'number', minimum: -90, maximum: 90 },
+                  lng: { type: 'number', minimum: -180, maximum: 180 },
+                },
+              },
+              example: {
+                lat: 13.7565,
+                lng: 121.0583,
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Coordinates reverse geocoded successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    address: { type: 'string' },
+                    location: { $ref: '#/components/schemas/Coordinates' },
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          404: { description: 'Unable to find address for coordinates' },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/routing/provider': {
+      get: {
+        tags: ['Routing'],
+        summary: 'Get current maps provider info',
+        description: `Get information about the current maps/routing provider.
+
+**Public endpoint** - No authentication required.`,
+        'x-roles': ['public'],
+        responses: {
+          200: {
+            description: 'Provider information',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    provider: {
+                      type: 'object',
+                      properties: {
+                        primary: { type: 'string', example: 'OpenRouteService' },
+                        fallback: { type: 'string', example: 'Google Maps' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/routing/delivery-estimate': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Get delivery fee and time estimate',
+        description: `Calculate delivery fee and estimated delivery time for a route.
+
+**Public endpoint** - No authentication required.
+
+Includes preparation time in the estimate.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['origin', 'destination'],
+                properties: {
+                  origin: { $ref: '#/components/schemas/Coordinates' },
+                  destination: { $ref: '#/components/schemas/Coordinates' },
+                  preparationTime: {
+                    type: 'number',
+                    minimum: 0,
+                    maximum: 120,
+                    default: 15,
+                    description: 'Restaurant preparation time in minutes',
+                  },
+                },
+              },
+              example: {
+                origin: { lat: 13.7565, lng: 121.0583 },
+                destination: { lat: 13.7465, lng: 121.0683 },
+                preparationTime: 20,
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Delivery estimate calculated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    estimate: {
+                      type: 'object',
+                      properties: {
+                        distance: { type: 'number', description: 'Distance in meters' },
+                        distanceKm: { type: 'string', example: '2.50' },
+                        deliveryFee: { type: 'number', description: 'Delivery fee in PHP', example: 49 },
+                        estimatedTime: { type: 'number', description: 'Total estimated time in minutes', example: 27 },
+                        travelTime: { type: 'number', description: 'Travel time only in minutes', example: 7 },
+                        preparationTime: { type: 'number', description: 'Preparation time in minutes', example: 20 },
+                        polyline: { type: 'string', description: 'Encoded polyline' },
+                      },
+                    },
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ValidationError' },
+        },
+      },
+    },
+    '/api/routing/check-delivery-zone': {
+      post: {
+        tags: ['Routing'],
+        summary: 'Check if location is within delivery zone',
+        description: `Check if a customer location is within the delivery zone of a restaurant.
+
+**Public endpoint** - No authentication required.`,
+        'x-roles': ['public'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['customerLocation', 'restaurantLocation'],
+                properties: {
+                  customerLocation: { $ref: '#/components/schemas/Coordinates' },
+                  restaurantLocation: { $ref: '#/components/schemas/Coordinates' },
+                  maxRadiusKm: {
+                    type: 'number',
+                    minimum: 1,
+                    maximum: 50,
+                    default: 15,
+                    description: 'Maximum delivery radius in kilometers',
+                  },
+                },
+              },
+              example: {
+                customerLocation: { lat: 13.7465, lng: 121.0683 },
+                restaurantLocation: { lat: 13.7565, lng: 121.0583 },
+                maxRadiusKm: 10,
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Delivery zone check result',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    isWithinZone: { type: 'boolean', example: true },
+                    maxRadiusKm: { type: 'number', example: 10 },
+                    actualDistanceKm: { type: 'string', example: '2.50' },
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ValidationError' },
         },
       },
     },

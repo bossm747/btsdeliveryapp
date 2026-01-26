@@ -10,7 +10,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import RiderMapTracking from "@/components/rider/rider-map-tracking";
+import LeafletRiderMapTracking from "@/components/rider/leaflet-rider-map-tracking";
+import DeliveryWorkflowManager from "@/components/rider/delivery-workflow-manager";
+import LeafletLiveTrackingMap from "@/components/shared/leaflet-live-tracking-map";
 import { RiderPageWrapper } from "@/components/rider/rider-page-wrapper";
 import { RiderDashboardSkeleton, RiderDeliveryCardSkeleton } from "@/components/rider/rider-skeletons";
 import { NoActiveDeliveriesEmptyState } from "@/components/rider/rider-empty-states";
@@ -91,6 +93,13 @@ export default function RiderDashboard() {
   useEffect(() => {
     setWsConnected(wsStatus === 'connected' || wsStatus === 'authenticated');
   }, [wsStatus]);
+
+  // Sync isOnline state from rider profile data
+  useEffect(() => {
+    if (riderData?.isOnline !== undefined) {
+      setIsOnline(riderData.isOnline);
+    }
+  }, [riderData?.isOnline]);
 
   // Fetch active deliveries - reduced polling when WebSocket is connected
   const { data: activeDeliveries = [], isLoading: deliveriesLoading } = useQuery<any[]>({
@@ -394,71 +403,33 @@ export default function RiderDashboard() {
     </div>
   );
 
-  // Active Deliveries Component
-  const ActiveDeliveries = () => (
-    <div className="px-4 py-3">
-      {Array.isArray(activeDeliveries) && activeDeliveries.length > 0 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-[#004225] flex items-center">
-            <Truck className="w-4 h-4 mr-2 text-blue-500" />
-            Active Deliveries
-          </h3>
-          {Array.isArray(activeDeliveries) && activeDeliveries.map((delivery: any) => (
-            <Card key={delivery.id} className="border-l-4 border-l-blue-500 shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <Badge className="bg-blue-100 text-blue-800">{delivery.status}</Badge>
-                  <div className="text-sm font-medium text-green-600">₱{delivery.totalAmount}</div>
-                </div>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center text-gray-600">
-                    <Package className="w-4 h-4 mr-2" />
-                    Order #{delivery.orderNumber}
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <Clock className="w-4 h-4 mr-2" />
-                    {new Date(delivery.createdAt).toLocaleTimeString()}
-                  </div>
-                </div>
+  // Handle delivery status updates from workflow manager
+  const handleDeliveryStatusUpdate = (orderId: string, status: string, data?: any) => {
+    updateDeliveryStatusMutation.mutate({ orderId, status });
+    // Refresh active deliveries
+    localQueryClient.invalidateQueries({ queryKey: ["/api/rider/deliveries/active"] });
+  };
 
-                <Progress value={getDeliveryProgress(delivery.status)} className="mt-3" />
-                
-                <div className="flex space-x-2 mt-3">
-                  <Button
-                    onClick={() => setActiveTab("map")}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                  >
-                    <Map className="w-4 h-4 mr-1" />
-                    Navigate
-                  </Button>
-                  <Button
-                    onClick={() => setChatOrderId(delivery.id)}
-                    variant="outline"
-                    size="sm"
-                    className="relative"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    onClick={() => updateDeliveryStatusMutation.mutate({
-                      orderId: delivery.id,
-                      status: getNextStatus(delivery.status)
-                    })}
-                    disabled={updateDeliveryStatusMutation.isPending}
-                    size="sm"
-                    className="flex-1 bg-[#FF6B35] hover:bg-orange-600"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Update
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+  // Active Deliveries Component - now using DeliveryWorkflowManager with Live Map
+  const ActiveDeliveries = () => (
+    <div className="px-4 py-3 space-y-4">
+      {Array.isArray(activeDeliveries) && activeDeliveries.length > 0 ? (
+        <>
+          {/* Live Tracking Map for rider's active deliveries */}
+          <LeafletLiveTrackingMap
+            userRole="rider"
+            apiEndpoint="/api/rider/deliveries/active"
+            title="Your Deliveries"
+            showList={false}
+            height="250px"
+          />
+          {/* Delivery Workflow Manager for status updates */}
+          <DeliveryWorkflowManager
+            riderId={riderData?.id || ''}
+            activeOrders={activeDeliveries}
+            onStatusUpdate={handleDeliveryStatusUpdate}
+          />
+        </>
       ) : (
         <NoActiveDeliveriesEmptyState
           onGoOnline={!isOnline ? () => handleStatusToggle(true) : undefined}
@@ -546,7 +517,7 @@ export default function RiderDashboard() {
       case "map":
         return (
           <div className="pb-20 h-screen">
-            <RiderMapTracking riderId={riderData?.id || ''} />
+            <LeafletRiderMapTracking riderId={riderData?.id || ''} />
           </div>
         );
       case "deliveries":
