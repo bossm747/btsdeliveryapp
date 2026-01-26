@@ -220,6 +220,15 @@ export const fraudDetection = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+// In-memory velocity tracking (in production, use Redis)
+const velocityStore = new Map<string, { count: number; amounts: number[]; timestamps: number[]; ips: Set<string> }>();
+const VELOCITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour window
+const MAX_TRANSACTIONS_PER_HOUR = 10;
+const MAX_DAILY_AMOUNT = 50000;
+
+// Device fingerprint tracking
+const deviceStore = new Map<string, { userId: string; lastSeen: number; transactions: number }>();
+
 // Calculate fraud score based on various factors
 async function calculateFraudScore(data: {
   userId?: string;
@@ -227,30 +236,305 @@ async function calculateFraudScore(data: {
   paymentMethod: string;
   ip: string;
   orderId?: string;
+  deviceFingerprint?: string;
+  userAgent?: string;
 }): Promise<number> {
   let score = 0;
+  const factors: string[] = [];
+  const now = Date.now();
   
-  // Amount-based scoring
-  if (data.amount > 10000) score += 20; // High amounts are riskier
-  if (data.amount > 25000) score += 30;
-  
-  // Payment method scoring
-  if (data.paymentMethod === 'card') score += 10; // Cards have higher fraud risk
-  
-  // IP-based scoring (simplified)
-  if (data.ip.startsWith('192.168.') || data.ip.startsWith('10.')) {
-    score -= 10; // Local IPs are less risky
+  // === 1. AMOUNT-BASED SCORING ===
+  if (data.amount > 10000) {
+    score += 15;
+    factors.push('high_amount_10k');
+  }
+  if (data.amount > 25000) {
+    score += 20;
+    factors.push('high_amount_25k');
+  }
+  // Unusual amounts (round numbers are suspicious for fraud)
+  if (data.amount > 1000 && data.amount % 1000 === 0) {
+    score += 5;
+    factors.push('round_amount');
   }
   
-  // TODO: Add more sophisticated fraud detection:
-  // - Velocity checks (multiple transactions in short time)
-  // - Geolocation mismatches
-  // - Device fingerprinting
-  // - Historical fraud patterns
-  // - Machine learning models
+  // === 2. PAYMENT METHOD SCORING ===
+  if (data.paymentMethod === 'card') {
+    score += 10;
+    factors.push('card_payment');
+  }
+  // Cash on delivery is lower risk
+  if (data.paymentMethod === 'cash') {
+    score -= 5;
+    factors.push('cod_payment');
+  }
+  
+  // === 3. IP-BASED ANALYSIS ===
+  const ipAnalysis = analyzeIpAddress(data.ip);
+  score += ipAnalysis.score;
+  factors.push(...ipAnalysis.factors);
+  
+  // === 4. VELOCITY CHECKS ===
+  if (data.userId) {
+    const velocityScore = checkVelocity(data.userId, data.amount, data.ip, now);
+    score += velocityScore.score;
+    factors.push(...velocityScore.factors);
+  }
+  
+  // === 5. DEVICE FINGERPRINT ANALYSIS ===
+  if (data.deviceFingerprint) {
+    const deviceScore = analyzeDeviceFingerprint(data.deviceFingerprint, data.userId);
+    score += deviceScore.score;
+    factors.push(...deviceScore.factors);
+  }
+  
+  // === 6. USER AGENT ANALYSIS ===
+  if (data.userAgent) {
+    const uaScore = analyzeUserAgent(data.userAgent);
+    score += uaScore.score;
+    factors.push(...uaScore.factors);
+  }
+  
+  // === 7. TIME-BASED PATTERNS ===
+  const hour = new Date().getHours();
+  // Transactions between 2 AM and 5 AM are riskier
+  if (hour >= 2 && hour <= 5) {
+    score += 10;
+    factors.push('late_night_transaction');
+  }
+  
+  // Log factors for analysis
+  if (factors.length > 0) {
+    logger.debug('Fraud score factors', { 
+      userId: data.userId, 
+      amount: data.amount, 
+      score, 
+      factors 
+    });
+  }
   
   return Math.min(100, Math.max(0, score));
 }
+
+// IP address analysis
+function analyzeIpAddress(ip: string): { score: number; factors: string[] } {
+  let score = 0;
+  const factors: string[] = [];
+  
+  // Private/local IPs are trusted (lower risk)
+  if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.16.') || ip === '127.0.0.1') {
+    score -= 10;
+    factors.push('private_ip');
+    return { score, factors };
+  }
+  
+  // Parse IP for analysis
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4) {
+    // IPv6 or invalid - moderate risk due to uncertainty
+    score += 15;
+    factors.push('non_ipv4');
+    return { score, factors };
+  }
+  
+  // Known high-risk datacenter ranges
+  const datacenterPrefixes = [
+    [3], [13, 52], [18], [52], [54], // AWS
+    [35, 190], [35, 200], [104, 196], // Google Cloud
+    [104, 131], [159, 65], [165, 22], // DigitalOcean
+    [40, 74], [45, 33], [45, 56], // Azure/Linode
+  ];
+  
+  for (const prefix of datacenterPrefixes) {
+    let match = true;
+    for (let i = 0; i < prefix.length; i++) {
+      if (parts[i] !== prefix[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      score += 20;
+      factors.push('datacenter_ip');
+      break;
+    }
+  }
+  
+  // Philippine ISP ranges (trusted for local service)
+  const phPrefixes = [
+    [112, 198], [112, 196], [119, 92], [120, 28], // PLDT/Globe
+    [203, 82], [122, 54], // Smart/Converge
+  ];
+  
+  for (const prefix of phPrefixes) {
+    if (parts[0] === prefix[0] && (prefix.length === 1 || parts[1] >= prefix[1] && parts[1] <= prefix[1] + 10)) {
+      score -= 5;
+      factors.push('philippine_isp');
+      break;
+    }
+  }
+  
+  return { score, factors };
+}
+
+// Velocity checking
+function checkVelocity(userId: string, amount: number, ip: string, now: number): { score: number; factors: string[] } {
+  let score = 0;
+  const factors: string[] = [];
+  
+  // Get or create velocity record
+  let record = velocityStore.get(userId);
+  if (!record) {
+    record = { count: 0, amounts: [], timestamps: [], ips: new Set() };
+    velocityStore.set(userId, record);
+  }
+  
+  // Clean old entries outside the window
+  const windowStart = now - VELOCITY_WINDOW_MS;
+  while (record.timestamps.length > 0 && record.timestamps[0] < windowStart) {
+    record.timestamps.shift();
+    record.amounts.shift();
+    record.count = Math.max(0, record.count - 1);
+  }
+  
+  // Check transaction count velocity
+  if (record.count >= MAX_TRANSACTIONS_PER_HOUR) {
+    score += 30;
+    factors.push('velocity_count_exceeded');
+  } else if (record.count >= MAX_TRANSACTIONS_PER_HOUR * 0.7) {
+    score += 15;
+    factors.push('velocity_count_high');
+  }
+  
+  // Check amount velocity
+  const totalAmount = record.amounts.reduce((sum, a) => sum + a, 0) + amount;
+  if (totalAmount > MAX_DAILY_AMOUNT) {
+    score += 25;
+    factors.push('velocity_amount_exceeded');
+  }
+  
+  // Check for multiple IPs (potential account takeover)
+  record.ips.add(ip);
+  if (record.ips.size > 3) {
+    score += 20;
+    factors.push('multiple_ips');
+  }
+  
+  // Check for rapid succession (transactions within 30 seconds)
+  const lastTimestamp = record.timestamps[record.timestamps.length - 1];
+  if (lastTimestamp && (now - lastTimestamp) < 30000) {
+    score += 15;
+    factors.push('rapid_succession');
+  }
+  
+  // Update record
+  record.count++;
+  record.amounts.push(amount);
+  record.timestamps.push(now);
+  
+  return { score, factors };
+}
+
+// Device fingerprint analysis
+function analyzeDeviceFingerprint(fingerprint: string, userId?: string): { score: number; factors: string[] } {
+  let score = 0;
+  const factors: string[] = [];
+  
+  const existing = deviceStore.get(fingerprint);
+  
+  if (existing) {
+    // Device seen before
+    if (userId && existing.userId !== userId) {
+      // Different user on same device - potential fraud
+      score += 25;
+      factors.push('device_user_mismatch');
+    }
+    
+    // High transaction count from single device
+    if (existing.transactions > 20) {
+      score += 10;
+      factors.push('device_high_volume');
+    }
+    
+    existing.transactions++;
+    existing.lastSeen = Date.now();
+  } else if (userId) {
+    // New device for this user
+    deviceStore.set(fingerprint, {
+      userId,
+      lastSeen: Date.now(),
+      transactions: 1
+    });
+    // First transaction from new device - slightly elevated risk
+    score += 5;
+    factors.push('new_device');
+  }
+  
+  return { score, factors };
+}
+
+// User agent analysis
+function analyzeUserAgent(userAgent: string): { score: number; factors: string[] } {
+  let score = 0;
+  const factors: string[] = [];
+  const ua = userAgent.toLowerCase();
+  
+  // Missing or empty user agent is suspicious
+  if (!ua || ua.length < 10) {
+    score += 20;
+    factors.push('missing_user_agent');
+    return { score, factors };
+  }
+  
+  // Bot/crawler signatures
+  const botPatterns = ['bot', 'crawler', 'spider', 'scraper', 'curl', 'wget', 'python-requests', 'axios', 'node-fetch'];
+  for (const pattern of botPatterns) {
+    if (ua.includes(pattern)) {
+      score += 25;
+      factors.push('bot_user_agent');
+      break;
+    }
+  }
+  
+  // Headless browser detection
+  const headlessPatterns = ['headless', 'phantom', 'puppeteer', 'playwright', 'selenium'];
+  for (const pattern of headlessPatterns) {
+    if (ua.includes(pattern)) {
+      score += 30;
+      factors.push('headless_browser');
+      break;
+    }
+  }
+  
+  // Very old browser versions (potential spoofing)
+  if (ua.includes('msie 6') || ua.includes('msie 7') || ua.includes('msie 8')) {
+    score += 20;
+    factors.push('legacy_browser');
+  }
+  
+  return { score, factors };
+}
+
+// Cleanup old velocity/device data periodically
+setInterval(() => {
+  const now = Date.now();
+  const dayAgo = now - 24 * 60 * 60 * 1000;
+  
+  // Clean velocity store
+  for (const [key, record] of velocityStore.entries()) {
+    const recent = record.timestamps.filter(t => t > dayAgo);
+    if (recent.length === 0) {
+      velocityStore.delete(key);
+    }
+  }
+  
+  // Clean device store
+  for (const [key, record] of deviceStore.entries()) {
+    if (record.lastSeen < dayAgo) {
+      deviceStore.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // Payment data encryption middleware
 export const encryptPaymentData = (req: Request, res: Response, next: NextFunction) => {

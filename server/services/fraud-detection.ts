@@ -668,9 +668,221 @@ export class FraudDetectionService {
       return cached[0];
     }
 
-    // TODO: Implement actual IP intelligence lookup
-    // For now, return null - would integrate with services like MaxMind, IPInfo, etc.
-    return null;
+    // Perform local IP intelligence analysis
+    // This provides useful analysis without external API dependencies
+    const intelligence = await this.analyzeIpLocally(ip);
+    
+    if (intelligence) {
+      // Cache the result for 24 hours
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      try {
+        await db.insert(ipIntelligenceCache).values({
+          ipAddress: ip,
+          isVpn: intelligence.isVpn,
+          isProxy: intelligence.isProxy,
+          isDatacenter: intelligence.isDatacenter,
+          isTor: intelligence.isTor,
+          country: intelligence.country,
+          riskScore: intelligence.riskScore,
+          lastSeen: new Date(),
+          expiresAt,
+        }).onConflictDoUpdate({
+          target: ipIntelligenceCache.ipAddress,
+          set: {
+            isVpn: intelligence.isVpn,
+            isProxy: intelligence.isProxy,
+            isDatacenter: intelligence.isDatacenter,
+            isTor: intelligence.isTor,
+            country: intelligence.country,
+            riskScore: intelligence.riskScore,
+            lastSeen: new Date(),
+            expiresAt,
+          }
+        });
+      } catch (cacheError) {
+        // Cache failure shouldn't block the check
+        console.error('Failed to cache IP intelligence:', cacheError);
+      }
+    }
+    
+    return intelligence;
+  }
+
+  /**
+   * Analyze IP address locally without external API dependencies
+   * Provides basic intelligence based on IP characteristics
+   */
+  private async analyzeIpLocally(ip: string): Promise<{
+    isVpn: boolean;
+    isProxy: boolean;
+    isDatacenter: boolean;
+    isTor: boolean;
+    country: string | null;
+    riskScore: number;
+  } | null> {
+    if (!ip) return null;
+
+    let riskScore = 0;
+    let isVpn = false;
+    let isProxy = false;
+    let isDatacenter = false;
+    let isTor = false;
+    let country: string | null = null;
+
+    // Parse IP address
+    const ipParts = ip.split('.').map(Number);
+    if (ipParts.length !== 4 || ipParts.some(p => isNaN(p) || p < 0 || p > 255)) {
+      // Invalid IPv4, could be IPv6 or invalid
+      if (ip.includes(':')) {
+        // IPv6 - basic handling
+        if (ip === '::1' || ip.toLowerCase() === '0:0:0:0:0:0:0:1') {
+          return { isVpn: false, isProxy: false, isDatacenter: false, isTor: false, country: 'LOCAL', riskScore: 0 };
+        }
+        // Default for IPv6 - moderate risk as we can't fully analyze
+        return { isVpn: false, isProxy: false, isDatacenter: false, isTor: false, country: null, riskScore: 30 };
+      }
+      return null;
+    }
+
+    const [a, b, c] = ipParts;
+
+    // Check for private/reserved IP ranges (low risk)
+    const isPrivate = 
+      (a === 10) || // 10.0.0.0/8
+      (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12
+      (a === 192 && b === 168) || // 192.168.0.0/16
+      (a === 127) || // 127.0.0.0/8 loopback
+      (a === 169 && b === 254); // 169.254.0.0/16 link-local
+
+    if (isPrivate) {
+      return { isVpn: false, isProxy: false, isDatacenter: false, isTor: false, country: 'LOCAL', riskScore: 0 };
+    }
+
+    // Known datacenter IP ranges (higher risk - potential bot/automation)
+    const datacenterRanges = [
+      // AWS
+      { start: [3, 0, 0, 0], end: [3, 255, 255, 255] },
+      { start: [13, 52, 0, 0], end: [13, 59, 255, 255] },
+      { start: [18, 0, 0, 0], end: [18, 255, 255, 255] },
+      { start: [52, 0, 0, 0], end: [52, 255, 255, 255] },
+      { start: [54, 0, 0, 0], end: [54, 255, 255, 255] },
+      // Google Cloud
+      { start: [35, 190, 0, 0], end: [35, 199, 255, 255] },
+      { start: [35, 200, 0, 0], end: [35, 239, 255, 255] },
+      { start: [104, 196, 0, 0], end: [104, 199, 255, 255] },
+      // DigitalOcean
+      { start: [104, 131, 0, 0], end: [104, 131, 255, 255] },
+      { start: [159, 65, 0, 0], end: [159, 65, 255, 255] },
+      { start: [165, 22, 0, 0], end: [165, 22, 255, 255] },
+      // Azure
+      { start: [40, 74, 0, 0], end: [40, 125, 255, 255] },
+      { start: [52, 224, 0, 0], end: [52, 255, 255, 255] },
+      // Linode
+      { start: [45, 33, 0, 0], end: [45, 33, 255, 255] },
+      { start: [45, 56, 0, 0], end: [45, 56, 255, 255] },
+      // Vultr
+      { start: [45, 32, 0, 0], end: [45, 32, 255, 255] },
+      { start: [45, 63, 0, 0], end: [45, 63, 255, 255] },
+    ];
+
+    for (const range of datacenterRanges) {
+      if (this.isIpInRange(ipParts, range.start, range.end)) {
+        isDatacenter = true;
+        riskScore += 25;
+        break;
+      }
+    }
+
+    // Known Tor exit node indicators (highest risk)
+    // Tor exit nodes often have high last octets and specific patterns
+    const knownTorRanges = [
+      { start: [185, 220, 101, 0], end: [185, 220, 101, 255] },
+      { start: [199, 249, 230, 0], end: [199, 249, 230, 255] },
+      { start: [62, 210, 129, 0], end: [62, 210, 129, 255] },
+    ];
+
+    for (const range of knownTorRanges) {
+      if (this.isIpInRange(ipParts, range.start, range.end)) {
+        isTor = true;
+        riskScore += 50;
+        break;
+      }
+    }
+
+    // Basic geographic estimation for Philippines
+    // Philippine ISP IP ranges (lower risk for local business)
+    const phRanges = [
+      // PLDT
+      { start: [112, 198, 0, 0], end: [112, 210, 255, 255] },
+      { start: [119, 92, 0, 0], end: [119, 95, 255, 255] },
+      // Globe
+      { start: [112, 196, 0, 0], end: [112, 197, 255, 255] },
+      { start: [120, 28, 0, 0], end: [120, 29, 255, 255] },
+      // Smart
+      { start: [203, 82, 0, 0], end: [203, 87, 255, 255] },
+      // Converge
+      { start: [122, 54, 0, 0], end: [122, 55, 255, 255] },
+    ];
+
+    for (const range of phRanges) {
+      if (this.isIpInRange(ipParts, range.start, range.end)) {
+        country = 'PH';
+        riskScore -= 10; // Local IPs are less risky for PH-based service
+        break;
+      }
+    }
+
+    // VPN/Proxy detection heuristics
+    // Common VPN provider ranges
+    const vpnRanges = [
+      // NordVPN
+      { start: [89, 187, 160, 0], end: [89, 187, 191, 255] },
+      { start: [156, 146, 36, 0], end: [156, 146, 59, 255] },
+      // ExpressVPN
+      { start: [192, 64, 86, 0], end: [192, 64, 86, 255] },
+      // ProtonVPN
+      { start: [185, 159, 157, 0], end: [185, 159, 159, 255] },
+    ];
+
+    for (const range of vpnRanges) {
+      if (this.isIpInRange(ipParts, range.start, range.end)) {
+        isVpn = true;
+        riskScore += 35;
+        break;
+      }
+    }
+
+    // Proxy detection: check for known proxy/hosting IPs
+    const proxyRanges = [
+      { start: [104, 28, 0, 0], end: [104, 31, 255, 255] }, // Cloudflare
+      { start: [172, 64, 0, 0], end: [172, 71, 255, 255] }, // Cloudflare
+      { start: [141, 101, 64, 0], end: [141, 101, 127, 255] }, // Cloudflare
+    ];
+
+    for (const range of proxyRanges) {
+      if (this.isIpInRange(ipParts, range.start, range.end)) {
+        isProxy = true;
+        riskScore += 15; // Cloudflare/CDN proxies are common, moderate risk
+        break;
+      }
+    }
+
+    // Clamp risk score to 0-100
+    riskScore = Math.max(0, Math.min(100, riskScore));
+
+    return { isVpn, isProxy, isDatacenter, isTor, country, riskScore };
+  }
+
+  /**
+   * Check if IP is within a given range
+   */
+  private isIpInRange(ip: number[], start: number[], end: number[]): boolean {
+    for (let i = 0; i < 4; i++) {
+      if (ip[i] < start[i]) return false;
+      if (ip[i] > end[i]) return false;
+      if (ip[i] > start[i] && ip[i] < end[i]) return true;
+    }
+    return true;
   }
 
   /**

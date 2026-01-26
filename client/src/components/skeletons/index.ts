@@ -30,3 +30,18 @@ export {
   FeaturedCarouselSkeleton,
   RecentOrdersSkeleton
 } from "./dashboard-skeleton";
+
+export {
+  AddressCardSkeleton,
+  AddressListSkeleton,
+  AddressPageSkeleton
+} from "./address-skeleton";
+
+export {
+  CartItemSkeleton,
+  CartItemsSkeleton,
+  CartSummarySkeleton,
+  DeliveryAddressSkeleton,
+  PaymentMethodSkeleton,
+  CartPageSkeleton
+} from "./cart-skeleton";

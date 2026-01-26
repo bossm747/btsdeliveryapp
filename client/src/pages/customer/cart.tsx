@@ -15,6 +15,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Minus, Trash2, MapPin, CreditCard, ArrowLeft, Clock, Shield, Percent, Gift, AlertCircle, CheckCircle2, Smartphone, Building2, Store, Banknote, Search, Truck, Coins, TrendingUp, Crown, Star, Trophy, Award, Wallet, Loader2 } from "lucide-react";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
+import { EmptyState } from "@/components/customer/empty-state";
+import { CartItemsSkeleton, CartSummarySkeleton } from "@/components/skeletons";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { AddressSelector, SelectedDeliveryAddress } from "@/components/address-selector";
 import { DeliveryZoneBadge } from "@/components/delivery-zone-map";
@@ -674,31 +677,23 @@ export default function Cart() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="empty-cart-page">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <img 
-                src={btsLogo} 
-                alt="BTS Delivery Logo" 
-                className="w-20 h-20 object-contain mx-auto mb-4 opacity-50"
-              />
-              <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-4xl">🛒</span>
-              </div>
-              <h1 className="text-2xl font-bold text-foreground mb-4">Your cart is empty</h1>
-              <p className="text-muted-foreground mb-6">
-                Looks like you haven't added any items to your cart yet.
-              </p>
-              <Link href="/restaurants">
-                <Button className="bg-primary text-white hover:bg-primary/90" data-testid="browse-restaurants-button">
-                  Browse Restaurants
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+      <CustomerPageWrapper
+        pageTitle="Your Cart"
+        pageDescription="Your shopping cart is currently empty"
+      >
+        <div className="min-h-screen bg-background pb-20" data-testid="empty-cart-page">
+          <CustomerHeader title="Your Cart" showBack backPath="/restaurants" />
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <EmptyState
+              type="cart"
+              title="Your cart is empty"
+              description="Looks like you haven't added any items to your cart yet. Browse restaurants to find delicious food!"
+              actionLabel="Browse Restaurants"
+              actionLink="/restaurants"
+            />
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
@@ -706,8 +701,13 @@ export default function Cart() {
   const total = subtotal + deliveryFee + serviceFee;
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="cart-page">
-      <CustomerHeader title="Your Cart" showBack backPath="/restaurants" />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/pricing/calculate", "/api/customer/addresses", "/api/loyalty/points"]}
+      pageTitle="Your Cart"
+      pageDescription="Review your order items and complete checkout"
+    >
+      <div className="min-h-screen bg-background pb-20" data-testid="cart-page">
+        <CustomerHeader title="Your Cart" showBack backPath="/restaurants" />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Cart Summary */}
@@ -887,7 +887,20 @@ export default function Cart() {
                 )}
 
                 {/* Saved Addresses Mode */}
-                {addressSelectionMode === 'saved' && hasSavedAddresses && (
+                {addressSelectionMode === 'saved' && isLoadingAddresses && (
+                  <div className="space-y-3">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 border rounded-lg animate-pulse">
+                        <div className="h-4 w-4 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-20 bg-muted rounded" />
+                          <div className="h-3 w-40 bg-muted rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {addressSelectionMode === 'saved' && !isLoadingAddresses && hasSavedAddresses && (
                   <AddressSelector
                     onAddressSelect={(address) => {
                       setSelectedSavedAddress(address);
@@ -1168,11 +1181,25 @@ export default function Cart() {
               <Card data-testid="order-summary">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    <span>Order Summary</span>
+                    <span className="flex items-center gap-2">
+                      Order Summary
+                      {isCalculatingPricing && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </span>
                     <TaxSummaryLine subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Pricing calculation error alert */}
+                  {calculatePricingMutation.isError && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Failed to calculate pricing. Using default rates.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {/* Tax-aware breakdown with Senior/PWD discounts */}
                   <TaxBreakdown
                     subtotal={subtotal}
@@ -1322,5 +1349,6 @@ export default function Cart() {
         </div>
       </div>
     </div>
+    </CustomerPageWrapper>
   );
 }

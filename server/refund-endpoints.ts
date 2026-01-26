@@ -47,13 +47,108 @@ export const processRefundSchema = z.object({
 // Type for the refund percentage keys
 export type RefundStatus = keyof typeof REFUND_PERCENTAGES;
 
+// Cancellation stages for tracking
+export const CANCELLATION_STAGES = {
+  BEFORE_VENDOR_ACCEPT: 'before_vendor_accept',   // pending status
+  AFTER_VENDOR_ACCEPT: 'after_vendor_accept',     // confirmed, preparing
+  AFTER_PICKUP: 'after_pickup',                   // ready, picked_up
+  AFTER_DELIVERY: 'after_delivery'                // in_transit, delivered, completed
+} as const;
+
 /**
  * Calculate refund amount based on order status
  */
-export function calculateRefundAmount(totalAmount: number, status: string): { percentage: number; amount: number } {
+export function calculateRefundAmount(totalAmount: number, status: string): { percentage: number; amount: number; stage: string } {
   const percentage = REFUND_PERCENTAGES[status as RefundStatus] ?? 0;
   const amount = (totalAmount * percentage) / 100;
-  return { percentage, amount };
+  const stage = getCancellationStage(status);
+  return { percentage, amount, stage };
+}
+
+/**
+ * Get the cancellation stage based on order status
+ */
+export function getCancellationStage(status: string): string {
+  switch (status) {
+    case 'pending':
+    case 'payment_pending':
+      return CANCELLATION_STAGES.BEFORE_VENDOR_ACCEPT;
+    case 'confirmed':
+    case 'preparing':
+      return CANCELLATION_STAGES.AFTER_VENDOR_ACCEPT;
+    case 'ready':
+    case 'picked_up':
+      return CANCELLATION_STAGES.AFTER_PICKUP;
+    case 'in_transit':
+    case 'delivered':
+    case 'completed':
+      return CANCELLATION_STAGES.AFTER_DELIVERY;
+    default:
+      return 'unknown';
+  }
+}
+
+/**
+ * Get human-readable refund status message
+ */
+export function getRefundStatusMessage(status: string): string {
+  switch (status) {
+    case 'pending':
+      return 'Your refund request is being reviewed';
+    case 'processing':
+      return 'Your refund is being processed';
+    case 'completed':
+      return 'Refund has been completed and credited to your account';
+    case 'failed':
+      return 'Refund could not be processed. Please contact support.';
+    case 'rejected':
+      return 'Refund request was not approved. Please contact support for more details.';
+    default:
+      return 'Unknown status';
+  }
+}
+
+/**
+ * Build a timeline of refund events
+ */
+export function buildRefundTimeline(refund: any): Array<{ event: string; timestamp: Date | null; details?: string }> {
+  const timeline = [];
+  
+  timeline.push({
+    event: 'Refund Requested',
+    timestamp: refund.createdAt,
+    details: `Refund of PHP ${parseFloat(refund.amount).toFixed(2)} requested`
+  });
+  
+  if (refund.approvedAt) {
+    timeline.push({
+      event: 'Refund Approved',
+      timestamp: refund.approvedAt,
+      details: 'Refund approved by administrator'
+    });
+  }
+  
+  if (refund.rejectedAt) {
+    timeline.push({
+      event: 'Refund Rejected',
+      timestamp: refund.rejectedAt,
+      details: refund.failureReason || 'Refund request was rejected'
+    });
+  }
+  
+  if (refund.processedAt) {
+    timeline.push({
+      event: refund.status === 'completed' ? 'Refund Completed' : 'Refund Processed',
+      timestamp: refund.processedAt,
+      details: refund.status === 'completed' 
+        ? 'Refund has been credited to your account' 
+        : 'Refund processing completed'
+    });
+  }
+  
+  return timeline.sort((a, b) => 
+    new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+  );
 }
 
 /**
@@ -61,6 +156,210 @@ export function calculateRefundAmount(totalAmount: number, status: string): { pe
  */
 export function requiresDispute(status: string): boolean {
   return ['in_transit', 'delivered', 'completed'].includes(status);
+}
+
+/**
+ * Reusable handler for processing refunds (approve/reject)
+ */
+async function processRefundHandler(
+  req: Request,
+  res: Response,
+  broadcastToSubscribers: (event: string, data: any) => void
+) {
+  try {
+    const { id: refundId } = req.params;
+
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    // Validate request body
+    const validationResult = processRefundSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        message: "Invalid request data",
+        errors: validationResult.error.errors
+      });
+    }
+
+    const { action, notes, adjustedAmount } = validationResult.data;
+
+    // Get the refund record
+    const [refundRecord] = await db.select()
+      .from(refunds)
+      .where(eq(refunds.id, refundId));
+
+    if (!refundRecord) {
+      return res.status(404).json({ message: "Refund not found" });
+    }
+
+    // Check if refund is in a processable state
+    if (refundRecord.status !== 'pending' && refundRecord.status !== 'processing') {
+      return res.status(400).json({
+        message: `Refund cannot be processed. Current status: ${refundRecord.status}`,
+        currentStatus: refundRecord.status
+      });
+    }
+
+    // Get associated order
+    const order = await storage.getOrder(refundRecord.orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Associated order not found" });
+    }
+
+    const finalAmount = adjustedAmount || parseFloat(refundRecord.amount);
+    const now = new Date();
+
+    if (action === 'approve') {
+      // Process the refund approval
+      const [updatedRefund] = await db.update(refunds)
+        .set({
+          status: 'completed',
+          approvedBy: req.user.id,
+          approvedAt: now,
+          processedAt: now,
+          amount: finalAmount.toString(),
+          adminNotes: notes,
+          metadata: {
+            ...(refundRecord.metadata as object || {}),
+            adminNotes: notes,
+            originalAmount: refundRecord.amount,
+            adjustedAmount: adjustedAmount ? finalAmount : null,
+            processedBy: req.user.id,
+            processedAt: now.toISOString()
+          },
+          updatedAt: now
+        })
+        .where(eq(refunds.id, refundId))
+        .returning();
+
+      // Update order payment status
+      await storage.updateOrder(refundRecord.orderId, {
+        paymentStatus: 'refunded'
+      });
+
+      // Update the associated payment record if it exists
+      const [existingPayment] = await db.select()
+        .from(payments)
+        .where(eq(payments.orderId, refundRecord.orderId));
+
+      if (existingPayment) {
+        await db.update(payments)
+          .set({
+            status: 'refunded',
+            refundedAt: now,
+            refundAmount: finalAmount.toString(),
+            updatedAt: now
+          })
+          .where(eq(payments.id, existingPayment.id));
+      }
+
+      // Record in order status history
+      await db.insert(orderStatusHistory).values({
+        orderId: refundRecord.orderId,
+        fromStatus: 'cancelled',
+        toStatus: 'cancelled',
+        changedBy: req.user.id,
+        changedByRole: 'admin',
+        reason: 'Refund approved and processed',
+        notes: `Refund of PHP ${finalAmount.toFixed(2)} approved by admin. ${notes || ''}`,
+        metadata: {
+          refundId,
+          refundAmount: finalAmount,
+          action: 'refund_approved'
+        }
+      });
+
+      // Broadcast refund completion
+      broadcastToSubscribers('refund_processed', {
+        refundId,
+        orderId: refundRecord.orderId,
+        orderNumber: order.orderNumber,
+        amount: finalAmount,
+        status: 'completed',
+        customerId: order.customerId
+      });
+
+      return res.json({
+        success: true,
+        message: "Refund approved and processed successfully",
+        refund: {
+          id: updatedRefund.id,
+          orderId: updatedRefund.orderId,
+          amount: finalAmount,
+          status: updatedRefund.status,
+          processedAt: updatedRefund.processedAt,
+          approvedBy: updatedRefund.approvedBy
+        }
+      });
+    } else if (action === 'reject') {
+      // Process the refund rejection
+      const [updatedRefund] = await db.update(refunds)
+        .set({
+          status: 'rejected',
+          rejectedBy: req.user.id,
+          rejectedAt: now,
+          processedAt: now,
+          failureReason: notes || 'Refund request rejected by administrator',
+          adminNotes: notes,
+          metadata: {
+            ...(refundRecord.metadata as object || {}),
+            rejectionReason: notes,
+            rejectedBy: req.user.id,
+            rejectedAt: now.toISOString()
+          },
+          updatedAt: now
+        })
+        .where(eq(refunds.id, refundId))
+        .returning();
+
+      // Update order payment status back to paid
+      await storage.updateOrder(refundRecord.orderId, {
+        paymentStatus: 'paid'
+      });
+
+      // Record in order status history
+      await db.insert(orderStatusHistory).values({
+        orderId: refundRecord.orderId,
+        fromStatus: 'cancelled',
+        toStatus: 'cancelled',
+        changedBy: req.user.id,
+        changedByRole: 'admin',
+        reason: 'Refund rejected',
+        notes: `Refund request rejected. Reason: ${notes || 'Not provided'}`,
+        metadata: {
+          refundId,
+          requestedAmount: refundRecord.amount,
+          action: 'refund_rejected'
+        }
+      });
+
+      // Broadcast refund rejection
+      broadcastToSubscribers('refund_rejected', {
+        refundId,
+        orderId: refundRecord.orderId,
+        orderNumber: order.orderNumber,
+        reason: notes || 'Refund request rejected',
+        customerId: order.customerId
+      });
+
+      return res.json({
+        success: true,
+        message: "Refund request rejected",
+        refund: {
+          id: updatedRefund.id,
+          orderId: updatedRefund.orderId,
+          amount: refundRecord.amount,
+          status: updatedRefund.status,
+          processedAt: updatedRefund.processedAt,
+          failureReason: updatedRefund.failureReason
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error processing refund:", error);
+    return res.status(500).json({ message: "Failed to process refund" });
+  }
 }
 
 /**
@@ -217,9 +516,9 @@ export function registerRefundEndpoints(
         });
       }
 
-      // Calculate refund amount
+      // Calculate refund amount with cancellation stage
       const totalAmount = parseFloat(order.totalAmount);
-      const { percentage: refundPercentage, amount: refundAmount } = calculateRefundAmount(totalAmount, order.status);
+      const { percentage: refundPercentage, amount: refundAmount, stage: cancellationStage } = calculateRefundAmount(totalAmount, order.status);
 
       // Cancel the order
       const cancelledOrder = await storage.cancelOrder(orderId, reason, req.user.id);
@@ -237,23 +536,30 @@ export function registerRefundEndpoints(
             .from(payments)
             .where(eq(payments.orderId, orderId));
 
-          // Create refund record
+          // Create refund record with enhanced fields
           const [newRefund] = await db.insert(refunds).values({
-            paymentId: existingPayment?.id || orderId, // Use payment ID if available
+            paymentId: existingPayment?.id,
             orderId: orderId,
             customerId: order.customerId,
+            originalOrderAmount: totalAmount.toString(),
             amount: refundAmount.toString(),
-            reason: reason,
-            description: `Order cancellation refund - ${refundPercentage}% of total`,
+            refundPercentage: refundPercentage.toString(),
+            orderStatusAtCancellation: order.status,
+            cancellationStage: cancellationStage,
+            reason: 'customer_cancelled',
+            description: `Order cancellation refund - ${refundPercentage}% of total. Reason: ${reason}`,
             status: 'pending',
             provider: order.paymentProvider || 'manual',
             initiatedBy: req.user.id,
+            initiatedByRole: req.user.role,
             metadata: {
               orderNumber: order.orderNumber,
               originalAmount: totalAmount,
               refundPercentage,
               orderStatusAtCancellation: order.status,
+              cancellationStage,
               cancelledBy: req.user.role,
+              cancellationReason: reason,
               requestedAt: new Date().toISOString()
             }
           }).returning();
@@ -341,195 +647,7 @@ export function registerRefundEndpoints(
    * Admin processes (approves/rejects) a pending refund
    */
   app.post("/api/admin/refunds/:id/process", authenticateToken, requireAdmin, auditLog('process_refund', 'refunds'), async (req: Request, res: Response) => {
-    try {
-      const { id: refundId } = req.params;
-
-      if (!req.user) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
-      // Validate request body
-      const validationResult = processRefundSchema.safeParse(req.body);
-      if (!validationResult.success) {
-        return res.status(400).json({
-          message: "Invalid request data",
-          errors: validationResult.error.errors
-        });
-      }
-
-      const { action, notes, adjustedAmount } = validationResult.data;
-
-      // Get the refund record
-      const [refundRecord] = await db.select()
-        .from(refunds)
-        .where(eq(refunds.id, refundId));
-
-      if (!refundRecord) {
-        return res.status(404).json({ message: "Refund not found" });
-      }
-
-      // Check if refund is in a processable state
-      if (refundRecord.status !== 'pending' && refundRecord.status !== 'processing') {
-        return res.status(400).json({
-          message: `Refund cannot be processed. Current status: ${refundRecord.status}`,
-          currentStatus: refundRecord.status
-        });
-      }
-
-      // Get associated order
-      const order = await storage.getOrder(refundRecord.orderId);
-      if (!order) {
-        return res.status(404).json({ message: "Associated order not found" });
-      }
-
-      const finalAmount = adjustedAmount || parseFloat(refundRecord.amount);
-      const now = new Date();
-
-      if (action === 'approve') {
-        // Process the refund approval
-        const [updatedRefund] = await db.update(refunds)
-          .set({
-            status: 'completed',
-            approvedBy: req.user.id,
-            processedAt: now,
-            amount: finalAmount.toString(),
-            metadata: {
-              ...(refundRecord.metadata as object || {}),
-              adminNotes: notes,
-              originalAmount: refundRecord.amount,
-              adjustedAmount: adjustedAmount ? finalAmount : null,
-              processedBy: req.user.id,
-              processedAt: now.toISOString()
-            },
-            updatedAt: now
-          })
-          .where(eq(refunds.id, refundId))
-          .returning();
-
-        // Update order payment status
-        await storage.updateOrder(refundRecord.orderId, {
-          paymentStatus: 'refunded'
-        });
-
-        // Update the associated payment record if it exists
-        const [existingPayment] = await db.select()
-          .from(payments)
-          .where(eq(payments.orderId, refundRecord.orderId));
-
-        if (existingPayment) {
-          await db.update(payments)
-            .set({
-              status: 'refunded',
-              refundedAt: now,
-              refundAmount: finalAmount.toString(),
-              updatedAt: now
-            })
-            .where(eq(payments.id, existingPayment.id));
-        }
-
-        // Record in order status history
-        await db.insert(orderStatusHistory).values({
-          orderId: refundRecord.orderId,
-          fromStatus: 'cancelled',
-          toStatus: 'cancelled',
-          changedBy: req.user.id,
-          changedByRole: 'admin',
-          reason: 'Refund approved and processed',
-          notes: `Refund of PHP ${finalAmount.toFixed(2)} approved by admin. ${notes || ''}`,
-          metadata: {
-            refundId,
-            refundAmount: finalAmount,
-            action: 'refund_approved'
-          }
-        });
-
-        // Broadcast refund completion
-        broadcastToSubscribers('refund_processed', {
-          refundId,
-          orderId: refundRecord.orderId,
-          orderNumber: order.orderNumber,
-          amount: finalAmount,
-          status: 'completed',
-          customerId: order.customerId
-        });
-
-        res.json({
-          success: true,
-          message: "Refund approved and processed successfully",
-          refund: {
-            id: updatedRefund.id,
-            orderId: updatedRefund.orderId,
-            amount: finalAmount,
-            status: updatedRefund.status,
-            processedAt: updatedRefund.processedAt,
-            approvedBy: updatedRefund.approvedBy
-          }
-        });
-      } else if (action === 'reject') {
-        // Process the refund rejection
-        const [updatedRefund] = await db.update(refunds)
-          .set({
-            status: 'failed',
-            processedAt: now,
-            failureReason: notes || 'Refund request rejected by administrator',
-            metadata: {
-              ...(refundRecord.metadata as object || {}),
-              rejectionReason: notes,
-              rejectedBy: req.user.id,
-              rejectedAt: now.toISOString()
-            },
-            updatedAt: now
-          })
-          .where(eq(refunds.id, refundId))
-          .returning();
-
-        // Update order payment status back to paid
-        await storage.updateOrder(refundRecord.orderId, {
-          paymentStatus: 'paid'
-        });
-
-        // Record in order status history
-        await db.insert(orderStatusHistory).values({
-          orderId: refundRecord.orderId,
-          fromStatus: 'cancelled',
-          toStatus: 'cancelled',
-          changedBy: req.user.id,
-          changedByRole: 'admin',
-          reason: 'Refund rejected',
-          notes: `Refund request rejected. Reason: ${notes || 'Not provided'}`,
-          metadata: {
-            refundId,
-            requestedAmount: refundRecord.amount,
-            action: 'refund_rejected'
-          }
-        });
-
-        // Broadcast refund rejection
-        broadcastToSubscribers('refund_rejected', {
-          refundId,
-          orderId: refundRecord.orderId,
-          orderNumber: order.orderNumber,
-          reason: notes || 'Refund request rejected',
-          customerId: order.customerId
-        });
-
-        res.json({
-          success: true,
-          message: "Refund request rejected",
-          refund: {
-            id: updatedRefund.id,
-            orderId: updatedRefund.orderId,
-            amount: refundRecord.amount,
-            status: updatedRefund.status,
-            processedAt: updatedRefund.processedAt,
-            failureReason: updatedRefund.failureReason
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error processing refund:", error);
-      res.status(500).json({ message: "Failed to process refund" });
-    }
+    return processRefundHandler(req, res, broadcastToSubscribers);
   });
 
   /**
@@ -596,6 +714,190 @@ export function registerRefundEndpoints(
       console.error("Error fetching refunds:", error);
       res.status(500).json({ message: "Failed to fetch refunds" });
     }
+  });
+
+  /**
+   * GET /api/customer/refunds
+   * Customer endpoint to list their own refunds
+   */
+  app.get("/api/customer/refunds", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { status, page = '1', limit = '20' } = req.query;
+
+      let query = db.select({
+        refund: refunds,
+        order: {
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          items: orders.items,
+          createdAt: orders.createdAt
+        }
+      })
+        .from(refunds)
+        .leftJoin(orders, eq(refunds.orderId, orders.id))
+        .where(eq(refunds.customerId, req.user.id))
+        .orderBy(desc(refunds.createdAt));
+
+      // Apply status filter if provided
+      if (status && typeof status === 'string') {
+        query = db.select({
+          refund: refunds,
+          order: {
+            id: orders.id,
+            orderNumber: orders.orderNumber,
+            totalAmount: orders.totalAmount,
+            status: orders.status,
+            items: orders.items,
+            createdAt: orders.createdAt
+          }
+        })
+          .from(refunds)
+          .leftJoin(orders, eq(refunds.orderId, orders.id))
+          .where(and(
+            eq(refunds.customerId, req.user.id),
+            eq(refunds.status, status)
+          ))
+          .orderBy(desc(refunds.createdAt)) as typeof query;
+      }
+
+      // Pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      const results = await query.limit(limitNum).offset(offset);
+
+      // Get total count for pagination
+      const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+        .from(refunds)
+        .where(eq(refunds.customerId, req.user.id));
+
+      // Format response with status messages
+      const formattedRefunds = results.map(r => ({
+        id: r.refund.id,
+        orderId: r.refund.orderId,
+        orderNumber: r.order?.orderNumber,
+        amount: parseFloat(r.refund.amount),
+        refundPercentage: r.refund.refundPercentage ? parseFloat(r.refund.refundPercentage) : null,
+        originalOrderAmount: r.refund.originalOrderAmount ? parseFloat(r.refund.originalOrderAmount) : null,
+        reason: r.refund.reason,
+        description: r.refund.description,
+        status: r.refund.status,
+        statusMessage: getRefundStatusMessage(r.refund.status),
+        orderStatusAtCancellation: r.refund.orderStatusAtCancellation,
+        cancellationStage: r.refund.cancellationStage,
+        processedAt: r.refund.processedAt,
+        createdAt: r.refund.createdAt,
+        order: r.order ? {
+          id: r.order.id,
+          orderNumber: r.order.orderNumber,
+          totalAmount: parseFloat(r.order.totalAmount),
+          status: r.order.status,
+          itemCount: Array.isArray(r.order.items) ? r.order.items.length : 0,
+          createdAt: r.order.createdAt
+        } : null
+      }));
+
+      res.json({
+        refunds: formattedRefunds,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: Number(count),
+          totalPages: Math.ceil(Number(count) / limitNum)
+        },
+        summary: {
+          totalRefunds: Number(count),
+          pendingCount: results.filter(r => r.refund.status === 'pending').length,
+          completedCount: results.filter(r => r.refund.status === 'completed').length,
+          totalRefundedAmount: results
+            .filter(r => r.refund.status === 'completed')
+            .reduce((sum, r) => sum + parseFloat(r.refund.amount), 0)
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching customer refunds:", error);
+      res.status(500).json({ message: "Failed to fetch refunds" });
+    }
+  });
+
+  /**
+   * GET /api/customer/refunds/:id
+   * Customer endpoint to get details of a specific refund
+   */
+  app.get("/api/customer/refunds/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { id: refundId } = req.params;
+
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const [result] = await db.select({
+        refund: refunds,
+        order: orders
+      })
+        .from(refunds)
+        .leftJoin(orders, eq(refunds.orderId, orders.id))
+        .where(and(
+          eq(refunds.id, refundId),
+          eq(refunds.customerId, req.user.id)
+        ));
+
+      if (!result) {
+        return res.status(404).json({ message: "Refund not found" });
+      }
+
+      res.json({
+        id: result.refund.id,
+        orderId: result.refund.orderId,
+        orderNumber: result.order?.orderNumber,
+        amount: parseFloat(result.refund.amount),
+        refundPercentage: result.refund.refundPercentage ? parseFloat(result.refund.refundPercentage) : null,
+        originalOrderAmount: result.refund.originalOrderAmount ? parseFloat(result.refund.originalOrderAmount) : null,
+        reason: result.refund.reason,
+        description: result.refund.description,
+        status: result.refund.status,
+        statusMessage: getRefundStatusMessage(result.refund.status),
+        orderStatusAtCancellation: result.refund.orderStatusAtCancellation,
+        cancellationStage: result.refund.cancellationStage,
+        processedAt: result.refund.processedAt,
+        failureReason: result.refund.failureReason,
+        createdAt: result.refund.createdAt,
+        updatedAt: result.refund.updatedAt,
+        order: result.order ? {
+          id: result.order.id,
+          orderNumber: result.order.orderNumber,
+          orderType: result.order.orderType,
+          totalAmount: parseFloat(result.order.totalAmount),
+          subtotal: parseFloat(result.order.subtotal),
+          deliveryFee: parseFloat(result.order.deliveryFee),
+          status: result.order.status,
+          paymentMethod: result.order.paymentMethod,
+          paymentStatus: result.order.paymentStatus,
+          createdAt: result.order.createdAt
+        } : null,
+        timeline: buildRefundTimeline(result.refund)
+      });
+    } catch (error) {
+      console.error("Error fetching refund details:", error);
+      res.status(500).json({ message: "Failed to fetch refund details" });
+    }
+  });
+
+  /**
+   * PATCH /api/admin/refunds/:id/process
+   * Admin processes (approves/rejects) a pending refund (PATCH version)
+   */
+  app.patch("/api/admin/refunds/:id/process", authenticateToken, requireAdmin, auditLog('process_refund', 'refunds'), async (req: Request, res: Response) => {
+    // Reuse the POST handler logic
+    return processRefundHandler(req, res, broadcastToSubscribers);
   });
 
   /**

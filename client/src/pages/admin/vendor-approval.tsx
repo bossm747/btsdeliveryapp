@@ -35,8 +35,15 @@ import {
   Store, Search, FileText, CheckCircle, XCircle, Clock,
   Eye, ChevronUp, ChevronDown, AlertCircle, Building, Phone, Mail
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useAdminToast } from "@/hooks";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  AdminPageWrapper,
+  AdminTableSkeleton,
+  AdminStatsSkeleton,
+  NoPendingApprovalEmptyState,
+  NoRestaurantsEmptyState,
+} from "@/components/admin";
 
 // Types
 interface VendorDocument {
@@ -70,7 +77,7 @@ type SortField = "businessName" | "ownerName" | "submittedAt" | "status";
 type SortDirection = "asc" | "desc";
 
 export default function VendorApproval() {
-  const { toast } = useToast();
+  const adminToast = useAdminToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -103,19 +110,12 @@ export default function VendorApproval() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/vendors/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/vendors/stats"] });
-      toast({
-        title: "Vendor Approved",
-        description: "The vendor application has been approved successfully.",
-      });
+      adminToast.restaurantApproved(selectedVendor?.businessName);
       setDetailsOpen(false);
       setSelectedVendor(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to approve vendor",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to approve vendor");
     },
   });
 
@@ -128,21 +128,14 @@ export default function VendorApproval() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/vendors/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/vendors/stats"] });
-      toast({
-        title: "Vendor Rejected",
-        description: "The vendor application has been rejected.",
-      });
+      adminToast.restaurantRejected(selectedVendor?.businessName);
       setRejectDialogOpen(false);
       setDetailsOpen(false);
       setSelectedVendor(null);
       setRejectionReason("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reject vendor",
-        variant: "destructive",
-      });
+      adminToast.error(error.message || "Failed to reject vendor");
     },
   });
 
@@ -283,10 +276,18 @@ export default function VendorApproval() {
         />
 
         {/* Page Content */}
-        <main className="p-6">
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <AdminPageWrapper
+          pageTitle="Vendor Approval"
+          pageDescription="Review and manage vendor registration requests"
+          refreshQueryKeys={[
+            "/api/admin/vendors/pending",
+            "/api/admin/vendors/stats",
+          ]}
+        >
+          <main className="p-6">
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">

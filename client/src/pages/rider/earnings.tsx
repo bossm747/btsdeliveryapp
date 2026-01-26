@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -33,6 +32,10 @@ import {
   Tooltip,
   ResponsiveContainer
 } from "recharts";
+import { RiderPageWrapper } from "@/components/rider/rider-page-wrapper";
+import { RiderEarningsSkeleton } from "@/components/rider/rider-skeletons";
+import { NoEarningsEmptyState, NoEarningsForPeriodEmptyState, RiderErrorState } from "@/components/rider/rider-empty-states";
+import { useRiderToast } from "@/hooks/use-rider-toast";
 
 // Types
 interface EarningsData {
@@ -96,20 +99,6 @@ const CHART_COLORS = {
   success: '#10b981',
   warning: '#f59e0b'
 };
-
-// Loading skeleton component
-const EarningsSkeleton = () => (
-  <div className="space-y-4">
-    <Skeleton className="h-32 w-full" />
-    <div className="grid grid-cols-2 gap-3">
-      <Skeleton className="h-20" />
-      <Skeleton className="h-20" />
-      <Skeleton className="h-20" />
-      <Skeleton className="h-20" />
-    </div>
-    <Skeleton className="h-64 w-full" />
-  </div>
-);
 
 // Earnings breakdown card component
 const EarningsBreakdownCard = ({
@@ -195,9 +184,10 @@ const GoalProgress = ({
 export default function RiderEarnings() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState("today");
+  const riderToast = useRiderToast();
 
   // Fetch earnings data
-  const { data: earnings, isLoading, error } = useQuery<EarningsData>({
+  const { data: earnings, isLoading, error, refetch } = useQuery<EarningsData>({
     queryKey: ["/api/rider/earnings"],
   });
 
@@ -262,15 +252,51 @@ export default function RiderEarnings() {
     return total > 0 ? (value / total) * 100 : 0;
   };
 
+  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-4">
-        <EarningsSkeleton />
-      </div>
+      <RiderPageWrapper
+        pageTitle="My Earnings"
+        pageDescription="Track your delivery income"
+        refreshQueryKeys={["/api/rider/earnings"]}
+      >
+        <div className="min-h-screen bg-gray-50 px-4 py-4">
+          <RiderEarningsSkeleton />
+        </div>
+      </RiderPageWrapper>
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <RiderPageWrapper
+        pageTitle="My Earnings"
+        pageDescription="Track your delivery income"
+        refreshQueryKeys={["/api/rider/earnings"]}
+      >
+        <div className="min-h-screen bg-gray-50 px-4 py-4">
+          <RiderErrorState
+            title="Hindi Na-load ang Earnings"
+            description="May problema sa pag-load ng iyong earnings. Subukan ulit, pre."
+            onRetry={() => refetch()}
+          />
+        </div>
+      </RiderPageWrapper>
+    );
+  }
+
+  // Check if no earnings data at all
+  const hasNoEarnings = !earningsData.today.deliveries && 
+                        !earningsData.weekly.deliveries && 
+                        !earningsData.monthly.deliveries;
+
   return (
+    <RiderPageWrapper
+      pageTitle="My Earnings"
+      pageDescription="Track your delivery income"
+      refreshQueryKeys={["/api/rider/earnings"]}
+    >
     <div className="min-h-screen bg-gray-50" data-testid="rider-earnings-page">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">

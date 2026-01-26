@@ -11388,3 +11388,3003 @@
   level: 'error',
   message: 'Request error'
 }
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'yj9odlmj9zboqoqq1ocs4',
+  method: 'GET',
+  url: '/health',
+  statusCode: 401,
+  duration: 17,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T07:11:49.650Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'f7p4gtu4jgeqfiottaw79k',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 515,
+  ip: '112.198.113.111',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T07:23:46.407Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rq0s9ihl97zdb6pndbngm',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 511,
+  ip: '112.198.113.111',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T07:23:47.225Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '4hhaoi4j3o882tloultn3r',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 511,
+  ip: '112.198.113.111',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T07:24:17.339Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'l72yvblz2qyavsimh0end',
+  method: 'GET',
+  url: '/assets/admin-analytics-0LaJ4txq.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:04.989Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'tf9ihwwtjkax3ea8e6j5a',
+  method: 'GET',
+  url: '/assets/table-BvG-xuSz.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:04.992Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'tn4q47yzutborprvszxmep',
+  method: 'GET',
+  url: '/assets/useQuery-Ca-tyMkr.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.003Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ouvd810rxrlmar6itr6uq',
+  method: 'GET',
+  url: '/assets/activity-Dn52azi_.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.005Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'f3ncx2j3t0llv6d4krev',
+  method: 'GET',
+  url: '/assets/tabs-B0r_RNZL.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.007Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ix95zpe3637b1domdpigig',
+  method: 'GET',
+  url: '/assets/refresh-cw-CkzMX1ZK.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.088Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5bz9enic0ras7bt279klcb',
+  method: 'GET',
+  url: '/assets/download-Dy5Rik1q.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.109Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'w8b49gpwcbkm1knbsna7n',
+  method: 'GET',
+  url: '/assets/dollar-sign-R3KOvyv1.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.113Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'sj0q5x9flwmvql23bp40ga',
+  method: 'GET',
+  url: '/assets/BarChart-DCIF-8hA.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.128Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'q1pjshg8sw7ds7dyeiom8',
+  method: 'GET',
+  url: '/assets/zap-BvmzpAyw.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.133Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'fd4x409sqq8ikzm95dw9bq',
+  method: 'GET',
+  url: '/assets/AreaChart-dE6YYF72.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.191Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'w6ebh1rkwupcjx31063yme',
+  method: 'GET',
+  url: '/assets/Area-PKKd_2Df.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.204Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'avs7vbavgnp183lvus3r5rj',
+  method: 'GET',
+  url: '/assets/ComposedChart-eSb6Un4i.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.212Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9px9albn8bhf8i5zopypur',
+  method: 'GET',
+  url: '/assets/target-DkIncY-V.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.243Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hzrzcbfyr64th2v5ttstt',
+  method: 'GET',
+  url: '/assets/Line-BRkPdamE.js',
+  statusCode: 429,
+  duration: 3,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.247Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'p87dkkspmkosfyvhnnf28',
+  method: 'GET',
+  url: '/assets/rotate-ccw-CQayaz5h.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.319Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rrli3ere21ha48za249is',
+  method: 'GET',
+  url: '/assets/triangle-alert-9NBDMNNI.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.320Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zpilbsw90roqxpuwpy8i4d',
+  method: 'GET',
+  url: '/assets/navigation-CPOzd-AZ.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.339Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'sprbdvxz2szw48u2h4x6',
+  method: 'GET',
+  url: '/assets/admin-sidebar-tDLzyh1x.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.358Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jq63f9n1ku4q0te3pobgp',
+  method: 'GET',
+  url: '/assets/avatar-CzsESt1u.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.378Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zul78nbh8p03rt89rv8z4y',
+  method: 'GET',
+  url: '/assets/log-out-B9_LWKXm.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.408Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'tsj1dqcsokkq11se8cliwo',
+  method: 'GET',
+  url: '/assets/layers-2od71I-B.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.428Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '4r6jvot1izmw42nd2bygao',
+  method: 'GET',
+  url: '/assets/percent-B8GwmB7T.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.448Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '4qb3itehk2bckvbamb0s4t',
+  method: 'GET',
+  url: '/assets/file-text-DCsofhcV.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.488Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'u9w29em1hfsodxlizs4f9m',
+  method: 'GET',
+  url: '/assets/tag-BgIOvwfp.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.490Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'm47xu7b1yzin59z3w8ck',
+  method: 'GET',
+  url: '/assets/trending-up-CuWGZHpW.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":776}',
+  timestamp: '2026-01-18T07:25:05.509Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'mrhotflhab5axloyu15fs',
+  method: 'GET',
+  url: '/admin-dashboard',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":763}',
+  timestamp: '2026-01-18T07:25:17.989Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5abm5bvcnn558gxnbbzqz3',
+  method: 'GET',
+  url: '/assets/wallet-BpqwLgcM.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":780}',
+  timestamp: '2026-01-18T07:45:43.247Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'dae1y8ewkr8hneut0lpq6d',
+  method: 'GET',
+  url: '/assets/building-B8N2dT4O.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":780}',
+  timestamp: '2026-01-18T07:45:43.254Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5v1yb8em00prsypg8x79l8',
+  method: 'GET',
+  url: '/assets/BarChart-DCIF-8hA.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":780}',
+  timestamp: '2026-01-18T07:45:43.256Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'caw7av29xx2vpkchgec1u',
+  method: 'GET',
+  url: '/assets/bts-logo-transparent-DdIZAgXa.png',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":779}',
+  timestamp: '2026-01-18T07:45:44.103Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '8vqagerrm9klxtm1rwqiph',
+  method: 'GET',
+  url: '/vendor-dashboard/commission',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":775}',
+  timestamp: '2026-01-18T07:45:47.498Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'oaz4l7vo6h99po33tfk1k',
+  method: 'GET',
+  url: '/favicon.ico',
+  statusCode: 429,
+  duration: 3,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":774}',
+  timestamp: '2026-01-18T07:45:48.522Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'development',
+  error: {
+    message: 'listen EADDRINUSE: address already in use 0.0.0.0:5001',
+    stack: 'Error: listen EADDRINUSE: address already in use 0.0.0.0:5001\n' +
+      '    at Server.setupListenHandle [as _listen2] (node:net:1902:16)\n' +
+      '    at listenInCluster (node:net:1959:12)\n' +
+      '    at doListen (node:net:2133:7)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)',
+    name: 'Error'
+  },
+  timestamp: '2026-01-18T07:54:55.068Z',
+  level: 'error',
+  message: 'Uncaught exception'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'vf20jalbhdnmhmfgs29l',
+  method: 'GET',
+  url: '/vendor-dashboard/business-settings',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":181}',
+  timestamp: '2026-01-18T07:55:41.490Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qiiyetn8qraweqqnpq5m4a',
+  method: 'GET',
+  url: '/',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":167}',
+  timestamp: '2026-01-18T07:55:56.291Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bnejv0zwidhyz9l0p047t',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 5,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T08:06:54.752Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '4w39qddg90xoho6l25ueoi',
+  method: 'GET',
+  url: '/assets/menu-BP4hjiH5.js',
+  statusCode: 429,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.129Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'mmosorvdglzn5yfgzi4wo',
+  method: 'GET',
+  url: '/assets/switch-BtoyX2Mm.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.133Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '63jmt3tk62cy82ekqvgna',
+  method: 'GET',
+  url: '/assets/index-D4MfhmrO.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.136Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'oxei1hnj0dos2zklmsmxn',
+  method: 'GET',
+  url: '/assets/label-ATZE1YGu.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.138Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'xmjb9fa74oz9uypxhjvg',
+  method: 'GET',
+  url: '/assets/textarea-Byh8ClVL.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.142Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9ez9kbac9v418pnhuo8ltr',
+  method: 'GET',
+  url: '/assets/dialog-v6BN1tFE.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.263Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'xriwwvv93unkqvomb3iap',
+  method: 'GET',
+  url: '/assets/skeleton-D7wREYpf.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.266Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'q7gen9hpnnbah4rxyn93x',
+  method: 'GET',
+  url: '/assets/alert-dialog-Cp_pBtlm.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.268Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0c7v1rv7ab6ri3h7fv32p1',
+  method: 'GET',
+  url: '/assets/plus-BRHk-3ne.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.272Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5ozz6q2bqtbhtc3mkcf8',
+  method: 'GET',
+  url: '/assets/square-pen-BhJxbkZp.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.277Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'oomxxvrozajuslb1szs2',
+  method: 'GET',
+  url: '/assets/trash-2-a5WEt9zn.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.387Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'snutobzfskeg0fcacy0yw',
+  method: 'GET',
+  url: '/assets/eye-DZ54aRM5.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.389Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'dh0hqx8u9f9ruaraal3kh',
+  method: 'GET',
+  url: '/assets/eye-off-CTDRNYno.js',
+  statusCode: 429,
+  duration: 0,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":41}',
+  timestamp: '2026-01-18T08:21:04.391Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9q62oldqr5uj5yq473sh',
+  method: 'GET',
+  url: '/',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":4}',
+  timestamp: '2026-01-18T08:21:41.487Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'gupwudn0lzw9r7p5vqelle',
+  method: 'GET',
+  url: '/assets/btslogo-B62I6810.png',
+  statusCode: 429,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":3}',
+  timestamp: '2026-01-18T08:21:41.618Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'h5g7hofq46e4n0ai92hsw',
+  method: 'GET',
+  url: '/api/vendor/modifiers',
+  statusCode: 403,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T08:59:51.837Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bgjzqw9awowar0q1bo1yb',
+  method: 'GET',
+  url: '/api/vendor/categories',
+  statusCode: 403,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T08:59:51.842Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ww1z9hgz9nsdd5nxkzkpb',
+  method: 'DELETE',
+  url: '/api/vendor/menu-items/0d9bcb86-7d58-4164-ae5a-2c9c315a886b',
+  statusCode: 403,
+  duration: 4,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T09:00:08.550Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hixtjrcsh9w187ntzurw',
+  method: 'GET',
+  url: '/api/vendor/menu-items/0d9bcb86-7d58-4164-ae5a-2c9c315a886b/modifiers',
+  statusCode: 403,
+  duration: 2,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T09:00:19.008Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0lq28m16c2j2wd9t5m0j5a',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 1,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T09:00:29.466Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'neu0m7ddm7ufq32ofbmha',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 10,
+  ip: '112.198.113.111',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-18T09:38:00.860Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7bw60wmw8zb4u7kdp7rc1d',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 515,
+  ip: '112.198.113.111',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T09:38:45.375Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'r5esm1x5cxcty8ymcuxdf',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 517,
+  ip: '112.198.113.111',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-18T09:39:24.942Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '3u46p4nqcnu0mgt3hg6rtl',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:42:36.246Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'fs9lm0o4x0spxag8ex9qq8',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:42:37.423Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'iuth2j6q1pskxo1tnsf4',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:42:46.436Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'x0qx0zccqx9tkjsbzk5p',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:42:47.549Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '68kre7n1zdx39xenqoitow',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 12,
+  ip: '175.176.58.219',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T09:43:06.791Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hb3tm4lwn5cl7us41skeb',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 509,
+  ip: '175.176.58.219',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T09:43:49.772Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'luiwjtlczfg6i4pgdlego',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 505,
+  ip: '175.176.58.219',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-18T09:44:51.969Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '300dzia8nivhph9d09bon',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 502,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:44:55.708Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hkivd0fbkzhq83r28zimh',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 503,
+  ip: '175.176.58.219',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T09:44:57.908Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'akduls1f6a2qqz497cqcr',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 510,
+  ip: '175.176.58.219',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T09:45:36.016Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '6ydd0rpxw48drsoqvnoum',
+  method: 'GET',
+  url: '/assets/category-coffee-uRVNrotX.jpg',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.141Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '8t8o07n189qumv3sjj176q',
+  method: 'GET',
+  url: '/assets/category-desserts-dPPsiADp.jpg',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.189Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '00aesxfzv4p7eww1idvid2d',
+  method: 'GET',
+  url: '/assets/category-healthy-C7-PG1KH.jpg',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.191Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ntggf49mq6ljg46c61ur6a',
+  method: 'GET',
+  url: '/assets/category-chicken-CE6hjYXR.jpg',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.192Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'v3qljwadaukhm69mfnmoim',
+  method: 'GET',
+  url: '/assets/chickenjoy-B8XFhMmb.jpg',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.205Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'xw8uxjsny1q3ege3whl6s',
+  method: 'GET',
+  url: '/assets/hawaiian-pizza-CGX44ZFj.jpg',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.235Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9m5o75576kncgjmkwcy0yr',
+  method: 'GET',
+  url: '/assets/sisig-bowl-A5ik8Gj1.jpg',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.243Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'v7bgqjmk8erzid4beptpz',
+  method: 'GET',
+  url: '/assets/pm2-inasal-NhaX1KUk.jpg',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":561}',
+  timestamp: '2026-01-18T09:45:42.255Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7rq83r92ynhjt0o6qug3b',
+  method: 'GET',
+  url: '/api/customer/profile',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":206}',
+  timestamp: '2026-01-18T09:51:37.751Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '46gm78w4ax5gyl3qbyhjy',
+  method: 'GET',
+  url: '/api/loyalty/points',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":206}',
+  timestamp: '2026-01-18T09:51:37.823Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'o4rrgvvthxpwtyfikzb6',
+  method: 'GET',
+  url: '/api/customer/orders/recent',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":206}',
+  timestamp: '2026-01-18T09:51:37.825Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0em8s3yzsa4qzgwabxp2g9l',
+  method: 'GET',
+  url: '/api/customer/favorites',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":206}',
+  timestamp: '2026-01-18T09:51:37.830Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jn79mmwz59vmpk7b6gf6e',
+  method: 'GET',
+  url: '/assets/bts-logo-transparent-DdIZAgXa.png',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":206}',
+  timestamp: '2026-01-18T09:51:37.942Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '743e0d971dxbetk0epepp',
+  method: 'GET',
+  url: '/assets/bts-logo-transparent-DdIZAgXa.png',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":140}',
+  timestamp: '2026-01-18T09:52:43.896Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'dw5o3fu0kq0hcjnahz9cm6',
+  method: 'GET',
+  url: '/assets/pabili-CytLk4Ku.js',
+  statusCode: 429,
+  duration: 1,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":140}',
+  timestamp: '2026-01-18T09:52:43.967Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qmi72x0yymkz1ls6glcxa8',
+  method: 'GET',
+  url: '/assets/bts-logo-transparent-DdIZAgXa.png',
+  statusCode: 429,
+  duration: 0,
+  ip: '175.176.58.219',
+  error: '{"error":"Rate limit exceeded","message":"Too many requests from this IP, please try again later.","retryAfter":140}',
+  timestamp: '2026-01-18T09:52:44.066Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '4y4jlnod7mievu3a2ufdgi',
+  method: 'GET',
+  url: '/health',
+  statusCode: 401,
+  duration: 16,
+  ip: '127.0.0.1',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T10:00:17.261Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'fdl7ofnsipmp30wzokzp',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 13,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:08:55.181Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9jsv7ubwbecwak0gon8g',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '136.158.67.168',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T13:10:18.095Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 's74f6mzqq1ag4ni9rj1bj',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '136.158.67.168',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T13:10:19.146Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '62fq0ncpocku00kcxdqf7',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 8,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:10:41.727Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'cgi2c0b5glnp9564i7e33d',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 218,
+  ip: '136.158.67.168',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-18T13:11:09.421Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'mqvfmnsgtm0q0vb8ddbfij',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 13,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:13:47.031Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qujoh5czsldyo64vdhri5',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 33,
+  ip: '136.158.67.168',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-18T13:14:02.587Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7cpbh1p567c5bxzv7z5slw',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '136.158.67.168',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T13:14:24.182Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'fq1kfzexv1kk8j7wqetuh',
+  method: 'GET',
+  url: '/api/customer/orders?',
+  statusCode: 401,
+  duration: 1,
+  ip: '136.158.67.168',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-18T13:14:25.265Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jc8uf5tuyenbf8sd8iego',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 8,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:16:10.394Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'af0wmebqh1b5u7crhdpunk',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 8,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:16:20.505Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'y968daj1yhrb9lm9peob',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 10,
+  ip: '136.158.67.168',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-18T13:16:30.633Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '6bz2f12crjlybrxocembj',
+  method: 'GET',
+  url: '/api/rider/earnings',
+  statusCode: 401,
+  duration: 1,
+  ip: '136.158.67.168',
+  error: '{"message":"Rider authentication required"}',
+  timestamp: '2026-01-18T13:16:42.738Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rhj76kqyha8t0azc80ij9',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 5,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T05:23:31.740Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hqz0amw313jcle9yzx3bsk',
+  method: 'GET',
+  url: '/health',
+  statusCode: 401,
+  duration: 2,
+  ip: '37.44.244.226',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-19T05:45:43.653Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'foh2fwgczdibep3hkcyd6c',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 32,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:34:59.898Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 't2oztllv6gka8uh5sxe7ai',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 14,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:34:59.982Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'g9bnxmg64nuyrluxo6k5xn',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 10,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:35:29.977Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hihc8spctzrezt30p3arkk',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 14,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:35:47.690Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jh9bxc3x3ldagqem38o0rt',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 13,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:35:47.792Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'cvan8k676833z7yv3d5rf',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 12,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:36:09.925Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'owcp1eaiie8yh7voshaft',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 9,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:36:09.926Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'lv5ub5xv0ibva0ke0ccfj',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 9,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:36:31.618Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ze1sv3ch43u3s3671oyh',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 14,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:36:57.351Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'o515dq8745dvp1em4ezjn',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 13,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:36:57.353Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'gd940n4ldxdybvx86xihs',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 15,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:49:20.340Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '3jls3nn1j98w9b0i7bb3lg',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 16,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:49:20.345Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'me5f2enyl5a5fgduedw3g',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 31,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-19T06:49:33.487Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jm5nrp1g40o1zfxp3qyteo',
+  method: 'GET',
+  url: '/api/admin/dispatch/riders/capacity',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:49:53.592Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5sgksocogpq4tmnpwd9kk',
+  method: 'GET',
+  url: '/api/admin/dispatch/sla-monitor',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:49:53.640Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'uxkassv4m9fnetgqvnc7va',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:49:53.791Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'idkepi2vh2da6y9ezauu3d',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:49:58.857Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'm194icoeamri0m38nbdeq',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 4,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.555Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '3ij5owh7jp7w2xojhxe59',
+  method: 'GET',
+  url: '/api/admin/dispatch/batches',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.567Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'k6a25xqmspc34zrja3o902',
+  method: 'GET',
+  url: '/api/admin/dispatch/escalations',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.645Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '883opvnabukcw4dw18c74',
+  method: 'GET',
+  url: '/api/admin/dispatch/riders/capacity',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.694Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'av52upsg3r59928pr66hbr',
+  method: 'GET',
+  url: '/api/admin/dispatch/sla-monitor',
+  statusCode: 403,
+  duration: 8,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.711Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '6hj6xsebl6p7m26ecp0b08',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:03.954Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '2f4vl57yevp6xdug9k9dos',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:09.031Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'parp9m6hwc8iobqte608oq',
+  method: 'GET',
+  url: '/api/admin/dispatch/riders/capacity',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:13.748Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '7yv772fhwbprljtfo0a9i',
+  method: 'GET',
+  url: '/api/admin/dispatch/sla-monitor',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:13.766Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kmvd7wsfl6k0027vgyrdf',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:14.278Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bw85ddfeeonppmm1n2t01m',
+  method: 'GET',
+  url: '/api/admin/dispatch/escalations',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:18.694Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'hfr9xzx6ly8jjvfblp76sp',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:19.331Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '3j49zjm225m1qbsye4m3de',
+  method: 'GET',
+  url: '/api/admin/dispatch/riders/capacity',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:23.800Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bzdkyj2wutnjg9ffkb2w4k',
+  method: 'GET',
+  url: '/api/admin/dispatch/sla-monitor',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:23.812Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5fw3mjquj7pvavgfpstzu',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:24.381Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'xl64b338n0o4z53gqmnzi4',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:29.453Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bj9i4ffmswtu4opyw0uy',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:33.617Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jajvqugwezfrtd6qyswg8',
+  method: 'GET',
+  url: '/api/admin/dispatch/batches',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:33.655Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'g6tam20cwtkivg7mh0vfeh',
+  method: 'GET',
+  url: '/api/admin/dispatch/escalations',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:33.742Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '5wubai4fup5yk9dck3war9',
+  method: 'GET',
+  url: '/api/admin/dispatch/riders/capacity',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:33.874Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '0depq26paakgps8ijq2n738',
+  method: 'GET',
+  url: '/api/admin/dispatch/sla-monitor',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:33.877Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '3asfbx5ygzz5kj7wwm9196',
+  method: 'GET',
+  url: '/api/admin/dispatch/orders',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:34.546Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'c9dkzdcnzfpbrcj94xrjw',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.818Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'pfyl4n7eogjv2k9xl5dcy',
+  method: 'GET',
+  url: '/admin/commission/rates',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.827Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jbeei4utymgjx8rumxe4ig',
+  method: 'GET',
+  url: '/admin/commission/tiers',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.830Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'gfdvmt3vshd8oi8ko6od4',
+  method: 'GET',
+  url: '/admin/commission/vendor-overrides',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.833Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '65hqnvcs4hulym0iqer86',
+  method: 'GET',
+  url: '/admin/vendors/list',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.836Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jz3je22xx7i0t1s7xf7ymvj',
+  method: 'GET',
+  url: '/admin/commission/stats',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:50:35.839Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'el8b98qcnb8ffn0ox9nhqt',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:51:06.040Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'aritn9dbb799wgigjmd8p',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:51:36.247Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qkeog7y4l5tf3h7duumrb',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 1,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:52:06.452Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'emocvd2c0i8f7b91vsgo9k',
+  method: 'GET',
+  url: '/admin/alerts/count',
+  statusCode: 403,
+  duration: 3,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-19T06:52:36.508Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rgh4bpqp044nd7la0ifdl',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 2,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-20T10:39:14.731Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qg1szytliw8nn1gpl68j',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 6,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-20T12:09:09.647Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'm7t5mebu3qjiu2d1vc346m',
+  method: 'GET',
+  url: '/',
+  statusCode: 404,
+  duration: 12,
+  ip: '136.158.35.243',
+  error: '{"error":"API endpoint not found"}',
+  timestamp: '2026-01-20T12:09:32.736Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'vsy7pjhzh1advx0u32dh3',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 7,
+  ip: '136.158.35.243',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-20T12:09:46.995Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'sfvwcmqfw2i7gv00zwlxk',
+  method: 'POST',
+  url: '/api/pricing/calculate',
+  statusCode: 400,
+  duration: 6,
+  ip: '136.158.35.243',
+  error: '{"success":false,"message":"Invalid pricing parameters","errors":[{"code":"invalid_type","expected":"object","received":"undefined","path":["coordinates"],"message":"Required"},{"code":"invalid_type","expected":"string","received":"undefined","path":["deliveryAddress"],"message":"Required"}]}',
+  timestamp: '2026-01-20T12:09:48.421Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'eihiwpe85rg7qb48ybpm4f',
+  method: 'GET',
+  url: '/api/auth/me',
+  statusCode: 403,
+  duration: 4,
+  ip: '136.158.35.243',
+  error: '{"message":"Invalid token"}',
+  timestamp: '2026-01-20T12:35:13.136Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'y2sor2kj3yevw162v09sb',
+  method: 'GET',
+  url: '/',
+  statusCode: 401,
+  duration: 4,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:09.621Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zejdouzpbn61i8zrzxkag',
+  method: 'GET',
+  url: '/experiments',
+  statusCode: 401,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:09.659Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'jjvgorndtao5zm3c9w1gd8',
+  method: 'GET',
+  url: '/experiments/configurations',
+  statusCode: 401,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:09.662Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qquag4mar7ndncn7kvrbs9',
+  method: 'HEAD',
+  url: '/',
+  statusCode: 401,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:23.952Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'qph7lvd8xg0bxhvxvytoz',
+  method: 'HEAD',
+  url: '/experiments',
+  statusCode: 401,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:23.972Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'v8qtw31wdsj204m86hbz68',
+  method: 'HEAD',
+  url: '/experiments/configurations',
+  statusCode: 401,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:27:23.991Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/certsrv/..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/certsrv/..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'k2zct6q54o15v6rdyywrj',
+    method: 'GET',
+    url: '/certsrv/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.496Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'k2zct6q54o15v6rdyywrj',
+  method: 'GET',
+  url: '/certsrv/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 6,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.497Z","requestId":"k2zct6q54o15v6rdyywrj","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.498Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/cgi-bin/..%c0%af../..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/cgi-bin/..%c0%af../..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ammgljcsfn67l0pqkmaqtt',
+    method: 'GET',
+    url: '/cgi-bin/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.505Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ammgljcsfn67l0pqkmaqtt',
+  method: 'GET',
+  url: '/cgi-bin/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.506Z","requestId":"ammgljcsfn67l0pqkmaqtt","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.506Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/iisadmpwd/..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/iisadmpwd/..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: '002gj2v10zbv63lha1qbqy9g',
+    method: 'GET',
+    url: '/iisadmpwd/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.512Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '002gj2v10zbv63lha1qbqy9g',
+  method: 'GET',
+  url: '/iisadmpwd/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.513Z","requestId":"002gj2v10zbv63lha1qbqy9g","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.513Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/msadc/..%c0%af../..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/msadc/..%c0%af../..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'i64w43y8hib7syk5zi51pl',
+    method: 'GET',
+    url: '/msadc/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.521Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'i64w43y8hib7syk5zi51pl',
+  method: 'GET',
+  url: '/msadc/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.521Z","requestId":"i64w43y8hib7syk5zi51pl","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.522Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/pbserver/..%c0%af../..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/pbserver/..%c0%af../..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'owtwzca8fif55pksdjwimy',
+    method: 'GET',
+    url: '/pbserver/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.529Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'owtwzca8fif55pksdjwimy',
+  method: 'GET',
+  url: '/pbserver/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.529Z","requestId":"owtwzca8fif55pksdjwimy","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.529Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/rpc/..%c0%af../..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/rpc/..%c0%af../..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'wsfjqtqrdmgwd0835q087',
+    method: 'GET',
+    url: '/rpc/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.537Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'wsfjqtqrdmgwd0835q087',
+  method: 'GET',
+  url: '/rpc/..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.537Z","requestId":"wsfjqtqrdmgwd0835q087","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.538Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/scripts/..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/scripts/..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'drqjwuwi6xv4wxm7xigem8',
+    method: 'GET',
+    url: '/scripts/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.545Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'drqjwuwi6xv4wxm7xigem8',
+  method: 'GET',
+  url: '/scripts/..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.545Z","requestId":"drqjwuwi6xv4wxm7xigem8","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.545Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/scripts/..%c1%1c../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/scripts/..%c1%1c../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'luucldxf1wvpk7i1p2yn8',
+    method: 'GET',
+    url: '/scripts/..%c1%1c../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.553Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'luucldxf1wvpk7i1p2yn8',
+  method: 'GET',
+  url: '/scripts/..%c1%1c../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.553Z","requestId":"luucldxf1wvpk7i1p2yn8","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.553Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/scripts/..%c1%1c../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/scripts/..%c1%1c../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'kg2xe3gn971143bvvptnv',
+    method: 'GET',
+    url: '/scripts/..%c1%1c../winnt/system32/cmd.exe?/c+dir+c:\\"',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.560Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'kg2xe3gn971143bvvptnv',
+  method: 'GET',
+  url: '/scripts/..%c1%1c../winnt/system32/cmd.exe?/c+dir+c:\\"',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.561Z","requestId":"kg2xe3gn971143bvvptnv","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.561Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  error: {
+    type: 'INTERNAL_ERROR',
+    message: "Failed to decode param '/_vti_bin/..%c0%af../..%c0%af../..%c0%af../winnt/system32/cmd.exe'",
+    stack: "Error: Failed to decode param '/_vti_bin/..%c0%af../..%c0%af../..%c0%af../winnt/system32/cmd.exe'\n" +
+      '    at convertToAppError (file:///root/bts/btsdeliveryapp/dist/index.js:35981:10)\n' +
+      '    at errorHandler (file:///root/bts/btsdeliveryapp/dist/index.js:35915:13)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:71:5)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9\n' +
+      '    at Function.process_params (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:346:12)\n' +
+      '    at next (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:280:10)\n' +
+      '    at Layer.handle_error (/root/bts/btsdeliveryapp/node_modules/express/lib/router/layer.js:67:12)\n' +
+      '    at trim_prefix (/root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:326:13)\n' +
+      '    at /root/bts/btsdeliveryapp/node_modules/express/lib/router/index.js:286:9',
+    details: undefined
+  },
+  request: {
+    id: 'ibcbym2wfp3edxnjmqy5',
+    method: 'GET',
+    url: '/_vti_bin/..%c0%af../..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+    ip: '172.17.0.2',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
+    user: 'anonymous'
+  },
+  timestamp: '2026-01-20T14:27:58.568Z',
+  level: 'error',
+  message: 'Server error occurred'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ibcbym2wfp3edxnjmqy5',
+  method: 'GET',
+  url: '/_vti_bin/..%c0%af../..%c0%af../..%c0%af../winnt/system32/cmd.exe?/c+dir',
+  statusCode: 500,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"error":"Internal Server Error","message":"Internal server error","type":"INTERNAL_ERROR","timestamp":"2026-01-20T14:27:58.568Z","requestId":"ibcbym2wfp3edxnjmqy5","statusCode":500}',
+  timestamp: '2026-01-20T14:27:58.568Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rlgaj4e2v9dnsk0thqwr5',
+  method: 'GET',
+  url: '/soap/?wsdl=1',
+  statusCode: 401,
+  duration: 2,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:28:35.897Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'lwud2axnjvo1glcsjbgzktj',
+  method: 'GET',
+  url: '/jsonws/',
+  statusCode: 401,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:28:40.031Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'bio2acdlvnovaf9guwbfn',
+  method: 'GET',
+  url: '/jsonws/index.jsp',
+  statusCode: 401,
+  duration: 1,
+  ip: '172.17.0.2',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T14:28:40.039Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'zvrqgoo04qpcoegagmjhb',
+  method: 'GET',
+  url: '/.env',
+  statusCode: 401,
+  duration: 1,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T16:32:03.845Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'rnt9wcafe8d9hyt8d1z7na',
+  method: 'GET',
+  url: '/v1/.env',
+  statusCode: 401,
+  duration: 2,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T16:32:28.352Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'd4lmsm6555i1tel3g1dwwq',
+  method: 'GET',
+  url: '/v2/.env',
+  statusCode: 401,
+  duration: 1,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T16:32:29.120Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: '9y943fmcp8o2abqssdwssb',
+  method: 'GET',
+  url: '/.env',
+  statusCode: 401,
+  duration: 1,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T17:01:35.331Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ehap7hg42tcbt80kdwje0n',
+  method: 'GET',
+  url: '/v1/.env',
+  statusCode: 401,
+  duration: 3,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T17:02:02.547Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'eouv3tof9v5thcvncr1inb',
+  method: 'GET',
+  url: '/v2/.env',
+  statusCode: 401,
+  duration: 1,
+  ip: '54.215.220.90',
+  error: '{"message":"Access token required"}',
+  timestamp: '2026-01-20T17:02:03.337Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'ocj6zfv1289wifbt6tifzn',
+  method: 'POST',
+  url: '/api/vendor/register',
+  statusCode: 500,
+  duration: 205,
+  ip: '127.0.0.1',
+  error: '{"message":"Internal server error"}',
+  timestamp: '2026-01-26T10:40:08.116Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'production',
+  requestId: 'r7eb29qrhztneknbvs0cl',
+  method: 'POST',
+  url: '/api/vendor/register',
+  statusCode: 500,
+  duration: 141,
+  ip: '127.0.0.1',
+  error: '{"message":"Internal server error"}',
+  timestamp: '2026-01-26T10:41:23.493Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'development',
+  requestId: 'xhq3c7cjj2fn4mblb6x4jf',
+  method: 'POST',
+  url: '/api/vendor/register',
+  statusCode: 500,
+  duration: 131,
+  ip: '127.0.0.1',
+  error: '{"message":"Internal server error"}',
+  timestamp: '2026-01-26T10:41:43.640Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'development',
+  requestId: '9dw3gkis8oc6smlet5epnc',
+  method: 'GET',
+  url: '/api/vendor/kyc/status',
+  statusCode: 403,
+  duration: 36,
+  ip: '127.0.0.1',
+  error: '{"message":"Email verification required. Please verify your email address to access this feature.","requiresEmailVerification":true}',
+  timestamp: '2026-01-26T10:41:58.767Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'development',
+  requestId: '6r6kkoqdf9bak93v6ym8ci',
+  method: 'POST',
+  url: '/api/auth/login',
+  statusCode: 401,
+  duration: 3,
+  ip: '127.0.0.1',
+  error: '{"message":"Invalid email or password"}',
+  timestamp: '2026-01-26T10:42:37.742Z',
+  level: 'error',
+  message: 'Request error'
+}
+{
+  service: 'bts-delivery-platform',
+  environment: 'development',
+  requestId: 'pi5r2b07hv6wjphpxdfux',
+  method: 'POST',
+  url: '/api/auth/login',
+  statusCode: 401,
+  duration: 349,
+  ip: '127.0.0.1',
+  error: '{"message":"Invalid email or password"}',
+  timestamp: '2026-01-26T10:42:45.970Z',
+  level: 'error',
+  message: 'Request error'
+}

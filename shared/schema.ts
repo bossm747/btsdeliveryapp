@@ -1556,26 +1556,68 @@ export const paymentWebhookEvents = pgTable("payment_webhook_events", {
   processedAt: timestamp("processed_at"),
 });
 
-// Refunds - Enhanced refund management
+// Refund Status Constants
+export const REFUND_STATUSES = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  REJECTED: 'rejected'
+} as const;
+
+// Refund Reason Constants
+export const REFUND_REASONS = {
+  CUSTOMER_CANCELLED: 'customer_cancelled',
+  VENDOR_CANCELLED: 'vendor_cancelled',
+  ADMIN_CANCELLED: 'admin_cancelled',
+  PAYMENT_FAILED: 'payment_failed',
+  ORDER_NOT_FULFILLED: 'order_not_fulfilled',
+  QUALITY_ISSUE: 'quality_issue',
+  DISPUTE_RESOLUTION: 'dispute_resolution',
+  DUPLICATE_PAYMENT: 'duplicate_payment',
+  FRAUDULENT: 'fraudulent',
+  OTHER: 'other'
+} as const;
+
+// Refunds - Enhanced refund management with cancellation stage tracking
 export const refunds = pgTable("refunds", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  paymentId: uuid("payment_id").references(() => payments.id).notNull(),
+  paymentId: uuid("payment_id").references(() => payments.id),
   orderId: uuid("order_id").references(() => orders.id).notNull(),
   customerId: uuid("customer_id").references(() => users.id).notNull(),
   
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  reason: varchar("reason", { length: 100 }).notNull(), // customer_request, fraudulent, duplicate, etc.
+  // Amount fields
+  originalOrderAmount: decimal("original_order_amount", { precision: 10, scale: 2 }), // Total order amount before refund
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Refund amount
+  refundPercentage: decimal("refund_percentage", { precision: 5, scale: 2 }), // Percentage of refund (100%, 80%, 50%, etc.)
+  
+  // Cancellation stage tracking
+  orderStatusAtCancellation: varchar("order_status_at_cancellation", { length: 30 }), // pending, confirmed, preparing, ready, picked_up, etc.
+  cancellationStage: varchar("cancellation_stage", { length: 50 }), // before_vendor_accept, after_vendor_accept, after_pickup, after_delivery
+  
+  // Refund details
+  reason: varchar("reason", { length: 100 }).notNull(), // customer_cancelled, vendor_cancelled, dispute_resolution, etc.
   description: text("description"),
   
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed
+  // Status tracking
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, failed, rejected
   provider: varchar("provider", { length: 50 }).notNull(),
   providerRefundId: varchar("provider_refund_id", { length: 255 }),
   
-  initiatedBy: uuid("initiated_by").references(() => users.id), // Admin/staff who initiated
+  // Who initiated/processed
+  initiatedBy: uuid("initiated_by").references(() => users.id), // User who initiated the refund
+  initiatedByRole: varchar("initiated_by_role", { length: 20 }), // customer, vendor, admin
   approvedBy: uuid("approved_by").references(() => users.id), // Admin who approved
+  rejectedBy: uuid("rejected_by").references(() => users.id), // Admin who rejected
   
+  // Timestamps
   processedAt: timestamp("processed_at"),
+  approvedAt: timestamp("approved_at"),
+  rejectedAt: timestamp("rejected_at"),
+  
+  // Additional details
   failureReason: text("failure_reason"),
+  adminNotes: text("admin_notes"), // Internal notes for admin review
   metadata: jsonb("metadata"),
   
   createdAt: timestamp("created_at").defaultNow(),

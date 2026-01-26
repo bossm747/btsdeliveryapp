@@ -208,12 +208,23 @@ const virusScanningPrep = async (req: Request, res: Response, next: NextFunction
         requestId: req.requestId
       });
       
-      // TODO: Integrate with virus scanning service
-      // This is where you would call your virus scanning service
-      // For now, we'll just prepare the infrastructure
-      const scanResult = await prepareForVirusScanning(file);
+      // Perform comprehensive file content scanning
+      const scanResult = await scanFileForThreats(file);
       (file as any).scanStatus = scanResult.status;
       (file as any).scanId = scanResult.scanId;
+      (file as any).threats = scanResult.threats;
+      
+      // Block files with confirmed threats
+      if (scanResult.status === 'malicious') {
+        logger.warn('Malicious file blocked', {
+          filename: file.originalname,
+          threats: scanResult.threats,
+          scanId: scanResult.scanId,
+          userId: req.user?.id || 'anonymous',
+          requestId: req.requestId
+        });
+        return next(createErrors.forbidden('File contains potentially malicious content'));
+      }
     }
     
     next();
@@ -282,35 +293,248 @@ async function validateImageDimensions(file: Express.Multer.File): Promise<{
     height: 10
   };
   
-  // For now, we'll just check file size as a proxy for dimensions
-  // TODO: Implement proper image dimension checking with Sharp
+  // Parse image dimensions from buffer headers
+  const buffer = file.buffer;
   
-  if (file.size < 100) { // Too small to be a valid image
+  if (buffer.length < 100) {
     return { isValid: false, error: 'Image file appears to be corrupted or too small' };
   }
   
-  if (file.size > 50 * 1024 * 1024) { // 50MB limit for images
+  if (file.size > 50 * 1024 * 1024) {
     return { isValid: false, error: 'Image file is too large' };
   }
   
-  return { isValid: true };
+  try {
+    const dimensions = parseImageDimensions(buffer, file.mimetype);
+    
+    if (!dimensions) {
+      // Couldn't parse dimensions, but file passed other checks
+      return { isValid: true };
+    }
+    
+    const { width, height } = dimensions;
+    
+    if (width < MIN_DIMENSIONS.width || height < MIN_DIMENSIONS.height) {
+      return { isValid: false, error: `Image dimensions too small. Minimum: ${MIN_DIMENSIONS.width}x${MIN_DIMENSIONS.height}` };
+    }
+    
+    if (width > MAX_DIMENSIONS.width || height > MAX_DIMENSIONS.height) {
+      return { isValid: false, error: `Image dimensions too large. Maximum: ${MAX_DIMENSIONS.width}x${MAX_DIMENSIONS.height}` };
+    }
+    
+    return { isValid: true };
+  } catch (error) {
+    logger.error('Image dimension validation error', { error, filename: file.originalname });
+    // Allow file through if dimension parsing fails but other checks pass
+    return { isValid: true };
+  }
 }
 
-// Prepare for virus scanning (placeholder for external service integration)
-async function prepareForVirusScanning(file: Express.Multer.File): Promise<{
-  status: 'pending' | 'clean' | 'suspicious';
+/**
+ * Parse image dimensions from buffer headers without external dependencies
+ * Supports PNG, JPEG, GIF, and WebP formats
+ */
+function parseImageDimensions(buffer: Buffer, mimetype: string): { width: number; height: number } | null {
+  try {
+    // PNG: dimensions at bytes 16-24 (width: 16-19, height: 20-23)
+    if (mimetype === 'image/png' || (buffer[0] === 0x89 && buffer[1] === 0x50)) {
+      if (buffer.length < 24) return null;
+      const width = buffer.readUInt32BE(16);
+      const height = buffer.readUInt32BE(20);
+      return { width, height };
+    }
+    
+    // JPEG: dimensions in SOF0/SOF2 markers
+    if (mimetype === 'image/jpeg' || (buffer[0] === 0xFF && buffer[1] === 0xD8)) {
+      let offset = 2;
+      while (offset < buffer.length - 8) {
+        if (buffer[offset] !== 0xFF) {
+          offset++;
+          continue;
+        }
+        const marker = buffer[offset + 1];
+        // SOF0 (0xC0) or SOF2 (0xC2) contain dimensions
+        if (marker === 0xC0 || marker === 0xC2) {
+          const height = buffer.readUInt16BE(offset + 5);
+          const width = buffer.readUInt16BE(offset + 7);
+          return { width, height };
+        }
+        // Skip to next marker
+        if (marker >= 0xC0 && marker <= 0xFE) {
+          const length = buffer.readUInt16BE(offset + 2);
+          offset += 2 + length;
+        } else {
+          offset += 2;
+        }
+      }
+      return null;
+    }
+    
+    // GIF: dimensions at bytes 6-9 (width: 6-7, height: 8-9, little-endian)
+    if (mimetype === 'image/gif' || (buffer[0] === 0x47 && buffer[1] === 0x49)) {
+      if (buffer.length < 10) return null;
+      const width = buffer.readUInt16LE(6);
+      const height = buffer.readUInt16LE(8);
+      return { width, height };
+    }
+    
+    // WebP: RIFF header, then VP8/VP8L/VP8X chunk
+    if (mimetype === 'image/webp' || (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP')) {
+      if (buffer.length < 30) return null;
+      const chunkType = buffer.toString('ascii', 12, 16);
+      
+      if (chunkType === 'VP8 ') {
+        // Lossy WebP: dimensions at offset 26-29
+        if (buffer.length < 30) return null;
+        const width = buffer.readUInt16LE(26) & 0x3FFF;
+        const height = buffer.readUInt16LE(28) & 0x3FFF;
+        return { width, height };
+      } else if (chunkType === 'VP8L') {
+        // Lossless WebP: dimensions packed in 4 bytes at offset 21
+        if (buffer.length < 25) return null;
+        const bits = buffer.readUInt32LE(21);
+        const width = (bits & 0x3FFF) + 1;
+        const height = ((bits >> 14) & 0x3FFF) + 1;
+        return { width, height };
+      } else if (chunkType === 'VP8X') {
+        // Extended WebP: dimensions at offset 24-29 (3 bytes each)
+        if (buffer.length < 30) return null;
+        const width = (buffer[24] | (buffer[25] << 8) | (buffer[26] << 16)) + 1;
+        const height = (buffer[27] | (buffer[28] << 8) | (buffer[29] << 16)) + 1;
+        return { width, height };
+      }
+    }
+    
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Comprehensive file threat scanning
+ * Performs multiple security checks without external API dependencies
+ */
+async function scanFileForThreats(file: Express.Multer.File): Promise<{
+  status: 'clean' | 'suspicious' | 'malicious';
   scanId: string;
+  threats: string[];
 }> {
-  // Generate a scan ID for tracking
   const scanId = SecurityUtils.generateSecureToken(16);
-  
-  // TODO: Integrate with actual virus scanning service
-  // For now, we'll just return a pending status
-  
-  return {
-    status: 'pending',
-    scanId
+  const threats: string[] = [];
+  const buffer = file.buffer;
+  const content = buffer.toString('utf8', 0, Math.min(buffer.length, 8192)); // Check first 8KB as text
+  const hexHeader = buffer.slice(0, 32).toString('hex');
+
+  // 1. Check for executable file signatures disguised as other types
+  const executableSignatures: { [key: string]: string } = {
+    '4d5a': 'Windows executable (MZ)',
+    '7f454c46': 'Linux executable (ELF)',
+    'cafebabe': 'Java class file',
+    '504b0304': 'ZIP archive (potential JAR/APK)',
+    'd0cf11e0': 'Microsoft OLE (potential macro document)',
   };
+
+  for (const [sig, desc] of Object.entries(executableSignatures)) {
+    if (hexHeader.toLowerCase().startsWith(sig)) {
+      // Check if file extension matches expected type
+      const ext = file.originalname.split('.').pop()?.toLowerCase();
+      const allowedForSig: { [key: string]: string[] } = {
+        '504b0304': ['zip', 'xlsx', 'docx', 'pptx'], // ZIP is okay for Office docs
+        'd0cf11e0': ['doc', 'xls', 'ppt'], // OLE is okay for old Office
+      };
+      if (!allowedForSig[sig]?.includes(ext || '')) {
+        threats.push(`Executable signature detected: ${desc}`);
+      }
+    }
+  }
+
+  // 2. Check for malicious patterns in content
+  const maliciousPatterns: { pattern: RegExp; description: string; severity: 'high' | 'medium' }[] = [
+    { pattern: /<%[\s\S]*?%>/g, description: 'Server-side script tags (ASP/PHP)', severity: 'high' },
+    { pattern: /<\?php[\s\S]*?\?>/gi, description: 'PHP script tags', severity: 'high' },
+    { pattern: /<script[\s\S]*?>[\s\S]*?<\/script>/gi, description: 'JavaScript script tags', severity: 'high' },
+    { pattern: /javascript\s*:/gi, description: 'JavaScript protocol handler', severity: 'high' },
+    { pattern: /vbscript\s*:/gi, description: 'VBScript protocol handler', severity: 'high' },
+    { pattern: /data\s*:\s*text\/html/gi, description: 'Data URI HTML injection', severity: 'high' },
+    { pattern: /on(load|error|click|mouseover|submit|focus|blur)\s*=/gi, description: 'Event handler injection', severity: 'medium' },
+    { pattern: /eval\s*\([^)]*\)/gi, description: 'Eval function call', severity: 'high' },
+    { pattern: /exec\s*\([^)]*\)/gi, description: 'Exec function call', severity: 'high' },
+    { pattern: /system\s*\([^)]*\)/gi, description: 'System function call', severity: 'high' },
+    { pattern: /shell_exec\s*\(/gi, description: 'Shell execution function', severity: 'high' },
+    { pattern: /passthru\s*\(/gi, description: 'Passthru function', severity: 'high' },
+    { pattern: /base64_decode\s*\([^)]*\)/gi, description: 'Base64 decode (obfuscation)', severity: 'medium' },
+    { pattern: /\x00/g, description: 'Null byte injection', severity: 'high' },
+    { pattern: /__HALT_COMPILER\s*\(\)/gi, description: 'PHP halt compiler', severity: 'high' },
+    { pattern: /powershell\s+-/gi, description: 'PowerShell command', severity: 'high' },
+    { pattern: /cmd\s*\/c/gi, description: 'CMD execution', severity: 'high' },
+    { pattern: /\/bin\/(ba)?sh/gi, description: 'Shell path reference', severity: 'medium' },
+    { pattern: /document\s*\.\s*(cookie|write|location)/gi, description: 'DOM manipulation', severity: 'medium' },
+    { pattern: /window\s*\.\s*location/gi, description: 'Window location manipulation', severity: 'medium' },
+    { pattern: /\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[/gi, description: 'PHP superglobal access', severity: 'high' },
+    { pattern: /union\s+(all\s+)?select/gi, description: 'SQL injection pattern', severity: 'high' },
+    { pattern: /;\s*drop\s+table/gi, description: 'SQL drop table', severity: 'high' },
+  ];
+
+  for (const { pattern, description, severity } of maliciousPatterns) {
+    if (pattern.test(content)) {
+      threats.push(`${severity === 'high' ? '⚠️ ' : ''}${description}`);
+    }
+  }
+
+  // 3. Check for polyglot files (files valid as multiple formats)
+  const isImage = file.mimetype.startsWith('image/');
+  if (isImage) {
+    // Check for HTML/JS hidden in image comment sections
+    if (/<html|<script|<body|<head/i.test(content)) {
+      threats.push('HTML content hidden in image file');
+    }
+  }
+
+  // 4. Check for suspicious file name patterns
+  const filename = file.originalname.toLowerCase();
+  const suspiciousNames = [
+    /\.php\d*$/i, // .php, .php5, .php7
+    /\.asp(x)?$/i, // .asp, .aspx
+    /\.jsp$/i, // Java Server Pages
+    /\.cgi$/i, // CGI scripts
+    /\.exe$/i, // Executables
+    /\.bat$/i, // Batch files
+    /\.cmd$/i, // Command files
+    /\.ps1$/i, // PowerShell
+    /\.sh$/i, // Shell scripts
+    /\.(phtml|phar)$/i, // PHP alternatives
+  ];
+
+  for (const pattern of suspiciousNames) {
+    if (pattern.test(filename)) {
+      threats.push(`Suspicious file extension: ${filename}`);
+      break;
+    }
+  }
+
+  // 5. Check for EICAR test signature (standard AV test pattern)
+  const eicarPattern = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
+  if (content.includes(eicarPattern)) {
+    threats.push('EICAR test signature detected');
+  }
+
+  // 6. Determine final status
+  let status: 'clean' | 'suspicious' | 'malicious' = 'clean';
+  
+  if (threats.length > 0) {
+    // High severity threats = malicious
+    const hasHighSeverity = threats.some(t => 
+      t.includes('⚠️') || 
+      t.includes('Executable signature') || 
+      t.includes('PHP script') ||
+      t.includes('Shell execution') ||
+      t.includes('EICAR')
+    );
+    status = hasHighSeverity ? 'malicious' : 'suspicious';
+  }
+
+  return { status, scanId, threats };
 }
 
 // File type-specific middleware

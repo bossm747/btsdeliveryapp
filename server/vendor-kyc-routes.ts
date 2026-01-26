@@ -178,7 +178,10 @@ export function registerVendorKycRoutes(
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       console.error("Vendor registration error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : '';
+      console.error("Error details:", { message: errorMessage, stack: errorStack });
+      res.status(500).json({ message: "Internal server error", debug: process.env.NODE_ENV === 'development' ? errorMessage : undefined });
     }
   });
 

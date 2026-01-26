@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { CustomerPageWrapper } from "@/components/customer/customer-page-wrapper";
+import { EmptyState } from "@/components/customer/empty-state";
+import { AddressListSkeleton } from "@/components/skeletons";
 import {
   Dialog,
   DialogContent,
@@ -272,85 +274,107 @@ export default function AddressesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="addresses-loading">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32 w-full rounded-xl" />
-            ))}
+      <CustomerPageWrapper
+        refreshQueryKeys={["/api/customer/addresses"]}
+        pageTitle="My Addresses"
+        pageDescription="Loading your saved delivery addresses"
+      >
+        <div className="min-h-screen bg-background pb-20" data-testid="addresses-loading">
+          <CustomerHeader
+            title="My Addresses"
+            showBack
+            backPath="/customer-dashboard"
+          />
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="mb-6">
+              <p className="text-gray-600">Manage your delivery addresses</p>
+            </div>
+            <AddressListSkeleton count={3} />
           </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background py-8" data-testid="addresses-error">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h2 className="text-xl font-semibold mb-2">Unable to load addresses</h2>
-              <p className="text-gray-600 mb-4">
-                There was an error loading your addresses. Please try again.
-              </p>
-              <Button onClick={() => window.location.reload()}>Try Again</Button>
-            </CardContent>
-          </Card>
+      <CustomerPageWrapper
+        refreshQueryKeys={["/api/customer/addresses"]}
+        pageTitle="My Addresses"
+        pageDescription="Error loading delivery addresses"
+      >
+        <div className="min-h-screen bg-background pb-20" data-testid="addresses-error">
+          <CustomerHeader
+            title="My Addresses"
+            showBack
+            backPath="/customer-dashboard"
+          />
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <h2 className="text-xl font-semibold mb-2">Unable to load addresses</h2>
+                <p className="text-gray-600 mb-4">
+                  There was an error loading your addresses. Please try again.
+                </p>
+                <Button
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/customer/addresses"] })}
+                  className="bg-[#FF6B35] hover:bg-[#FF6B35]/90"
+                >
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </CustomerPageWrapper>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="addresses-page">
-      <CustomerHeader
-        title="My Addresses"
-        showBack
-        backPath="/customer-dashboard"
-        rightContent={
-          <Button
-            onClick={() => {
-              form.reset();
-              setIsAddDialogOpen(true);
-            }}
-            size="sm"
-            className="bg-[#FF6B35] hover:bg-[#FF6B35]/90"
-            data-testid="add-address-button"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add
-          </Button>
-        }
-      />
+    <CustomerPageWrapper
+      refreshQueryKeys={["/api/customer/addresses"]}
+      pageTitle="My Addresses"
+      pageDescription="Manage your saved delivery addresses"
+    >
+      <div className="min-h-screen bg-background pb-20" data-testid="addresses-page">
+        <CustomerHeader
+          title="My Addresses"
+          showBack
+          backPath="/customer-dashboard"
+          rightContent={
+            <Button
+              onClick={() => {
+                form.reset();
+                setIsAddDialogOpen(true);
+              }}
+              size="sm"
+              className="bg-[#FF6B35] hover:bg-[#FF6B35]/90"
+              data-testid="add-address-button"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add
+            </Button>
+          }
+        />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Page Description */}
-        <div className="mb-6">
-          <p className="text-gray-600">Manage your delivery addresses</p>
-        </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Page Description */}
+          <div className="mb-6">
+            <p className="text-gray-600">Manage your delivery addresses</p>
+          </div>
 
-        {/* Address List */}
-        {addresses.length === 0 ? (
-          <Card data-testid="no-addresses">
-            <CardContent className="p-12 text-center">
-              <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold mb-2">No saved addresses</h3>
-              <p className="text-gray-600 mb-4">
-                Add your first delivery address to get started
-              </p>
-              <Button
-                onClick={() => setIsAddDialogOpen(true)}
-                className="bg-[#FF6B35] hover:bg-[#FF6B35]/90"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Your First Address
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
+          {/* Address List */}
+          {addresses.length === 0 ? (
+            <EmptyState
+              type="addresses"
+              title="No saved addresses"
+              description="Add your first delivery address to get started"
+              actionLabel="Add Your First Address"
+              onAction={() => setIsAddDialogOpen(true)}
+              data-testid="no-addresses"
+            />
+          ) : (
           <div className="space-y-4" data-testid="address-list">
             {addresses.map((address) => (
               <Card
@@ -849,5 +873,6 @@ export default function AddressesPage() {
         </AlertDialog>
       </div>
     </div>
+    </CustomerPageWrapper>
   );
 }
