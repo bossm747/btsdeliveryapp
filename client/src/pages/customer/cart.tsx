@@ -62,7 +62,7 @@ const deliveryAddressSchema = z.object({
 
 const orderSchema = z.object({
   deliveryAddress: deliveryAddressSchema,
-  paymentProvider: z.enum(['nexuspay', 'cod']).default('nexuspay'),
+  paymentProvider: z.enum(['nexuspay', 'cod']).default('cod'), // Default to COD
   paymentMethodType: z.string().optional(),
   specialInstructions: z.string().optional(),
   tip: z.number().min(0).optional(),
@@ -141,8 +141,9 @@ export default function Cart() {
   const pricingDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Enhanced state management for comprehensive payment system
-  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'nexuspay' | 'cod'>('nexuspay');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  // Default to COD (Cash on Delivery) - safest default that doesn't trigger payment processing
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'nexuspay' | 'cod'>('cod');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('cash');
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | undefined>();
   const [savePaymentForFuture, setSavePaymentForFuture] = useState(false);
   const [pricingCalculation, setPricingCalculation] = useState<any>(null);
@@ -177,6 +178,11 @@ export default function Cart() {
   // Pricing derived from delivery zone or defaults
   const deliveryFee = deliveryZone?.deliveryFee ?? 49; // Default delivery fee
   const serviceFee = pricingCalculation?.serviceFee ?? 10; // Default service fee
+
+  // Scroll to top on page load
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   // API hooks for comprehensive payment system
   const { data: availablePaymentMethods, isLoading: isLoadingPaymentMethods } = useQuery({
@@ -238,7 +244,7 @@ export default function Cart() {
         province: "Batangas",
         zipCode: "",
       },
-      paymentProvider: "nexuspay",
+      paymentProvider: "cod", // Default to COD - safest option
       paymentMethodType: "",
       specialInstructions: "",
       tip: 0,
@@ -533,7 +539,7 @@ export default function Cart() {
         const paymentResponse = await apiRequest("POST", "/api/payment/create-with-pricing", {
           orderId: order.id,
           orderType: "food",
-          baseAmount: orderData.itemsTotal,
+          baseAmount: orderData.subtotal,
           city: orderData.deliveryAddress.city,
           distance: distance,
           paymentProvider: orderData.paymentProvider,
@@ -1315,7 +1321,8 @@ export default function Cart() {
                   selectedMethodId={savedPaymentMethodId}
                   showSaveOption={true}
                   onSelectPaymentMethod={(method) => {
-                    if (method.type === 'cod') {
+                    // Check for COD selection - can come as type='cod' or paymentProvider='cod'
+                    if (method.type === 'cod' || method.paymentProvider === 'cod' || method.paymentMethodType === 'cash') {
                       setSelectedPaymentProvider('cod');
                       setSelectedPaymentMethod('cash');
                       setSavedPaymentMethodId(undefined);

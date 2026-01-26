@@ -26,6 +26,7 @@ import FeaturedCarousel from "@/components/customer/featured-carousel";
 import CustomerPageWrapper from "@/components/customer/customer-page-wrapper";
 import MobileBottomNav from "@/components/mobile-bottom-nav";
 import { DashboardSkeleton } from "@/components/skeletons";
+import LiveOrderTracker from "@/components/shared/live-order-tracker";
 
 interface CustomerProfile {
   totalOrders?: number;
@@ -359,6 +360,17 @@ export default function CustomerDashboard() {
 
       {/* Quick Stats */}
       <QuickStats />
+
+      {/* Live Order Tracking - Shows active orders with real-time updates */}
+      <div className="px-4 py-3">
+        <LiveOrderTracker
+          userRole="customer"
+          apiEndpoint="/api/customer/orders/recent"
+          title="Your Active Orders"
+          maxOrders={3}
+          compact={false}
+        />
+      </div>
 
       {/* Category Pills */}
       <CategoryPills />

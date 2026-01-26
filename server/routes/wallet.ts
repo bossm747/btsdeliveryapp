@@ -220,21 +220,19 @@ router.post("/customer/wallet/topup", async (req: any, res) => {
       const webhookUrl = `${process.env.API_URL || ''}/api/customer/wallet/topup/callback`;
       const redirectUrl = `${process.env.FRONTEND_URL || ''}/wallet?topup=success`;
 
-      const paymentResult = await nexusPayService.createPaymentWithMethod(
+      const paymentResult = await nexusPayService.createCashInPayment(
         validatedData.amount,
-        paymentMethodKey as keyof typeof NEXUSPAY_CODES,
         webhookUrl,
         redirectUrl,
-        {
-          name: `${req.user.firstName} ${req.user.lastName}`,
-          email: req.user.email
-        },
+        paymentMethodKey,
         {
           type: 'wallet_topup',
           walletId: wallet.id,
           transactionId: transaction.id,
           topupRequestId: topupRequest.id,
-          userId: req.user.id
+          userId: req.user.id,
+          customerName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() : undefined,
+          customerEmail: req.user.email
         }
       );
 

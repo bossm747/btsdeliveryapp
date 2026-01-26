@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { riders, orders, riderAssignmentQueue, riderLocationHistory, riderPerformanceMetrics } from "@shared/schema";
+import { riders, orders, riderAssignmentQueue, riderLocationHistory, riderPerformanceMetrics, restaurants } from "@shared/schema";
 import { eq, and, gte, lte, desc, asc, isNull, or } from "drizzle-orm";
 import type { InsertRiderAssignmentQueue } from "@shared/schema";
 
@@ -247,9 +247,9 @@ export class RiderAssignmentService {
         orderId: assignment.orderId,
         restaurantLocation: assignment.restaurantLocation as {lat: number, lng: number},
         deliveryLocation: assignment.deliveryLocation as {lat: number, lng: number},
-        priority: assignment.priority,
-        estimatedValue: Number(assignment.estimatedValue),
-        maxDistance: Number(assignment.maxDistance)
+        priority: assignment.priority ?? 1,
+        estimatedValue: Number(assignment.estimatedValue ?? 0),
+        maxDistance: Number(assignment.maxDistance ?? 10)
       };
 
       // Get eligible riders excluding rejected ones
@@ -298,8 +298,9 @@ export class RiderAssignmentService {
 
   /**
    * Accept assignment and update rider status
+   * RIDER-FIRST FLOW: This is the key method that triggers vendor notification
    */
-  async acceptAssignment(assignmentId: string, riderId: string): Promise<boolean> {
+  async acceptAssignment(assignmentId: string, riderId: string): Promise<{ success: boolean; order?: any }> {
     try {
       const [assignment] = await db
         .select()
@@ -313,7 +314,7 @@ export class RiderAssignmentService {
         .limit(1);
 
       if (!assignment || assignment.assignmentStatus !== "assigned") {
-        return false;
+        return { success: false };
       }
 
       // Get rider data first
@@ -324,7 +325,7 @@ export class RiderAssignmentService {
         .limit(1);
 
       if (!riderData) {
-        return false;
+        return { success: false };
       }
 
       // Update assignment status
@@ -344,12 +345,26 @@ export class RiderAssignmentService {
         })
         .where(eq(riders.id, riderId));
 
-      console.log(`Rider ${riderId} accepted assignment ${assignmentId}`);
-      
-      return true;
+      // RIDER-FIRST FLOW: Update order status and assign rider
+      // This is when the vendor gets notified - AFTER rider accepts
+      const [updatedOrder] = await db
+        .update(orders)
+        .set({
+          status: "confirmed",
+          riderId: riderId,
+          riderAcceptedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, assignment.orderId))
+        .returning();
+
+      console.log(`[Rider-First] Rider ${riderId} accepted assignment ${assignmentId} for order ${assignment.orderId}`);
+      console.log(`[Rider-First] Order ${assignment.orderId} status changed to 'confirmed', vendor will be notified`);
+
+      return { success: true, order: updatedOrder };
     } catch (error) {
       console.error("Error accepting assignment:", error);
-      return false;
+      return { success: false };
     }
   }
 
@@ -388,12 +403,11 @@ export class RiderAssignmentService {
    */
   async updateRiderLocation(riderId: string, location: {lat: number, lng: number, accuracy?: number}) {
     try {
-      // Update rider's current location
+      // Update rider's current location (location includes timestamp)
       await db
         .update(riders)
         .set({
-          currentLocation: location,
-          lastLocationUpdate: new Date(),
+          currentLocation: { ...location, timestamp: new Date().toISOString() },
           lastActivityAt: new Date()
         })
         .where(eq(riders.id, riderId));
@@ -439,8 +453,8 @@ export class RiderAssignmentService {
             orderId: assignment.orderId,
             restaurantLocation,
             deliveryLocation: assignment.deliveryLocation as {lat: number, lng: number},
-            priority: assignment.priority,
-            estimatedValue: Number(assignment.estimatedValue),
+            priority: assignment.priority ?? 1,
+            estimatedValue: Number(assignment.estimatedValue ?? 0),
             maxDistance
           };
 

@@ -1,93 +1,100 @@
-# MyDevTeam - BTS Delivery Task Tracker
+# BTS Delivery - Performance & Bug Fix Implementation Plan
 
-**Project:** BTS Delivery App (bts-delivery.com)
-**Started:** 2026-01-26
-**Status:** 75% Complete → Target: 100%
-**Directive:** "Tapusin mo. Wag ka titigil ng hindi tapos." - Boss Marc
+## Priority 1: Critical Bugs
 
----
+### 1.1 Completed Orders Not Loading
+**Location:** `client/src/pages/customer/customer-orders.tsx`
+**Issue:** Past/completed orders tab shows no data
+**Tasks:**
+- [ ] Check if orders API returns completed orders (`status: delivered, cancelled`)
+- [ ] Verify frontend filtering logic in `pastOrders` filter (line ~315)
+- [ ] Check if `getOrdersByCustomer` in storage.ts returns all statuses
+- [ ] Add console logging to debug API response vs filtered results
+- [ ] Test with actual completed orders in database
 
-## ✅ Phase 1: Critical Launch Blockers - BACKEND COMPLETE!
-
-### 1.1 Vendor Onboarding & KYC System ✅
-- [x] All backend routes implemented
-- [x] Schema tables exist
-- [x] Tested and working
-- [ ] **FRONTEND NEEDED**
-
-### 1.2 Order Refund Workflow ✅
-- [x] refund-service.ts created
-- [x] refund-endpoints.ts implemented
-- [x] Calculation logic (100%/80%/50%/dispute)
-- [x] Schema enhanced
-- [ ] **FRONTEND NEEDED**
-
-### 1.3 Rider Verification System ✅
-- [x] 700+ lines of routes
-- [x] All 9 endpoints working
-- [x] Document upload, admin verification
-- [ ] **FRONTEND NEEDED**
-
-### 1.4 WebSocket Real-time ✅
-- [x] WebSocket Manager fully implemented
-- [x] Channel subscriptions working
-- [x] JWT authentication
-- [ ] **FRONTEND: Convert polling to WebSocket**
-
-### 1.5 Bug Fixes ✅
-- [x] fraud-detection.ts - IP intelligence
-- [x] fileUpload.ts - Virus scanning
-- [x] paymentSecurity.ts - Advanced fraud scoring
+### 1.2 WebSocket Constant Disconnections (1006 errors)
+**Location:** `server/routes.ts` (WebSocketManager), `client/src/hooks/use-websocket.ts`
+**Issue:** Clients connect/disconnect rapidly, causing performance issues
+**Tasks:**
+- [ ] Check WebSocket heartbeat/ping configuration
+- [ ] Add reconnection backoff strategy
+- [ ] Check if nginx proxy timeout is too short
+- [ ] Review WebSocket path `/ws/v2` configuration
+- [ ] Add proper connection error handling
 
 ---
 
-## 🔄 Phase 2: Frontend Work (IN PROGRESS)
+## Priority 2: Performance Optimization
 
-### 2.1 Customer Module Frontend
-- [x] addresses.tsx - skeleton added
-- [ ] cart.tsx - needs loading states
-- [ ] favorites.tsx - verify functionality
-- [ ] profile-settings.tsx - verify functionality
-- [ ] wallet.tsx - verify functionality
-- [ ] loyalty.tsx - verify functionality
-- [ ] Tip selection in checkout
-- [ ] Promo code input UI
-- [ ] Review & rating form
+### 2.1 Install and Configure Redis
+**Commands to run:**
+```bash
+apt update && apt install -y redis-server
+systemctl enable redis-server
+systemctl start redis-server
+```
+**Then verify in app:** Check `/root/bts/btsdeliveryapp/server/services/cache.ts` connects properly
 
-### 2.2 Vendor Module Frontend
-- [ ] Vendor registration wizard
-- [ ] KYC document upload UI
-- [ ] Business hours configuration
-- [ ] Analytics dashboard polish
-- [ ] Commission view
-- [ ] Inventory sync
+### 2.2 Reduce API Calls on Page Load
+**Location:** Various customer pages
+**Tasks:**
+- [ ] Audit API calls on cart.tsx - currently makes 8+ calls on load
+- [ ] Implement request batching where possible
+- [ ] Add stale-while-revalidate caching strategy
+- [ ] Reduce refetch intervals for non-critical data
 
-### 2.3 Rider Module Frontend
-- [ ] Document upload screens
-- [ ] Pending orders queue polish
-- [ ] Earnings breakdown
-- [ ] Performance metrics
-- [ ] Turn-by-turn navigation
+### 2.3 Optimize Bundle Size
+**Current:** index.js ~476KB gzipped
+**Tasks:**
+- [ ] Analyze bundle with `npm run build -- --analyze`
+- [ ] Check for duplicate dependencies
+- [ ] Lazy load heavy components (maps, charts)
+- [ ] Tree-shake unused code
 
-### 2.4 Admin Module Frontend
-- [ ] Vendor approval dashboard
-- [ ] Rider verification dashboard
-- [ ] Refund management UI
-- [ ] Support ticket system polish
-
-### 2.5 Shared/Core
-- [ ] Convert polling to WebSocket (order tracking)
-- [ ] Real-time ETA updates
-- [ ] Push notifications setup
+### 2.4 Image Optimization
+**Location:** Restaurant images, menu item images
+**Tasks:**
+- [ ] Add lazy loading for images below fold
+- [ ] Implement responsive image srcset
+- [ ] Consider WebP format with fallback
 
 ---
 
-## 📊 Progress
+## Priority 3: Code Quality
 
-| Phase | Status |
-|-------|--------|
-| Phase 1 Backend | ✅ 100% |
-| Phase 2 Frontend | 🔄 20% |
-| Phase 3 Polish | ⏳ 0% |
+### 3.1 Fix TypeScript Errors (if any)
+- [ ] Run `npx tsc --noEmit` to check for type errors
+- [ ] Fix any strict mode violations
 
-**Last Updated:** 2026-01-26 10:46 UTC
+### 3.2 Clean Up Console Logs
+- [ ] Remove debug console.log statements in production code
+- [ ] Use proper logger with log levels
+
+---
+
+## Testing Checklist
+
+After fixes, verify:
+- [ ] Orders page loads with both active and completed orders
+- [ ] WebSocket stays connected without rapid reconnects
+- [ ] Page navigation is smooth (<1s transition)
+- [ ] Cart page loads fully on first visit
+- [ ] Payment amount matches cart total exactly
+
+---
+
+## Commands Reference
+
+```bash
+# Build and restart
+cd /root/bts/btsdeliveryapp && npm run build && pm2 restart bts-delivery
+
+# Check logs
+pm2 logs bts-delivery --lines 50
+
+# Check Redis
+redis-cli ping
+
+# Database check for completed orders
+psql -U postgres -d bts_delivery -c "SELECT id, status FROM orders WHERE status IN ('delivered', 'cancelled') LIMIT 5;"
+```

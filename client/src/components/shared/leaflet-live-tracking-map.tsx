@@ -188,6 +188,7 @@ export default function LeafletLiveTrackingMap({
     new Map()
   );
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [mapError, setMapError] = useState<string | null>(null);
 
   // Fetch orders
   const {
@@ -235,30 +236,40 @@ export default function LeafletLiveTrackingMap({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clean up existing map
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
+    try {
+      // Clean up existing map
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      // Create map
+      const map = L.map(mapRef.current, {
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        zoomControl: true,
+        attributionControl: false,
+      });
+
+      // Add tile layer
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+      setMapError(null);
+    } catch (error) {
+      console.error("Failed to initialize map:", error);
+      setMapError("Failed to load map. Please refresh the page.");
     }
-
-    // Create map
-    const map = L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-      zoomControl: true,
-      attributionControl: false,
-    });
-
-    // Add tile layer
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-    }).addTo(map);
-
-    mapInstanceRef.current = map;
 
     return () => {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          console.error("Error removing map:", e);
+        }
         mapInstanceRef.current = null;
       }
     };
@@ -454,6 +465,29 @@ export default function LeafletLiveTrackingMap({
         </CardHeader>
         <CardContent>
           <Skeleton className="w-full" style={{ height }} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (mapError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            {title}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center p-8 text-center" style={{ height }}>
+            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+            <p className="text-muted-foreground mb-4">{mapError}</p>
+            <Button onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Reload Page
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

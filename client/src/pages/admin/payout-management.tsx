@@ -218,7 +218,7 @@ export default function PayoutManagement() {
       return res.json();
     },
     onSuccess: (data) => {
-      adminToast.success("Payouts Processed", `Successfully processed ${data.processed || 1} payout(s)`);
+      adminToast.success(`Successfully processed ${data.processed || 1} payout(s)`);
       qClient.invalidateQueries({ queryKey: ["/api/admin/financial/settlements"] });
       qClient.invalidateQueries({ queryKey: ["/api/admin/financial/payouts"] });
       setSelectedSettlements([]);
@@ -226,7 +226,7 @@ export default function PayoutManagement() {
       setShowConfirmDialog(false);
     },
     onError: (error: any) => {
-      adminToast.error("Payout Failed", error.message || "Failed to process payout");
+      adminToast.error(error.message || "Failed to process payout");
     },
   });
 
@@ -243,11 +243,11 @@ export default function PayoutManagement() {
       return res.json();
     },
     onSuccess: () => {
-      adminToast.success("Settlement Updated", "Settlement status updated successfully");
+      adminToast.success("Settlement status updated successfully");
       qClient.invalidateQueries({ queryKey: ["/api/admin/financial/settlements"] });
     },
     onError: (error: any) => {
-      adminToast.error("Update Failed", error.message || "Failed to update settlement");
+      adminToast.error(error.message || "Failed to update settlement");
     },
   });
 
@@ -264,11 +264,11 @@ export default function PayoutManagement() {
       return res.json();
     },
     onSuccess: (data) => {
-      adminToast.success("Settlements Generated", `Generated ${data.generated || 0} new settlement(s)`);
+      adminToast.success(`Generated ${data.generated || 0} new settlement(s)`);
       refetchSettlements();
     },
     onError: (error: any) => {
-      adminToast.error("Generation Failed", error.message || "Failed to generate settlements");
+      adminToast.error(error.message || "Failed to generate settlements");
     },
   });
 
@@ -309,15 +309,15 @@ export default function PayoutManagement() {
   const totalPages = Math.ceil((settlementsData?.total || 0) / 20);
 
   return (
-    <AdminPageWrapper 
-      title="Payout Management" 
-      description="Manage vendor settlements and process payouts"
+    <AdminPageWrapper
+      pageTitle="Payout Management"
+      pageDescription="Manage vendor settlements and process payouts"
     >
       <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         <AdminSidebar activeTab="payouts" isOpen={sidebarOpen} />
 
         <div className="flex-1 flex flex-col lg:ml-64">
-          <AdminHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+          <AdminHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
 
           <main className="flex-1 overflow-auto p-6">
             {/* Header */}

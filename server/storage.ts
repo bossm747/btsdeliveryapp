@@ -277,6 +277,7 @@ export interface IStorage {
   
   // Rider Assignment Queue Operations (using existing schema)
   createRiderAssignment(assignment: InsertRiderAssignmentQueue): Promise<RiderAssignmentQueue>;
+  getRiderAssignment(assignmentId: string): Promise<RiderAssignmentQueue | undefined>;
   updateRiderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<RiderAssignmentQueue | undefined>;
   
   getRiderPerformanceMetrics(riderId: string, startDate?: string, endDate?: string): Promise<RiderPerformanceMetrics[]>;
@@ -509,7 +510,7 @@ export interface IStorage {
 
   // Operations and Dispatch
   getActiveOrdersForDispatch(): Promise<any>;
-  getAvailableRiders(): Promise<any>;
+  getAllAvailableRiders(): Promise<any>;
   getActiveSystemAlerts(): Promise<any>;
   getRealTimePerformanceMetrics(): Promise<any>;
   getEmergencyAlerts(): Promise<any>;
@@ -964,14 +965,16 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Check inventory if tracking is enabled
-      if (menuItem.isTrackingStock && menuItem.stockQuantity !== -1) {
-        if (menuItem.stockQuantity < item.quantity) {
-          if (menuItem.stockQuantity === 0) {
+      const stockQty = menuItem.stockQuantity ?? 0;
+      const lowThreshold = menuItem.lowStockThreshold ?? 0;
+      if (menuItem.isTrackingStock && stockQty !== -1) {
+        if (stockQty < item.quantity) {
+          if (stockQty === 0) {
             errors.push(`${menuItem.name} is out of stock`);
           } else {
-            errors.push(`Only ${menuItem.stockQuantity} of ${menuItem.name} available, requested ${item.quantity}`);
+            errors.push(`Only ${stockQty} of ${menuItem.name} available, requested ${item.quantity}`);
           }
-        } else if (menuItem.stockQuantity <= menuItem.lowStockThreshold) {
+        } else if (stockQty <= lowThreshold) {
           warnings.push(`${menuItem.name} is running low on stock`);
         }
       }
@@ -998,11 +1001,12 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      if (menuItem.isTrackingStock && menuItem.stockQuantity !== -1) {
-        if (menuItem.stockQuantity < item.quantity) {
+      const stockQty = menuItem.stockQuantity ?? 0;
+      if (menuItem.isTrackingStock && stockQty !== -1) {
+        if (stockQty < item.quantity) {
           unavailableItems.push({
             ...item,
-            availableQuantity: menuItem.stockQuantity,
+            availableQuantity: stockQty,
             reason: 'Insufficient stock'
           });
         }
@@ -1020,8 +1024,9 @@ export class DatabaseStorage implements IStorage {
       for (const item of items) {
         const menuItem = await this.getMenuItem(item.id);
         
-        if (menuItem && menuItem.isTrackingStock && menuItem.stockQuantity !== -1) {
-          const newStock = menuItem.stockQuantity - item.quantity;
+        const stockQty = menuItem?.stockQuantity ?? 0;
+        if (menuItem && menuItem.isTrackingStock && stockQty !== -1) {
+          const newStock = stockQty - item.quantity;
           if (newStock < 0) {
             throw new Error(`Insufficient stock for ${menuItem.name}`);
           }
@@ -1116,7 +1121,7 @@ export class DatabaseStorage implements IStorage {
         if (orderCreatedAt) {
           const acceptanceTime = Math.floor((now.getTime() - new Date(orderCreatedAt).getTime()) / 1000);
           updates.vendorAcceptanceTime = acceptanceTime;
-          updates.vendorAcceptanceSlaBreached = acceptanceTime > slaTracking.vendorAcceptanceSla;
+          updates.vendorAcceptanceSlaBreached = acceptanceTime > (slaTracking.vendorAcceptanceSla ?? 300);
         }
         break;
         
@@ -1312,6 +1317,13 @@ export class DatabaseStorage implements IStorage {
   async createRiderAssignment(assignment: InsertRiderAssignmentQueue): Promise<RiderAssignmentQueue> {
     const [record] = await db.insert(riderAssignmentQueue).values(assignment).returning();
     return record;
+  }
+
+  async getRiderAssignment(assignmentId: string): Promise<RiderAssignmentQueue | undefined> {
+    const [assignment] = await db.select()
+      .from(riderAssignmentQueue)
+      .where(eq(riderAssignmentQueue.id, assignmentId));
+    return assignment;
   }
 
   async updateRiderAssignmentStatus(assignmentId: string, status: string, rejectionReason?: string): Promise<RiderAssignmentQueue | undefined> {
@@ -2143,7 +2155,7 @@ export class DatabaseStorage implements IStorage {
         // Add status to history
         await db.insert(orderStatusHistory).values({
           orderId: order.id,
-          status: updates.status,
+          toStatus: updates.status,
           notes: updates.notes || "Tracking update"
         });
       }
@@ -2481,37 +2493,39 @@ export class DatabaseStorage implements IStorage {
 
   // Order SLA Performance Analytics
   async getOrderSlaPerformance(restaurantId?: string, startDate?: string, endDate?: string): Promise<any> {
-    let whereConditions: any[] = [];
-    
+    // Build WHERE clause conditions for raw SQL
+    const conditions: string[] = [];
+
     if (restaurantId) {
-      whereConditions.push(eq(orderSlaTracking.restaurantId, restaurantId));
-    }
-    
-    if (startDate && endDate) {
-      whereConditions.push(
-        sql`${orderSlaTracking.createdAt} >= ${startDate}`,
-        sql`${orderSlaTracking.createdAt} <= ${endDate}`
-      );
+      conditions.push(`o.restaurant_id = '${restaurantId}'`);
     }
 
-    const result = await db.execute(sql`
-      SELECT 
+    if (startDate && endDate) {
+      conditions.push(`ost.created_at >= '${startDate}'`);
+      conditions.push(`ost.created_at <= '${endDate}'`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await db.execute(sql.raw(`
+      SELECT
         COUNT(*) as total_tracked_orders,
-        AVG(CASE WHEN vendor_accepted_at IS NOT NULL AND vendor_acceptance_sla IS NOT NULL
-            THEN EXTRACT(EPOCH FROM vendor_accepted_at - created_at) / 60 END) as avg_vendor_response_minutes,
-        COUNT(CASE WHEN vendor_accepted_at IS NOT NULL AND vendor_acceptance_sla IS NOT NULL
-            AND EXTRACT(EPOCH FROM vendor_accepted_at - created_at) <= vendor_acceptance_sla THEN 1 END) as vendor_sla_met,
-        AVG(CASE WHEN preparation_completed_at IS NOT NULL AND preparation_time_sla IS NOT NULL
-            THEN EXTRACT(EPOCH FROM preparation_completed_at - vendor_accepted_at) / 60 END) as avg_preparation_minutes,
-        COUNT(CASE WHEN preparation_completed_at IS NOT NULL AND preparation_time_sla IS NOT NULL
-            AND EXTRACT(EPOCH FROM preparation_completed_at - vendor_accepted_at) <= preparation_time_sla THEN 1 END) as preparation_sla_met,
-        AVG(CASE WHEN delivered_at IS NOT NULL AND delivery_time_sla IS NOT NULL
-            THEN EXTRACT(EPOCH FROM delivered_at - created_at) / 60 END) as avg_total_delivery_minutes,
-        COUNT(CASE WHEN delivered_at IS NOT NULL AND delivery_time_sla IS NOT NULL
-            AND EXTRACT(EPOCH FROM delivered_at - created_at) <= delivery_time_sla THEN 1 END) as delivery_sla_met
-      FROM order_sla_tracking 
-      ${whereConditions.length > 0 ? sql`WHERE ${sql.join(whereConditions, sql` AND `)}` : sql``}
-    `);
+        AVG(CASE WHEN ost.vendor_acceptance_time IS NOT NULL AND ost.vendor_acceptance_sla IS NOT NULL
+            THEN ost.vendor_acceptance_time / 60.0 END) as avg_vendor_response_minutes,
+        COUNT(CASE WHEN ost.vendor_acceptance_time IS NOT NULL AND ost.vendor_acceptance_sla IS NOT NULL
+            AND ost.vendor_acceptance_time <= ost.vendor_acceptance_sla THEN 1 END) as vendor_sla_met,
+        AVG(CASE WHEN ost.preparation_time IS NOT NULL AND ost.preparation_time_sla IS NOT NULL
+            THEN ost.preparation_time / 60.0 END) as avg_preparation_minutes,
+        COUNT(CASE WHEN ost.preparation_time IS NOT NULL AND ost.preparation_time_sla IS NOT NULL
+            AND ost.preparation_time <= ost.preparation_time_sla THEN 1 END) as preparation_sla_met,
+        AVG(CASE WHEN ost.delivery_time IS NOT NULL AND ost.delivery_time_sla IS NOT NULL
+            THEN ost.delivery_time / 60.0 END) as avg_total_delivery_minutes,
+        COUNT(CASE WHEN ost.delivery_time IS NOT NULL AND ost.delivery_time_sla IS NOT NULL
+            AND ost.delivery_time <= ost.delivery_time_sla THEN 1 END) as delivery_sla_met
+      FROM order_sla_tracking ost
+      JOIN orders o ON ost.order_id = o.id
+      ${whereClause}
+    `));
 
     const data = result.rows[0] || {
       total_tracked_orders: 0,
@@ -3146,8 +3160,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDeliveryZone(zone: InsertDeliveryZone): Promise<SelectDeliveryZone> {
-    const [result] = await db.insert(deliveryZones).values(zone).returning();
-    return result;
+    const results = await db.insert(deliveryZones).values(zone).returning();
+    return (results as SelectDeliveryZone[])[0];
   }
 
   // Operations and Dispatch
@@ -3555,6 +3569,181 @@ export class DatabaseStorage implements IStorage {
       category: 'orders',
       priority: 'normal'
     });
+  }
+
+  // =============================================================================
+  // STUB METHODS - TODO: Implement these methods
+  // =============================================================================
+
+  async createUserPushSubscription(data: any): Promise<any> {
+    console.log('TODO: Implement createUserPushSubscription', data);
+    return { id: 'stub', ...data };
+  }
+
+  async deactivateUserPushSubscription(userId: string, endpoint: string): Promise<void> {
+    console.log('TODO: Implement deactivateUserPushSubscription', userId, endpoint);
+  }
+
+  async getUserPushSubscriptions(userId: string): Promise<any[]> {
+    console.log('TODO: Implement getUserPushSubscriptions', userId);
+    return [];
+  }
+
+  async getNotificationAnalyticsByUser(userId: string): Promise<any> {
+    console.log('TODO: Implement getNotificationAnalyticsByUser', userId);
+    return { sent: 0, delivered: 0, opened: 0, clicked: 0 };
+  }
+
+  async updateNotificationAnalytics(notificationId: string, data: any): Promise<void> {
+    console.log('TODO: Implement updateNotificationAnalytics', notificationId, data);
+  }
+
+  async getNotificationCampaigns(): Promise<any[]> {
+    console.log('TODO: Implement getNotificationCampaigns');
+    return [];
+  }
+
+  async createNotificationCampaign(data: any): Promise<any> {
+    console.log('TODO: Implement createNotificationCampaign', data);
+    return { id: 'stub', ...data };
+  }
+
+  async getNotificationCampaign(id: string): Promise<any> {
+    console.log('TODO: Implement getNotificationCampaign', id);
+    return null;
+  }
+
+  async updateNotificationCampaign(id: string, data: any): Promise<any> {
+    console.log('TODO: Implement updateNotificationCampaign', id, data);
+    return { id, ...data };
+  }
+
+  async getCampaignRecipients(campaignId: string): Promise<any[]> {
+    console.log('TODO: Implement getCampaignRecipients', campaignId);
+    return [];
+  }
+
+  async addToNotificationQueue(notification: any): Promise<void> {
+    console.log('TODO: Implement addToNotificationQueue', notification);
+  }
+
+  async getNotificationQueueStats(): Promise<any> {
+    console.log('TODO: Implement getNotificationQueueStats');
+    return { pending: 0, processing: 0, failed: 0, completed: 0 };
+  }
+
+  async getPendingNotifications(limit?: number): Promise<any[]> {
+    console.log('TODO: Implement getPendingNotifications', limit);
+    return [];
+  }
+
+  async getNotificationAnalyticsOverview(timeframe?: string): Promise<any> {
+    console.log('TODO: Implement getNotificationAnalyticsOverview', timeframe);
+    return { totalSent: 0, deliveryRate: 0, openRate: 0, clickRate: 0 };
+  }
+
+  async getNotificationTemplates(filters?: any): Promise<any[]> {
+    console.log('TODO: Implement getNotificationTemplates', filters);
+    return [];
+  }
+
+  async createNotificationTemplate(data: any): Promise<any> {
+    console.log('TODO: Implement createNotificationTemplate', data);
+    return { id: 'stub', ...data };
+  }
+
+  async getUsersByRole(role: string): Promise<any[]> {
+    const usersList = await db.select().from(users).where(eq(users.role, role));
+    return usersList;
+  }
+
+  async getUserById(id: string): Promise<any> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  // Order Business Rules Operations (stub implementations)
+  async getOrderBusinessRules(): Promise<OrderBusinessRule[]> {
+    return await db.select().from(orderBusinessRules);
+  }
+
+  async getActiveOrderBusinessRules(orderType?: string): Promise<OrderBusinessRule[]> {
+    if (orderType) {
+      return await db.select().from(orderBusinessRules).where(
+        and(
+          eq(orderBusinessRules.isActive, true),
+          eq(orderBusinessRules.orderType, orderType)
+        )
+      );
+    }
+    return await db.select().from(orderBusinessRules).where(eq(orderBusinessRules.isActive, true));
+  }
+
+  async createOrderBusinessRule(rule: InsertOrderBusinessRule): Promise<OrderBusinessRule> {
+    const [newRule] = await db.insert(orderBusinessRules).values(rule).returning();
+    return newRule;
+  }
+
+  async updateOrderBusinessRule(id: string, updates: Partial<OrderBusinessRule>): Promise<OrderBusinessRule | undefined> {
+    const [updated] = await db.update(orderBusinessRules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(orderBusinessRules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteOrderBusinessRule(id: string): Promise<void> {
+    await db.delete(orderBusinessRules).where(eq(orderBusinessRules.id, id));
+  }
+
+  // Non-duplicate Order Dispute Operations
+  async getOrderDispute(id: string): Promise<OrderDispute | undefined> {
+    const [dispute] = await db.select().from(orderDisputes).where(eq(orderDisputes.id, id));
+    return dispute;
+  }
+
+  async resolveOrderDispute(id: string, resolution: any): Promise<OrderDispute | undefined> {
+    const [resolved] = await db.update(orderDisputes)
+      .set({
+        status: 'resolved',
+        resolutionType: resolution.type,
+        resolutionAmount: resolution.amount,
+        resolutionDescription: resolution.description,
+        resolutionNotes: resolution.notes,
+        resolvedBy: resolution.resolvedBy,
+        resolvedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(orderDisputes.id, id))
+      .returning();
+    return resolved;
+  }
+
+  // Order Dispute Messages Operations
+  async getOrderDisputeMessages(disputeId: string): Promise<OrderDisputeMessage[]> {
+    return await db.select().from(orderDisputeMessages).where(eq(orderDisputeMessages.disputeId, disputeId));
+  }
+
+  async createOrderDisputeMessage(message: InsertOrderDisputeMessage): Promise<OrderDisputeMessage> {
+    const [newMessage] = await db.insert(orderDisputeMessages).values(message).returning();
+    return newMessage;
+  }
+
+  async markDisputeMessageRead(id: string, userId?: string): Promise<OrderDisputeMessage | undefined> {
+    // Get the current message to update readBy array
+    const [current] = await db.select().from(orderDisputeMessages).where(eq(orderDisputeMessages.id, id));
+    if (!current) return undefined;
+
+    const readBy = Array.isArray(current.readBy) ? current.readBy : [];
+    if (userId && !readBy.includes(userId)) {
+      readBy.push(userId);
+    }
+
+    const [message] = await db.update(orderDisputeMessages)
+      .set({ readBy })
+      .where(eq(orderDisputeMessages.id, id))
+      .returning();
+    return message;
   }
 }
 

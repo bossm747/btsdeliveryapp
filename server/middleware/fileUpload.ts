@@ -223,7 +223,7 @@ const virusScanningPrep = async (req: Request, res: Response, next: NextFunction
           userId: req.user?.id || 'anonymous',
           requestId: req.requestId
         });
-        return next(createErrors.forbidden('File contains potentially malicious content'));
+        return next(createErrors.authorization('File contains potentially malicious content'));
       }
     }
     

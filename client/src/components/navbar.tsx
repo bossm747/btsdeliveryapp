@@ -155,7 +155,7 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <NotificationCenter userId="user-1" userRole="customer" />
+            <NotificationCenter />
             
             <LanguageToggle />
             
@@ -181,7 +181,7 @@ export default function Navbar() {
           </div>
           
           <div className="md:hidden flex items-center space-x-2">
-            <NotificationCenter userId="user-1" userRole="customer" />
+            <NotificationCenter />
             
             <Button
               variant="outline"

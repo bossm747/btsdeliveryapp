@@ -390,102 +390,149 @@ class AddressService {
   }
 
   /**
-   * Google Places Autocomplete proxy
+   * Places Autocomplete - uses OpenRouteService or Google Places
    */
   async getPlacesSuggestions(input: string, sessionToken?: string): Promise<PlaceSuggestion[]> {
-    if (!this.googleApiKey) {
-      // Return mock suggestions for development
-      return this.getMockSuggestions(input);
+    // Try OpenRouteService first (FREE)
+    const orsKey = process.env.OPENROUTESERVICE_API_KEY;
+    if (orsKey) {
+      try {
+        const params = new URLSearchParams({
+          text: `${input}, Batangas, Philippines`,
+          'boundary.country': 'PH',
+          size: '5',
+        });
+
+        const response = await fetch(`https://api.openrouteservice.org/geocode/search?${params}`, {
+          headers: {
+            'Authorization': orsKey,
+            'Accept': 'application/json',
+          },
+        });
+        const data = await response.json();
+
+        if (data.features && data.features.length > 0) {
+          console.log('[AddressService] Using OpenRouteService for autocomplete');
+          return data.features.map((feature: any, index: number) => ({
+            placeId: `ors-${index}-${Date.now()}`,
+            description: feature.properties.label,
+            mainText: feature.properties.name || feature.properties.label.split(',')[0],
+            secondaryText: feature.properties.region || feature.properties.country || 'Batangas, Philippines',
+            types: [feature.properties.layer || 'address'],
+            // Store coordinates for later use
+            coordinates: {
+              lat: feature.geometry.coordinates[1],
+              lng: feature.geometry.coordinates[0]
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('[AddressService] OpenRouteService error:', error);
+      }
     }
 
-    try {
-      const params = new URLSearchParams({
-        input,
-        key: this.googleApiKey,
-        components: 'country:ph',
-        types: 'address',
-        location: '13.7565,121.0583', // Batangas City center
-        radius: '50000', // 50km radius
-        strictbounds: 'true'
-      });
+    // Fallback to Google Places API
+    if (this.googleApiKey) {
+      try {
+        const params = new URLSearchParams({
+          input,
+          key: this.googleApiKey,
+          components: 'country:ph',
+          types: 'address',
+          location: '13.7565,121.0583', // Batangas City center
+          radius: '50000', // 50km radius
+          strictbounds: 'true'
+        });
 
-      if (sessionToken) {
-        params.append('sessiontoken', sessionToken);
+        if (sessionToken) {
+          params.append('sessiontoken', sessionToken);
+        }
+
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`
+        );
+        const data = await response.json();
+
+        if (data.status !== 'OK') {
+          console.warn('Places API returned:', data.status);
+          return this.getMockSuggestions(input);
+        }
+
+        return data.predictions.map((prediction: any) => ({
+          placeId: prediction.place_id,
+          description: prediction.description,
+          mainText: prediction.structured_formatting?.main_text || prediction.description,
+          secondaryText: prediction.structured_formatting?.secondary_text || '',
+          types: prediction.types || []
+        }));
+      } catch (error) {
+        console.error('Places autocomplete error:', error);
       }
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`
-      );
-      const data = await response.json();
-
-      if (data.status !== 'OK') {
-        console.warn('Places API returned:', data.status);
-        return [];
-      }
-
-      return data.predictions.map((prediction: any) => ({
-        placeId: prediction.place_id,
-        description: prediction.description,
-        mainText: prediction.structured_formatting?.main_text || prediction.description,
-        secondaryText: prediction.structured_formatting?.secondary_text || '',
-        types: prediction.types || []
-      }));
-    } catch (error) {
-      console.error('Places autocomplete error:', error);
-      return [];
     }
+
+    // Final fallback to mock suggestions
+    return this.getMockSuggestions(input);
   }
 
   /**
-   * Get place details from Google Places API
+   * Get place details from OpenRouteService or Google Places API
    */
   async getPlaceDetails(placeId: string, sessionToken?: string): Promise<PlaceDetails | null> {
-    if (!this.googleApiKey) {
-      // Return mock details for development
-      return this.getMockPlaceDetails(placeId);
-    }
-
-    try {
-      const params = new URLSearchParams({
-        place_id: placeId,
-        key: this.googleApiKey,
-        fields: 'formatted_address,geometry,address_components'
-      });
-
-      if (sessionToken) {
-        params.append('sessiontoken', sessionToken);
-      }
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?${params}`
-      );
-      const data = await response.json();
-
-      if (data.status !== 'OK' || !data.result) {
-        console.warn('Places details API returned:', data.status);
-        return null;
-      }
-
-      const result = data.result;
-      const components = this.parseAddressComponents(result.address_components);
-
-      return {
-        placeId,
-        formattedAddress: result.formatted_address,
-        street: components.street,
-        barangay: components.barangay,
-        city: components.city,
-        province: components.province,
-        zipCode: components.zipCode,
-        coordinates: {
-          lat: result.geometry.location.lat,
-          lng: result.geometry.location.lng
-        }
-      };
-    } catch (error) {
-      console.error('Places details error:', error);
+    // Handle OpenRouteService place IDs (format: ors-{index}-{timestamp})
+    // The coordinates are passed via query param or stored client-side
+    if (placeId.startsWith('ors-')) {
+      console.log('[AddressService] OpenRouteService placeId - coordinates should be provided');
+      // For ORS, we need to get coordinates from the request
+      // Return null to trigger client-side handling
       return null;
     }
+
+    // Try Google Places API
+    if (this.googleApiKey) {
+      try {
+        const params = new URLSearchParams({
+          place_id: placeId,
+          key: this.googleApiKey,
+          fields: 'formatted_address,geometry,address_components'
+        });
+
+        if (sessionToken) {
+          params.append('sessiontoken', sessionToken);
+        }
+
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?${params}`
+        );
+        const data = await response.json();
+
+        if (data.status !== 'OK' || !data.result) {
+          console.warn('Places details API returned:', data.status);
+          return this.getMockPlaceDetails(placeId);
+        }
+
+        const result = data.result;
+        const components = this.parseAddressComponents(result.address_components);
+
+        return {
+          placeId,
+          formattedAddress: result.formatted_address,
+          street: components.street,
+          barangay: components.barangay,
+          city: components.city,
+          province: components.province,
+          zipCode: components.zipCode,
+          coordinates: {
+            lat: result.geometry.location.lat,
+            lng: result.geometry.location.lng
+          }
+        };
+      } catch (error) {
+        console.error('Places details error:', error);
+      }
+    }
+
+    // Fallback to mock place details
+    return this.getMockPlaceDetails(placeId);
   }
 
   /**

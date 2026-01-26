@@ -198,6 +198,49 @@ Response:
   },
   "provider": "OpenRouteService"
 }
+```
+
+### Example: Geocode (Address to Coordinates)
+
+```bash
+curl -X POST http://localhost:5001/api/routing/geocode \
+  -H "Content-Type: application/json" \
+  -d '{"address": "Batangas City, Philippines"}'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "location": {
+    "lat": 13.7567,
+    "lng": 121.0584,
+    "address": "Batangas City, BT, Philippines"
+  },
+  "provider": "OpenRouteService"
+}
+```
+
+### Example: Reverse Geocode (Coordinates to Address)
+
+```bash
+curl -X POST http://localhost:5001/api/routing/reverse-geocode \
+  -H "Content-Type: application/json" \
+  -d '{"lat": 13.7565, "lng": 121.0583}'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "address": "Street Name, Barangay, Batangas City, BT, Philippines",
+  "location": {
+    "lat": 13.7565,
+    "lng": 121.0583
+  },
+  "provider": "OpenRouteService"
+}
+```
 
 ---
 

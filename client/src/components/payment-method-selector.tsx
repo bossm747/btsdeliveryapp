@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -235,8 +235,10 @@ export function PaymentMethodSelector({
   // Find default payment method
   const defaultMethod = savedMethods?.find(m => m.isDefault);
 
-  // Auto-select default method on load
-  useState(() => {
+  // Sync initial selection with parent on mount
+  // This ensures the parent component knows the correct default selection
+  useEffect(() => {
+    // If there's a default saved method, use it
     if (defaultMethod && !selectedMethodId) {
       setSelectedValue(`saved_${defaultMethod.id}`);
       onSelectPaymentMethod({
@@ -245,8 +247,11 @@ export function PaymentMethodSelector({
         paymentProvider: defaultMethod.provider,
         paymentMethodType: defaultMethod.type
       });
+    } else if (!selectedMethodId && selectedValue === 'cod') {
+      // Default to COD if no saved method and no specific selection
+      onSelectPaymentMethod({ type: 'cod' });
     }
-  });
+  }, [defaultMethod, selectedMethodId]); // Run when savedMethods loads
 
   if (isLoading) {
     return (

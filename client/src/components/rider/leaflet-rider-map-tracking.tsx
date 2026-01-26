@@ -99,6 +99,7 @@ export default function LeafletRiderMapTracking({
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
   const [deliveryQueue, setDeliveryQueue] = useState<Delivery[]>([]);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [earnings, setEarnings] = useState({
     today: 0,
     trips: 0,
@@ -253,44 +254,54 @@ export default function LeafletRiderMapTracking({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clean up existing map
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
+    try {
+      // Clean up existing map
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      const center = currentLocation || { lat: 13.7565, lng: 121.0583 };
+
+      // Create map with mobile-optimized options
+      const map = L.map(mapRef.current, {
+        center: [center.lat, center.lng],
+        zoom: 15,
+        zoomControl: true,
+        attributionControl: false,
+        // Mobile-friendly options
+        dragging: true,
+        touchZoom: true,
+        scrollWheelZoom: true,
+      });
+
+      // Add tile layer
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+
+      // Add rider marker
+      const riderMarker = L.marker([center.lat, center.lng], {
+        icon: markerIcons.rider,
+      })
+        .addTo(map)
+        .bindPopup("Your Location");
+      riderMarkerRef.current = riderMarker;
+      setMapError(null);
+    } catch (error) {
+      console.error("Failed to initialize rider map:", error);
+      setMapError("Failed to load map. Please refresh the page.");
     }
-
-    const center = currentLocation || { lat: 13.7565, lng: 121.0583 };
-
-    // Create map with mobile-optimized options
-    const map = L.map(mapRef.current, {
-      center: [center.lat, center.lng],
-      zoom: 15,
-      zoomControl: true,
-      attributionControl: false,
-      // Mobile-friendly options
-      dragging: true,
-      touchZoom: true,
-      scrollWheelZoom: true,
-    });
-
-    // Add tile layer
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-    }).addTo(map);
-
-    mapInstanceRef.current = map;
-
-    // Add rider marker
-    const riderMarker = L.marker([center.lat, center.lng], {
-      icon: markerIcons.rider,
-    })
-      .addTo(map)
-      .bindPopup("Your Location");
-    riderMarkerRef.current = riderMarker;
 
     return () => {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          console.error("Error removing map:", e);
+        }
         mapInstanceRef.current = null;
       }
     };
@@ -546,6 +557,25 @@ export default function LeafletRiderMapTracking({
       </div>
     </div>
   );
+
+  // Show error state if map failed to initialize
+  if (mapError) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-8">
+            <div className="flex flex-col items-center justify-center text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+              <p className="text-muted-foreground mb-4">{mapError}</p>
+              <Button onClick={() => window.location.reload()}>
+                Reload Page
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

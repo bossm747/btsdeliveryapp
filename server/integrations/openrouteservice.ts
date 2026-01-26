@@ -70,13 +70,17 @@ export class OpenRouteService {
 
     try {
       const params = new URLSearchParams({
-        api_key: this.apiKey,
         text: address,
         'boundary.country': country,
         size: '1',
       });
 
-      const response = await fetch(`${ORS_BASE_URL}/geocode/search?${params}`);
+      const response = await fetch(`${ORS_BASE_URL}/geocode/search?${params}`, {
+        headers: {
+          'Authorization': this.apiKey,
+          'Accept': 'application/json',
+        },
+      });
       const data = await response.json();
 
       if (data.features && data.features.length > 0) {
@@ -107,13 +111,17 @@ export class OpenRouteService {
 
     try {
       const params = new URLSearchParams({
-        api_key: this.apiKey,
         'point.lat': lat.toString(),
         'point.lon': lng.toString(),
         size: '1',
       });
 
-      const response = await fetch(`${ORS_BASE_URL}/geocode/reverse?${params}`);
+      const response = await fetch(`${ORS_BASE_URL}/geocode/reverse?${params}`, {
+        headers: {
+          'Authorization': this.apiKey,
+          'Accept': 'application/json',
+        },
+      });
       const data = await response.json();
 
       if (data.features && data.features.length > 0) {

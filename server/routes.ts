@@ -93,6 +93,7 @@ import { nanoid } from "nanoid";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { LocalObjectStorageService, ObjectNotFoundError as LocalObjectNotFoundError } from "./services/local-object-storage";
 import { gpsTrackingService } from "./gps-tracking";
+import { mapsService } from "./integrations/maps";
 import { generatePlatformImages, generateDishImages, generateCategoryImages } from "./generateImages";
 import * as aiServices from "./ai-services";
 import { registerVendorKycRoutes } from "./vendor-kyc-routes";
@@ -4895,10 +4896,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/riders/:riderId/pending-assignments", authenticateToken, requireAnyRole(['rider', 'admin']), async (req: any, res) => {
     try {
       const { riderId } = req.params;
-      // Riders can only see their own assignments, admins can see any
-      if (req.user.role === 'rider' && req.user.id !== riderId) {
-        return res.status(403).json({ message: "You can only view your own assignments" });
+
+      // For riders, verify they own this rider record by checking user_id
+      if (req.user.role === 'rider') {
+        const riderCheck = await pool.query(
+          'SELECT id FROM riders WHERE id = $1 AND user_id = $2',
+          [riderId, req.user.id]
+        );
+        if (riderCheck.rows.length === 0) {
+          return res.status(403).json({ message: "You can only view your own assignments" });
+        }
       }
+
       const assignments = await riderAssignmentService.getRiderPendingAssignments(riderId);
       res.json(assignments);
     } catch (error) {
@@ -4911,10 +4920,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { riderId } = req.params;
       const { latitude, longitude, accuracy } = req.body;
-      
-      // Riders can only update their own location
-      if (req.user.role === 'rider' && req.user.id !== riderId) {
-        return res.status(403).json({ message: "You can only update your own location" });
+
+      // For riders, verify they own this rider record by checking user_id
+      if (req.user.role === 'rider') {
+        const riderCheck = await pool.query(
+          'SELECT id FROM riders WHERE id = $1 AND user_id = $2',
+          [riderId, req.user.id]
+        );
+        if (riderCheck.rows.length === 0) {
+          return res.status(403).json({ message: "You can only update your own location" });
+        }
       }
 
       if (!latitude || !longitude) {
@@ -5666,7 +5681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Authentication required" });
       }
 
-      const { title, streetAddress, barangay, city, province, zipCode, landmark, deliveryInstructions, isDefault } = req.body;
+      const { title, streetAddress, barangay, city, province, zipCode, landmark, deliveryInstructions, isDefault, coordinates, lat, lng } = req.body;
 
       // Validate required fields
       if (!title || !streetAddress || !city || !province) {
@@ -5676,6 +5691,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If setting as default, unset other defaults first
       if (isDefault) {
         await storage.setDefaultAddress(req.user.id, ""); // This will unset all defaults
+      }
+
+      // Handle coordinates - accept either coordinates object or separate lat/lng
+      let coordsData = null;
+      if (coordinates && coordinates.lat && coordinates.lng) {
+        coordsData = { lat: coordinates.lat, lng: coordinates.lng };
+      } else if (lat && lng) {
+        coordsData = { lat, lng };
       }
 
       const addressData = {
@@ -5688,6 +5711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         zipCode: zipCode || null,
         landmark: landmark || null,
         deliveryInstructions: deliveryInstructions || null,
+        coordinates: coordsData,
         isDefault: isDefault || false,
         isActive: true
       };
@@ -5729,6 +5753,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.setDefaultAddress(req.user.id, id);
       }
 
+      // Handle coordinates - accept either coordinates object or separate lat/lng
+      const { coordinates, lat, lng } = req.body;
+      let coordsData = existingAddress.coordinates; // Keep existing if not provided
+      if (coordinates && coordinates.lat && coordinates.lng) {
+        coordsData = { lat: coordinates.lat, lng: coordinates.lng };
+      } else if (lat && lng) {
+        coordsData = { lat, lng };
+      }
+
       const updates = {
         title,
         streetAddress,
@@ -5738,6 +5771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         zipCode: zipCode || null,
         landmark: landmark || null,
         deliveryInstructions: deliveryInstructions || null,
+        coordinates: coordsData,
         isDefault: isDefault || false
       };
 
@@ -5807,6 +5841,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting default address:", error);
       res.status(500).json({ message: "Failed to set default address" });
+    }
+  });
+
+  // POST /api/customer/addresses/from-location - Create address from detected location
+  app.post("/api/customer/addresses/from-location", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { lat, lng, title, isDefault } = req.body;
+
+      if (!lat || !lng) {
+        return res.status(400).json({ message: "Latitude and longitude are required" });
+      }
+
+      // Reverse geocode to get address
+      const address = await mapsService.reverseGeocode(lat, lng);
+
+      if (!address) {
+        return res.status(400).json({ message: "Could not determine address from coordinates" });
+      }
+
+      // Parse address components (basic parsing for Philippine addresses)
+      let streetAddress = address;
+      let barangay = null;
+      let city = "Batangas City";
+      let province = "Batangas";
+      let zipCode = null;
+
+      // Try to extract components from address string
+      const parts = address.split(',').map((p: string) => p.trim());
+      if (parts.length >= 1) {
+        streetAddress = parts[0];
+      }
+      if (parts.length >= 2) {
+        // Check if second part is a barangay
+        if (parts[1].toLowerCase().includes('brgy') || parts[1].toLowerCase().includes('barangay')) {
+          barangay = parts[1];
+        } else {
+          barangay = parts[1];
+        }
+      }
+      if (parts.length >= 3) {
+        city = parts[2];
+      }
+      if (parts.length >= 4) {
+        province = parts[3];
+      }
+
+      // If setting as default, unset other defaults first
+      if (isDefault) {
+        await storage.setDefaultAddress(req.user.id, "");
+      }
+
+      const addressData = {
+        userId: req.user.id,
+        title: title || "Current Location",
+        streetAddress,
+        barangay,
+        city,
+        province,
+        zipCode,
+        landmark: null,
+        deliveryInstructions: null,
+        coordinates: { lat, lng },
+        isDefault: isDefault || false,
+        isActive: true
+      };
+
+      const savedAddress = await storage.createUserAddress(addressData);
+
+      // If this is the first address, make it default
+      const existingAddresses = await storage.getUserAddresses(req.user.id);
+      if (existingAddresses.length === 1) {
+        await storage.setDefaultAddress(req.user.id, savedAddress.id);
+        savedAddress.isDefault = true;
+      }
+
+      res.json({
+        ...savedAddress,
+        fullAddress: address
+      });
+    } catch (error) {
+      console.error("Error creating address from location:", error);
+      res.status(500).json({ message: "Failed to save address from location" });
+    }
+  });
+
+  // PATCH /api/customer/addresses/:id/update-coordinates - Update coordinates for existing address
+  app.patch("/api/customer/addresses/:id/update-coordinates", authenticateToken, requireAdminOrCustomer, async (req: any, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+      const { lat, lng, updateAddress } = req.body;
+
+      if (!lat || !lng) {
+        return res.status(400).json({ message: "Latitude and longitude are required" });
+      }
+
+      // Verify ownership
+      const existingAddress = await storage.getUserAddress(id);
+      if (!existingAddress || existingAddress.userId !== req.user.id) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      const updates: any = {
+        coordinates: { lat, lng }
+      };
+
+      // Optionally update street address from reverse geocoding
+      if (updateAddress) {
+        const address = await mapsService.reverseGeocode(lat, lng);
+        if (address) {
+          updates.streetAddress = address;
+        }
+      }
+
+      const savedAddress = await storage.updateUserAddress(id, updates);
+      res.json(savedAddress);
+    } catch (error) {
+      console.error("Error updating address coordinates:", error);
+      res.status(500).json({ message: "Failed to update coordinates" });
     }
   });
 

@@ -633,6 +633,62 @@ For generating AND saving descriptions, use update_menu_item with regenerateDesc
       required: ["type", "itemName"]
     },
     roles: ["vendor"]
+  },
+  {
+    name: "parse_menu_file_info",
+    description: `Get info about parsing a menu file. USE THIS when user says:
+- "I have a menu file to upload"
+- "import menu from CSV/PDF/Excel/image"
+- "bulk add menu items from file"
+Explains the supported formats and guides user to use the file upload endpoint.`,
+    parameters: {
+      type: "object",
+      properties: {
+        fileType: {
+          type: "string",
+          enum: ["image", "pdf", "csv", "excel", "unknown"],
+          description: "Type of file user wants to upload"
+        }
+      }
+    },
+    roles: ["vendor", "admin"]
+  },
+  {
+    name: "create_menu_items_bulk",
+    description: `Create multiple menu items at once. USE THIS when:
+- User provides a list of menu items to add
+- User has parsed menu data ready to import
+- User wants to add several items quickly`,
+    parameters: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Item name" },
+              description: { type: "string", description: "Item description" },
+              price: { type: "number", description: "Price in PHP" },
+              category: { type: "string", description: "Category name" },
+              tags: { type: "array", items: { type: "string" }, description: "Tags like spicy, vegetarian, etc." }
+            },
+            required: ["name", "price"]
+          },
+          description: "Array of menu items to create"
+        },
+        generateImages: {
+          type: "boolean",
+          description: "Whether to generate AI images for each item (default false for bulk)"
+        },
+        categoryId: {
+          type: "string",
+          description: "Default category ID if item doesn't specify category"
+        }
+      },
+      required: ["items"]
+    },
+    roles: ["vendor", "admin"]
   }
 ];
 
@@ -1605,6 +1661,144 @@ export async function executeFunction(
         }
 
         return { success: true, data: result };
+      }
+
+      case "parse_menu_file_info": {
+        const supportedFormats = {
+          image: {
+            extensions: ["jpg", "jpeg", "png", "webp"],
+            description: "Menu photos - AI will analyze the image and extract all visible menu items",
+            example: "Upload a photo of your printed menu or menu board"
+          },
+          pdf: {
+            extensions: ["pdf"],
+            description: "PDF menus - AI will extract text and parse menu items",
+            example: "Upload your digital menu PDF"
+          },
+          csv: {
+            extensions: ["csv", "tsv"],
+            description: "Spreadsheet data with columns: name, description, price, category, tags",
+            example: "Columns: name, description, price, category"
+          },
+          excel: {
+            extensions: ["xlsx", "xls"],
+            description: "Excel spreadsheets with menu data",
+            example: "Same format as CSV"
+          }
+        };
+
+        const fileTypeInfo = args.fileType && args.fileType !== "unknown"
+          ? supportedFormats[args.fileType as keyof typeof supportedFormats]
+          : null;
+
+        return {
+          success: true,
+          data: {
+            message: "To import menu items from a file, upload it using the chat interface or the vendor dashboard.",
+            supportedFormats,
+            selectedFormat: fileTypeInfo,
+            endpoint: "/api/ai/create-menu-from-file",
+            instructions: [
+              "1. Prepare your menu file (image, PDF, CSV, or Excel)",
+              "2. Upload it through the chat or vendor dashboard",
+              "3. Review the parsed items before confirming",
+              "4. Optionally enable AI image generation for each item"
+            ]
+          }
+        };
+      }
+
+      case "create_menu_items_bulk": {
+        if (!context.restaurantId) {
+          const restaurants = await storage.getRestaurantsByOwner(context.userId);
+          if (!restaurants.length) return { success: false, error: "No restaurant found" };
+          context.restaurantId = restaurants[0].id;
+        }
+
+        if (!args.items || !Array.isArray(args.items) || args.items.length === 0) {
+          return { success: false, error: "No items provided" };
+        }
+
+        // Get or create categories
+        const categoryMap = new Map<string, string>();
+        const existingCategories = await storage.getMenuCategories(context.restaurantId);
+        existingCategories.forEach((cat: any) => {
+          categoryMap.set(cat.name.toLowerCase(), cat.id);
+        });
+
+        // Use default category if provided
+        let defaultCategoryId = args.categoryId;
+        if (!defaultCategoryId && existingCategories.length > 0) {
+          defaultCategoryId = existingCategories[0].id;
+        }
+
+        const results: any[] = [];
+        const errors: string[] = [];
+
+        for (const item of args.items) {
+          try {
+            // Get or create category for this item
+            let categoryId = defaultCategoryId;
+            if (item.category) {
+              const catKey = item.category.toLowerCase();
+              if (!categoryMap.has(catKey)) {
+                const newCat = await storage.createMenuCategory({
+                  restaurantId: context.restaurantId,
+                  name: item.category,
+                  displayOrder: categoryMap.size + 1
+                });
+                categoryMap.set(catKey, newCat.id);
+              }
+              categoryId = categoryMap.get(catKey);
+            }
+
+            // Create the menu item
+            const menuItem = await storage.createMenuItem({
+              restaurantId: context.restaurantId,
+              categoryId,
+              name: item.name,
+              description: item.description || `Delicious ${item.name}`,
+              price: String(item.price),
+              isAvailable: true,
+              preparationTime: item.preparationTime || 15,
+              tags: item.tags
+            });
+
+            // Optionally generate image
+            if (args.generateImages && menuItem.id) {
+              try {
+                const imageUrl = await generateMenuItemImage(
+                  item.name,
+                  item.description || `${item.category || "Delicious"} dish`
+                );
+                await storage.updateMenuItem(menuItem.id, { imageUrl });
+                menuItem.imageUrl = imageUrl;
+              } catch (imgErr: any) {
+                console.warn(`[AI Functions] Image generation failed for ${item.name}:`, imgErr.message);
+              }
+            }
+
+            results.push({
+              id: menuItem.id,
+              name: menuItem.name,
+              price: menuItem.price,
+              category: item.category
+            });
+          } catch (err: any) {
+            errors.push(`Failed to create "${item.name}": ${err.message}`);
+          }
+        }
+
+        return {
+          success: results.length > 0,
+          data: {
+            created: results.length,
+            failed: errors.length,
+            items: results,
+            errors: errors.length > 0 ? errors : undefined,
+            message: `Created ${results.length} menu items${errors.length > 0 ? `, ${errors.length} failed` : ""}`
+          }
+        };
       }
 
       default:

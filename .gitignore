@@ -1,12 +1,45 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Generated files
 server/public
 vite.config.ts.*
+
+# Archives
 *.tar.gz
+*.zip
 
 # Environment files (contain secrets)
 .env
 .env.local
 .env.*.local
 .env.production
+
+# Logs
+logs/
+*.log
+
+# Test artifacts
+test-results/
+playwright-report/
+e2e-report/
+.playwright-artifacts-*
+
+# User uploads (local dev only)
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude
+.claude/

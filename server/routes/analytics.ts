@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { authenticateToken, requireAdmin, requireAdminOrVendor } from "../middleware/auth";
-import { cache, CacheKeys, CacheTTL, cacheMiddleware } from "../services/cache-service";
+import { cacheQuery, CacheTTL, getStats as getCacheStats, del as cacheDelete, delPattern } from "../services/cache";
 
 const router = Router();
 
@@ -40,11 +40,14 @@ router.get(
   "/orders/summary",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const analytics = await storage.getOrderAnalytics(startDate, endDate);
+      const cacheKey = `analytics:orders:summary:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const analytics = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getOrderAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -66,11 +69,14 @@ router.get(
   "/orders/trends",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const trends = await storage.getOrderTrends(startDate, endDate);
+      const cacheKey = `analytics:orders:trends:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const trends = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getOrderTrends(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -92,39 +98,30 @@ router.get(
   "/orders/by-status",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.MEDIUM),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
+      const cacheKey = `analytics:orders:by-status:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-      const cacheKey = CacheKeys.analyticsOrders(
-        startDate.toISOString(),
-        endDate.toISOString()
-      );
+      const data = await cacheQuery(cacheKey, CacheTTL.MEDIUM, async () => {
+        const orders = await storage.getOrders();
+        const filteredOrders = orders.filter((o) => {
+          if (!o.createdAt) return false;
+          const createdAt = new Date(o.createdAt);
+          return createdAt >= startDate && createdAt <= endDate;
+        });
 
-      const data = await cache.getOrSet(
-        cacheKey,
-        async () => {
-          const orders = await storage.getOrders();
-          const filteredOrders = orders.filter((o) => {
-            if (!o.createdAt) return false;
-            const createdAt = new Date(o.createdAt);
-            return createdAt >= startDate && createdAt <= endDate;
-          });
+        // Group by status
+        const byStatus: Record<string, number> = {};
+        filteredOrders.forEach((order) => {
+          byStatus[order.status] = (byStatus[order.status] || 0) + 1;
+        });
 
-          // Group by status
-          const byStatus: Record<string, number> = {};
-          filteredOrders.forEach((order) => {
-            byStatus[order.status] = (byStatus[order.status] || 0) + 1;
-          });
-
-          return {
-            byStatus,
-            totalOrders: filteredOrders.length,
-          };
-        },
-        CacheTTL.LONG
-      );
+        return {
+          byStatus,
+          totalOrders: filteredOrders.length,
+        };
+      });
 
       res.json({ success: true, data });
     } catch (error: any) {
@@ -142,7 +139,6 @@ router.get(
   "/orders/by-type",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { period = "day", orderType } = req.query;
@@ -151,10 +147,14 @@ router.get(
         return res.status(400).json({ message: "Period must be 'day', 'week', or 'month'" });
       }
 
-      const trends = await storage.getOrderTrendAnalysis(
-        period as "day" | "week" | "month",
-        orderType as string
-      );
+      const cacheKey = `analytics:orders:by-type:${period}:${orderType || 'all'}`;
+
+      const trends = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getOrderTrendAnalysis(
+          period as "day" | "week" | "month",
+          orderType as string
+        );
+      });
 
       res.json({ success: true, data: trends });
     } catch (error: any) {
@@ -176,11 +176,14 @@ router.get(
   "/revenue/summary",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const revenue = await storage.getRevenueAnalytics(startDate, endDate);
+      const cacheKey = `analytics:revenue:summary:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const revenue = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getRevenueAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -202,11 +205,14 @@ router.get(
   "/revenue/trends",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const trends = await storage.getRevenueTrends(startDate, endDate);
+      const cacheKey = `analytics:revenue:trends:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const trends = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getRevenueTrends(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -228,11 +234,14 @@ router.get(
   "/financial",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { timeRange = "30d" } = req.query;
-      const financials = await storage.getFinancialTrends(timeRange as string);
+      const cacheKey = `analytics:financial:${timeRange}`;
+
+      const financials = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getFinancialTrends(timeRange as string);
+      });
 
       res.json({ success: true, data: financials });
     } catch (error: any) {
@@ -254,11 +263,14 @@ router.get(
   "/users/summary",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const userStats = await storage.getUserAnalytics(startDate, endDate);
+      const cacheKey = `analytics:users:summary:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const userStats = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getUserAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -280,35 +292,33 @@ router.get(
   "/users/growth",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
+      const cacheKey = `analytics:users:growth:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-      // Get users grouped by registration date
-      const users = await storage.getUsers();
-      const filteredUsers = users.filter((u) => {
-        if (!u.createdAt) return false;
-        const createdAt = new Date(u.createdAt);
-        return createdAt >= startDate && createdAt <= endDate;
-      });
+      const data = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        const users = await storage.getUsers();
+        const filteredUsers = users.filter((u) => {
+          if (!u.createdAt) return false;
+          const createdAt = new Date(u.createdAt);
+          return createdAt >= startDate && createdAt <= endDate;
+        });
 
-      // Group by day
-      const byDay: Record<string, { customers: number; vendors: number; riders: number }> = {};
-      filteredUsers.forEach((user) => {
-        if (!user.createdAt) return;
-        const day = new Date(user.createdAt).toISOString().split("T")[0];
-        if (!byDay[day]) {
-          byDay[day] = { customers: 0, vendors: 0, riders: 0 };
-        }
-        if (user.role === "customer") byDay[day].customers++;
-        else if (user.role === "vendor") byDay[day].vendors++;
-        else if (user.role === "rider") byDay[day].riders++;
-      });
+        // Group by day
+        const byDay: Record<string, { customers: number; vendors: number; riders: number }> = {};
+        filteredUsers.forEach((user) => {
+          if (!user.createdAt) return;
+          const day = new Date(user.createdAt).toISOString().split("T")[0];
+          if (!byDay[day]) {
+            byDay[day] = { customers: 0, vendors: 0, riders: 0 };
+          }
+          if (user.role === "customer") byDay[day].customers++;
+          else if (user.role === "vendor") byDay[day].vendors++;
+          else if (user.role === "rider") byDay[day].riders++;
+        });
 
-      res.json({
-        success: true,
-        data: {
+        return {
           dailyGrowth: byDay,
           totalNew: filteredUsers.length,
           byRole: {
@@ -316,7 +326,12 @@ router.get(
             vendors: filteredUsers.filter((u) => u.role === "vendor").length,
             riders: filteredUsers.filter((u) => u.role === "rider").length,
           },
-        },
+        };
+      });
+
+      res.json({
+        success: true,
+        data,
         period: { startDate, endDate },
       });
     } catch (error: any) {
@@ -338,11 +353,14 @@ router.get(
   "/riders/summary",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const riderStats = await storage.getRiderAnalytics(startDate, endDate);
+      const cacheKey = `analytics:riders:summary:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const riderStats = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getRiderAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -364,31 +382,36 @@ router.get(
   "/riders/performance",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.MEDIUM),
   async (req: Request, res: Response) => {
     try {
-      const riders = await storage.getUsers();
-      const riderUsers = riders.filter((u) => u.role === "rider");
+      const cacheKey = `analytics:riders:performance`;
 
-      // Get delivery stats for each rider
-      const performance = await Promise.all(
-        riderUsers.slice(0, 50).map(async (rider) => {
-          const orders = await storage.getOrdersByRider(rider.id);
-          const deliveredOrders = orders.filter((o) => o.status === "delivered");
+      const performance = await cacheQuery(cacheKey, CacheTTL.MEDIUM, async () => {
+        const riders = await storage.getUsers();
+        const riderUsers = riders.filter((u) => u.role === "rider");
 
-          return {
-            riderId: rider.id,
-            name: `${rider.firstName} ${rider.lastName}`,
-            totalDeliveries: deliveredOrders.length,
-            avgRating: 0, // Would come from rider profile/ratings table
-            isOnline: false, // Would come from rider availability status
-          };
-        })
-      );
+        // Get delivery stats for each rider
+        const riderPerformance = await Promise.all(
+          riderUsers.slice(0, 50).map(async (rider) => {
+            const orders = await storage.getOrdersByRider(rider.id);
+            const deliveredOrders = orders.filter((o) => o.status === "delivered");
+
+            return {
+              riderId: rider.id,
+              name: `${rider.firstName} ${rider.lastName}`,
+              totalDeliveries: deliveredOrders.length,
+              avgRating: 0, // Would come from rider profile/ratings table
+              isOnline: false, // Would come from rider availability status
+            };
+          })
+        );
+
+        return riderPerformance.sort((a, b) => b.totalDeliveries - a.totalDeliveries);
+      });
 
       res.json({
         success: true,
-        data: performance.sort((a, b) => b.totalDeliveries - a.totalDeliveries),
+        data: performance,
       });
     } catch (error: any) {
       console.error("Rider performance error:", error);
@@ -409,11 +432,14 @@ router.get(
   "/restaurants/summary",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const restaurantStats = await storage.getRestaurantAnalytics(startDate, endDate);
+      const cacheKey = `analytics:restaurants:summary:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const restaurantStats = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getRestaurantAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -435,7 +461,6 @@ router.get(
   "/restaurants/:id",
   authenticateToken,
   requireAdminOrVendor,
-  cacheMiddleware(CacheTTL.MEDIUM),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -449,7 +474,11 @@ router.get(
         }
       }
 
-      const analytics = await storage.getRestaurantOrderAnalytics(id, days);
+      const cacheKey = `analytics:restaurant:${id}:${days}`;
+
+      const analytics = await cacheQuery(cacheKey, CacheTTL.MEDIUM, async () => {
+        return storage.getRestaurantOrderAnalytics(id, days);
+      });
 
       res.json({ success: true, data: analytics });
     } catch (error: any) {
@@ -467,37 +496,42 @@ router.get(
   "/restaurants/top-performers",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
-      const restaurants = await storage.getRestaurants();
+      const cacheKey = `analytics:restaurants:top-performers:${limit}`;
 
-      // Calculate performance scores
-      const performers = await Promise.all(
-        restaurants.slice(0, 50).map(async (restaurant) => {
-          const orders = await storage.getOrdersByRestaurant(restaurant.id);
-          const completedOrders = orders.filter((o) => o.status === "delivered");
-          const revenue = completedOrders.reduce(
-            (sum, o) => sum + (Number(o.totalAmount) || 0),
-            0
-          );
+      const performers = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        const restaurants = await storage.getRestaurants();
 
-          return {
-            id: restaurant.id,
-            name: restaurant.name,
-            totalOrders: completedOrders.length,
-            revenue,
-            avgRating: Number(restaurant.rating) || 0,
-          };
-        })
-      );
+        // Calculate performance scores
+        const restaurantPerformance = await Promise.all(
+          restaurants.slice(0, 50).map(async (restaurant) => {
+            const orders = await storage.getOrdersByRestaurant(restaurant.id);
+            const completedOrders = orders.filter((o) => o.status === "delivered");
+            const revenue = completedOrders.reduce(
+              (sum, o) => sum + (Number(o.totalAmount) || 0),
+              0
+            );
+
+            return {
+              id: restaurant.id,
+              name: restaurant.name,
+              totalOrders: completedOrders.length,
+              revenue,
+              avgRating: Number(restaurant.rating) || 0,
+            };
+          })
+        );
+
+        return restaurantPerformance
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, limit);
+      });
 
       res.json({
         success: true,
-        data: performers
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, limit),
+        data: performers,
       });
     } catch (error: any) {
       console.error("Top performers error:", error);
@@ -518,11 +552,14 @@ router.get(
   "/geographic",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
-      const geoData = await storage.getGeographicAnalytics(startDate, endDate);
+      const cacheKey = `analytics:geographic:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+      const geoData = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        return storage.getGeographicAnalytics(startDate, endDate);
+      });
 
       res.json({
         success: true,
@@ -544,38 +581,39 @@ router.get(
   "/geographic/heatmap",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.LONG),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
+      const cacheKey = `analytics:geographic:heatmap:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-      // Get orders with delivery addresses
-      const orders = await storage.getOrders();
-      const filteredOrders = orders.filter((o) => {
-        if (!o.createdAt) return false;
-        const createdAt = new Date(o.createdAt);
-        return (
-          createdAt >= startDate &&
-          createdAt <= endDate &&
-          o.deliveryAddress &&
-          typeof o.deliveryAddress === "object"
-        );
+      const heatmapData = await cacheQuery(cacheKey, CacheTTL.LONG, async () => {
+        const orders = await storage.getOrders();
+        const filteredOrders = orders.filter((o) => {
+          if (!o.createdAt) return false;
+          const createdAt = new Date(o.createdAt);
+          return (
+            createdAt >= startDate &&
+            createdAt <= endDate &&
+            o.deliveryAddress &&
+            typeof o.deliveryAddress === "object"
+          );
+        });
+
+        // Extract coordinates
+        return filteredOrders
+          .map((order) => {
+            const addr = order.deliveryAddress as any;
+            if (addr?.coordinates) {
+              return {
+                lat: addr.coordinates.lat,
+                lng: addr.coordinates.lng,
+                weight: 1,
+              };
+            }
+            return null;
+          })
+          .filter((d): d is NonNullable<typeof d> => d !== null);
       });
-
-      // Extract coordinates
-      const heatmapData = filteredOrders
-        .map((order) => {
-          const addr = order.deliveryAddress as any;
-          if (addr?.coordinates) {
-            return {
-              lat: addr.coordinates.lat,
-              lng: addr.coordinates.lng,
-              weight: 1,
-            };
-          }
-          return null;
-        })
-        .filter((d): d is NonNullable<typeof d> => d !== null);
 
       res.json({
         success: true,
@@ -602,30 +640,34 @@ router.get(
   "/dashboard",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.MEDIUM),
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = parseDateRange(req);
+      const cacheKey = `analytics:dashboard:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-      // Parallel fetch all analytics
-      const [orderAnalytics, revenueAnalytics, userAnalytics, riderAnalytics, restaurantAnalytics] =
-        await Promise.all([
-          storage.getOrderAnalytics(startDate, endDate),
-          storage.getRevenueAnalytics(startDate, endDate),
-          storage.getUserAnalytics(startDate, endDate),
-          storage.getRiderAnalytics(startDate, endDate),
-          storage.getRestaurantAnalytics(startDate, endDate),
-        ]);
+      const data = await cacheQuery(cacheKey, CacheTTL.MEDIUM, async () => {
+        // Parallel fetch all analytics
+        const [orderAnalytics, revenueAnalytics, userAnalytics, riderAnalytics, restaurantAnalytics] =
+          await Promise.all([
+            storage.getOrderAnalytics(startDate, endDate),
+            storage.getRevenueAnalytics(startDate, endDate),
+            storage.getUserAnalytics(startDate, endDate),
+            storage.getRiderAnalytics(startDate, endDate),
+            storage.getRestaurantAnalytics(startDate, endDate),
+          ]);
 
-      res.json({
-        success: true,
-        data: {
+        return {
           orders: orderAnalytics,
           revenue: revenueAnalytics,
           users: userAnalytics,
           riders: riderAnalytics,
           restaurants: restaurantAnalytics,
-        },
+        };
+      });
+
+      res.json({
+        success: true,
+        data,
         period: { startDate, endDate },
       });
     } catch (error: any) {
@@ -643,35 +685,35 @@ router.get(
   "/realtime",
   authenticateToken,
   requireAdmin,
-  cacheMiddleware(CacheTTL.SHORT),
   async (req: Request, res: Response) => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const cacheKey = `analytics:realtime`;
 
-      const orders = await storage.getOrders();
-      const todaysOrders = orders.filter((o) => o.createdAt && new Date(o.createdAt) >= today);
+      const data = await cacheQuery(cacheKey, CacheTTL.SHORT, async () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      // Calculate real-time metrics
-      const pending = todaysOrders.filter((o) => o.status === "pending").length;
-      const preparing = todaysOrders.filter((o) => o.status === "preparing").length;
-      const inDelivery = todaysOrders.filter(
-        (o) => o.status === "picked_up" || o.status === "on_the_way"
-      ).length;
-      const delivered = todaysOrders.filter((o) => o.status === "delivered").length;
-      const cancelled = todaysOrders.filter((o) => o.status === "cancelled").length;
+        const orders = await storage.getOrders();
+        const todaysOrders = orders.filter((o) => o.createdAt && new Date(o.createdAt) >= today);
 
-      const todaysRevenue = todaysOrders
-        .filter((o) => o.status === "delivered")
-        .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+        // Calculate real-time metrics
+        const pending = todaysOrders.filter((o) => o.status === "pending").length;
+        const preparing = todaysOrders.filter((o) => o.status === "preparing").length;
+        const inDelivery = todaysOrders.filter(
+          (o) => o.status === "picked_up" || o.status === "on_the_way"
+        ).length;
+        const delivered = todaysOrders.filter((o) => o.status === "delivered").length;
+        const cancelled = todaysOrders.filter((o) => o.status === "cancelled").length;
 
-      // Get active riders (count riders who are verified and active)
-      const users = await storage.getUsers();
-      const activeRiders = users.filter((u) => u.role === "rider" && u.status === "active").length;
+        const todaysRevenue = todaysOrders
+          .filter((o) => o.status === "delivered")
+          .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
-      res.json({
-        success: true,
-        data: {
+        // Get active riders (count riders who are verified and active)
+        const users = await storage.getUsers();
+        const activeRiders = users.filter((u) => u.role === "rider" && u.status === "active").length;
+
+        return {
           orders: {
             total: todaysOrders.length,
             pending,
@@ -683,7 +725,12 @@ router.get(
           revenue: todaysRevenue,
           activeRiders,
           timestamp: new Date().toISOString(),
-        },
+        };
+      });
+
+      res.json({
+        success: true,
+        data,
       });
     } catch (error: any) {
       console.error("Realtime analytics error:", error);
@@ -702,7 +749,7 @@ router.get(
   requireAdmin,
   async (req: Request, res: Response) => {
     try {
-      const stats = cache.getStats();
+      const stats = await getCacheStats();
       res.json({ success: true, data: stats });
     } catch (error: any) {
       res.status(500).json({ message: "Failed to fetch cache stats" });
@@ -723,11 +770,12 @@ router.post(
       const { pattern } = req.body;
 
       if (pattern) {
-        const deleted = cache.deletePattern(pattern);
+        const deleted = await delPattern(pattern);
         res.json({ success: true, message: `Cleared ${deleted} cache entries` });
       } else {
-        cache.clear();
-        res.json({ success: true, message: "Cache cleared" });
+        // Clear all analytics caches
+        const deleted = await delPattern('analytics:*');
+        res.json({ success: true, message: `Cleared ${deleted} analytics cache entries` });
       }
     } catch (error: any) {
       res.status(500).json({ message: "Failed to clear cache" });

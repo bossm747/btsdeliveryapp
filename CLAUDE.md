@@ -126,6 +126,32 @@ Frontend uses Leaflet (free) with OpenStreetMap tiles:
 - `client/src/components/shared/leaflet-tracking-map.tsx` - Order tracking for customers
 - `client/src/components/shared/leaflet-live-tracking-map.tsx` - Multi-order tracking for admin/vendor
 - `client/src/components/rider/leaflet-rider-map-tracking.tsx` - Rider navigation and delivery tracking
+- `client/src/components/shared/location-picker.tsx` - Interactive location picker with GPS auto-detect
+- `client/src/hooks/use-current-location.ts` - Hook for GPS detection and reverse geocoding
+
+### Location Picker Component
+The `LocationPicker` component provides interactive location selection:
+- **GPS Auto-detect**: Uses browser Geolocation API to detect current position
+- **Map Selection**: Click anywhere on map to select location
+- **Drag Marker**: Fine-tune location by dragging the marker
+- **Address Search**: Search for addresses with forward geocoding
+- **Auto-fill**: Automatically populates address fields via reverse geocoding
+- **Coordinates Storage**: Saves lat/lng with addresses for precise delivery
+
+Usage in address forms:
+```tsx
+import LocationPicker from "@/components/shared/location-picker";
+import { useCurrentLocation } from "@/hooks";
+
+<LocationPicker
+  value={locationValue}
+  onChange={handleLocationChange}
+  autoDetect={false}
+  showSearch={true}
+  height="200px"
+  markerType="customer"
+/>
+```
 
 ### Real-time Features
 WebSocket server runs alongside Express for:

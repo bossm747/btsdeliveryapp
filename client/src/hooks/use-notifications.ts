@@ -1,6 +1,6 @@
 /**
  * useNotifications Hook
- * 
+ *
  * Manages user notifications with:
  * - Fetching notifications with pagination
  * - Real-time updates via WebSocket
@@ -8,7 +8,7 @@
  * - Unread count badge
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from './use-websocket';
 import { apiRequest } from '@/lib/queryClient';
@@ -111,20 +111,20 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   }, [pageSize, filters]);
 
   // Fetch notifications
-  const { 
-    data, 
-    isLoading, 
+  const {
+    data,
+    isLoading,
     error,
-    refetch 
+    refetch
   } = useQuery({
     queryKey: ['notifications', filters, page],
     queryFn: async () => {
-      const response = await apiRequest(`/api/notifications?${buildQueryParams(page * pageSize)}`);
-      return response as {
+      const response = await apiRequest("GET", `/api/notifications?${buildQueryParams(page * pageSize)}`);
+      return response.json() as Promise<{
         notifications: Notification[];
         unreadCount: number;
         hasMore: boolean;
-      };
+      }>;
     },
     enabled,
     staleTime: 30000, // 30 seconds
@@ -134,8 +134,8 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: async () => {
-      const response = await apiRequest('/api/notifications/unread-count');
-      return response as { count: number };
+      const response = await apiRequest("GET", '/api/notifications/unread-count');
+      return response.json() as Promise<{ count: number }>;
     },
     enabled,
     staleTime: 10000, // 10 seconds
@@ -169,7 +169,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         // Add new notification to the top
         const newNotification = message.notification as Notification;
         setAllNotifications(prev => [newNotification, ...prev]);
-        
+
         // Invalidate unread count
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
       }
@@ -179,13 +179,11 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   // Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      await apiRequest(`/api/notifications/${notificationId}/read`, {
-        method: 'PATCH'
-      });
+      await apiRequest("PATCH", `/api/notifications/${notificationId}/read`);
     },
     onSuccess: (_, notificationId) => {
       // Update local state
-      setAllNotifications(prev => 
+      setAllNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)
       );
       // Invalidate unread count
@@ -196,13 +194,11 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest('/api/notifications/mark-all-read', {
-        method: 'PATCH'
-      });
+      await apiRequest("PATCH", '/api/notifications/mark-all-read');
     },
     onSuccess: () => {
       // Update local state
-      setAllNotifications(prev => 
+      setAllNotifications(prev =>
         prev.map(n => ({ ...n, isRead: true, readAt: new Date().toISOString() }))
       );
       // Invalidate unread count
@@ -213,9 +209,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   // Archive mutation
   const archiveMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      await apiRequest(`/api/notifications/${notificationId}/archive`, {
-        method: 'PATCH'
-      });
+      await apiRequest("PATCH", `/api/notifications/${notificationId}/archive`);
     },
     onSuccess: (_, notificationId) => {
       // Remove from local state if not showing archived
@@ -228,9 +222,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      await apiRequest(`/api/notifications/${notificationId}`, {
-        method: 'DELETE'
-      });
+      await apiRequest("DELETE", `/api/notifications/${notificationId}`);
     },
     onSuccess: (_, notificationId) => {
       // Remove from local state
@@ -277,8 +269,8 @@ export function useUnreadNotificationCount(): number {
   const { data } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: async () => {
-      const response = await apiRequest('/api/notifications/unread-count');
-      return response as { count: number };
+      const response = await apiRequest("GET", '/api/notifications/unread-count');
+      return response.json() as Promise<{ count: number }>;
     },
     staleTime: 10000,
     refetchInterval: 60000,

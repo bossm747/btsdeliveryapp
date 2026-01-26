@@ -42,6 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import CustomerHeader from "@/components/customer/customer-header";
+import LocationPicker, { LocationPickerValue } from "@/components/shared/location-picker";
 import {
   MapPin,
   Plus,
@@ -71,6 +72,10 @@ const addressSchema = z.object({
   landmark: z.string().max(255).optional(),
   deliveryInstructions: z.string().max(500).optional(),
   isDefault: z.boolean().default(false),
+  coordinates: z.object({
+    lat: z.number(),
+    lng: z.number(),
+  }).optional(),
 });
 
 type AddressFormData = z.infer<typeof addressSchema>;
@@ -108,6 +113,7 @@ export default function AddressesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [locationPickerValue, setLocationPickerValue] = useState<LocationPickerValue | null>(null);
 
   // Fetch addresses
   const { data: addresses = [], isLoading, error } = useQuery<Address[]>({
@@ -127,6 +133,7 @@ export default function AddressesPage() {
       landmark: "",
       deliveryInstructions: "",
       isDefault: false,
+      coordinates: undefined,
     },
   });
 
@@ -144,6 +151,7 @@ export default function AddressesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/customer/addresses"] });
       setIsAddDialogOpen(false);
       form.reset();
+      setLocationPickerValue(null);
     },
     onError: (error: Error) => {
       toast({
@@ -169,6 +177,7 @@ export default function AddressesPage() {
       setIsEditDialogOpen(false);
       setSelectedAddress(null);
       form.reset();
+      setLocationPickerValue(null);
     },
     onError: (error: Error) => {
       toast({
@@ -226,12 +235,58 @@ export default function AddressesPage() {
   });
 
   const handleAddAddress = (data: AddressFormData) => {
-    createAddressMutation.mutate(data);
+    // Include coordinates from location picker
+    const addressData = {
+      ...data,
+      coordinates: locationPickerValue ? {
+        lat: locationPickerValue.lat,
+        lng: locationPickerValue.lng,
+      } : undefined,
+    };
+    createAddressMutation.mutate(addressData);
   };
 
   const handleEditAddress = (data: AddressFormData) => {
     if (selectedAddress) {
-      updateAddressMutation.mutate({ id: selectedAddress.id, data });
+      // Include coordinates from location picker
+      const addressData = {
+        ...data,
+        coordinates: locationPickerValue ? {
+          lat: locationPickerValue.lat,
+          lng: locationPickerValue.lng,
+        } : selectedAddress.coordinates,
+      };
+      updateAddressMutation.mutate({ id: selectedAddress.id, data: addressData });
+    }
+  };
+
+  // Handle location picker changes - auto-populate address fields
+  const handleLocationChange = (location: LocationPickerValue) => {
+    setLocationPickerValue(location);
+
+    // If address is available from reverse geocoding, parse and populate fields
+    if (location.address) {
+      // Parse the address string to extract components
+      // OpenRouteService returns addresses like "Street, Barangay, City, Province, Country"
+      const parts = location.address.split(", ").map(p => p.trim());
+
+      if (parts.length >= 1) {
+        // Set street address if we have it
+        form.setValue("streetAddress", parts[0] || "");
+      }
+      if (parts.length >= 2) {
+        // Second part could be barangay
+        form.setValue("barangay", parts[1] || "");
+      }
+      if (parts.length >= 3) {
+        // Third part is usually city/municipality
+        form.setValue("city", parts[2] || "");
+      }
+      if (parts.length >= 4) {
+        // Fourth part could be province
+        const province = parts[3] || "Batangas";
+        form.setValue("province", province);
+      }
     }
   };
 
@@ -259,7 +314,18 @@ export default function AddressesPage() {
       landmark: address.landmark || "",
       deliveryInstructions: address.deliveryInstructions || "",
       isDefault: address.isDefault,
+      coordinates: address.coordinates,
     });
+    // Set location picker value from existing coordinates
+    if (address.coordinates) {
+      setLocationPickerValue({
+        lat: address.coordinates.lat,
+        lng: address.coordinates.lng,
+        address: `${address.streetAddress}, ${address.barangay || ""}, ${address.city}, ${address.province}`,
+      });
+    } else {
+      setLocationPickerValue(null);
+    }
     setIsEditDialogOpen(true);
   };
 
@@ -346,6 +412,7 @@ export default function AddressesPage() {
             <Button
               onClick={() => {
                 form.reset();
+                setLocationPickerValue(null);
                 setIsAddDialogOpen(true);
               }}
               size="sm"
@@ -371,7 +438,11 @@ export default function AddressesPage() {
               title="No saved addresses"
               description="Add your first delivery address to get started"
               actionLabel="Add Your First Address"
-              onAction={() => setIsAddDialogOpen(true)}
+              onAction={() => {
+                form.reset();
+                setLocationPickerValue(null);
+                setIsAddDialogOpen(true);
+              }}
               data-testid="no-addresses"
             />
           ) : (
@@ -427,6 +498,12 @@ export default function AddressesPage() {
                             "{address.deliveryInstructions}"
                           </p>
                         )}
+                        {address.coordinates && (
+                          <p className="text-green-600 text-xs mt-1 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            GPS coordinates saved
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -468,19 +545,37 @@ export default function AddressesPage() {
         )}
 
         {/* Add Address Dialog */}
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          setIsAddDialogOpen(open);
+          if (!open) {
+            setLocationPickerValue(null);
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-[#FF6B35]" />
                 Add New Address
               </DialogTitle>
               <DialogDescription>
-                Add a new delivery address to your account
+                Use the map to auto-detect your location or enter address manually
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleAddAddress)} className="space-y-4">
+                {/* Location Picker */}
+                <LocationPicker
+                  value={locationPickerValue}
+                  onChange={handleLocationChange}
+                  autoDetect={false}
+                  showAddressInput={true}
+                  showSearch={true}
+                  height="200px"
+                  label="Select Location on Map"
+                  placeholder="Search for address or use current location"
+                  markerType="customer"
+                />
+
                 <FormField
                   control={form.control}
                   name="title"
@@ -671,19 +766,38 @@ export default function AddressesPage() {
         </Dialog>
 
         {/* Edit Address Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setLocationPickerValue(null);
+            setSelectedAddress(null);
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Pencil className="w-5 h-5 text-[#FF6B35]" />
                 Edit Address
               </DialogTitle>
               <DialogDescription>
-                Update your delivery address details
+                Update your delivery address or adjust location on the map
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleEditAddress)} className="space-y-4">
+                {/* Location Picker */}
+                <LocationPicker
+                  value={locationPickerValue}
+                  onChange={handleLocationChange}
+                  autoDetect={false}
+                  showAddressInput={true}
+                  showSearch={true}
+                  height="200px"
+                  label="Adjust Location on Map"
+                  placeholder="Search for address or use current location"
+                  markerType="customer"
+                />
+
                 <FormField
                   control={form.control}
                   name="title"

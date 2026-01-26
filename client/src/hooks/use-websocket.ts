@@ -225,7 +225,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           break;
 
         case 'vendor_alert':
-        case 'messageType' in message && message.messageType === 'vendor_alert':
           onVendorAlert?.(message as unknown as VendorAlert);
           break;
 

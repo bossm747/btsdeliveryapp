@@ -72,7 +72,7 @@ export const securityHeaders = helmet({
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"], // Prevent clickjacking
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : undefined
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
     }
   },
   

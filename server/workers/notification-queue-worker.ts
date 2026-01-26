@@ -4,7 +4,7 @@
 import { notificationStorage } from '../storage/notification-storage.js';
 import { pushNotificationService } from '../integrations/push-notifications.js';
 import { emailTemplateEngine } from '../templates/email-templates.js';
-import { SendGridProvider } from '../integrations/email.js';
+import { NodemailerProvider } from '../integrations/email.js';
 import { TwilioProvider, SemaphoreProvider } from '../integrations/sms.js';
 import type { NotificationQueue } from '../../shared/schema.js';
 
@@ -18,7 +18,7 @@ export class NotificationQueueWorker {
   private smsProvider: TwilioProvider | SemaphoreProvider;
 
   constructor() {
-    this.emailProvider = new SendGridProvider();
+    this.emailProvider = new NodemailerProvider();
     
     // Initialize SMS provider with fallback
     try {

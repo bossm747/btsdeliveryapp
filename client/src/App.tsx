@@ -1,5 +1,14 @@
-import { useState, lazy, Suspense } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { useState, lazy, Suspense, useEffect } from "react";
+import { Switch, Route, Redirect, useLocation } from "wouter";
+
+// Scroll to top on route change
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
+  return null;
+}
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,6 +29,7 @@ const Restaurants = lazy(() => import("@/pages/shared/restaurants"));
 const RestaurantDetail = lazy(() => import("@/pages/shared/restaurant-detail"));
 const Cart = lazy(() => import("@/pages/customer/cart"));
 const OrderTracking = lazy(() => import("@/pages/shared/order-tracking"));
+const MapTrackingDemo = lazy(() => import("@/pages/shared/map-tracking-demo"));
 const CustomerOrders = lazy(() => import("@/pages/customer/customer-orders"));
 const CustomerAddresses = lazy(() => import("@/pages/customer/addresses"));
 const CustomerFavorites = lazy(() => import("@/pages/customer/favorites"));
@@ -119,12 +129,17 @@ function Router() {
   const { user, isAuthenticated } = useAuth();
 
   return (
+    <>
+    <ScrollToTop />
     <Suspense fallback={<PageLoader />}>
     <Switch>
       {/* Public routes - available to everyone */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={MultiStepSignup} />
       <Route path="/signup-basic" component={MultiStepSignup} />
+
+      {/* Map Tracking Demo - Public route for testing */}
+      <Route path="/map-demo" component={MapTrackingDemo} />
 
       {/* Customer Dashboard */}
       <Route path="/customer-dashboard">
@@ -138,6 +153,11 @@ function Router() {
       {/* Customer routes - /home redirects to customer-dashboard */}
       <Route path="/home">
         <Redirect to="/customer-dashboard" />
+      </Route>
+
+      {/* Redirect /customer/addresses to /addresses */}
+      <Route path="/customer/addresses">
+        <Redirect to="/addresses" />
       </Route>
 
       <Route path="/restaurants">
@@ -576,6 +596,7 @@ function Router() {
       <Route component={NotFound} />
     </Switch>
     </Suspense>
+    </>
   );
 }
 

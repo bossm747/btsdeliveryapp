@@ -39,7 +39,7 @@ export interface WebSocketMessage {
 }
 
 export class PushNotificationService {
-  private vapidKeys: {
+  private vapidKeys!: {
     publicKey: string;
     privateKey: string;
   };

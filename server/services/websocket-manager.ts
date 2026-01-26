@@ -51,10 +51,12 @@ export interface OrderStatusUpdate {
   updatedBy?: string;
   estimatedDelivery?: string;
   timestamp: string;
+  modificationType?: string;
+  riderId?: string;
 }
 
 export interface VendorAlert {
-  type: 'new_order' | 'order_cancelled' | 'rider_assigned' | 'order_timeout' | 'order_issue';
+  type: 'new_order' | 'order_cancelled' | 'rider_assigned' | 'order_timeout' | 'order_issue' | 'order_modified';
   orderId: string;
   orderNumber: string;
   vendorId: string;

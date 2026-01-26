@@ -17,7 +17,7 @@ export async function generateImage(
     try {
         // IMPORTANT: only this gemini model supports image generation
         const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash-preview-image-generation",
+            model: "gemini-2.0-flash-exp-image-generation",
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             config: {
                 responseModalities: [Modality.TEXT, Modality.IMAGE],
@@ -69,7 +69,7 @@ export async function generateImageToStorage(
 ): Promise<string> {
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash-preview-image-generation",
+            model: "gemini-2.0-flash-exp-image-generation",
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             config: {
                 responseModalities: [Modality.TEXT, Modality.IMAGE],

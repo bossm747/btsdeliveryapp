@@ -172,12 +172,18 @@ export class LocalObjectStorageService {
 
   /**
    * Save a file directly (without token)
+   * @param buffer - File buffer to save
+   * @param originalFilename - Original filename (used for extension)
+   * @param category - Storage category
+   * @param entityId - Entity ID for subfolder
+   * @param customName - Optional custom name for the file (without extension)
    */
   static async saveFile(
     buffer: Buffer,
     originalFilename: string,
     category: "restaurants" | "menu" | "users" | "ai-uploads" | "ai-generated" | "delivery-proofs" | "documents" = "ai-uploads",
-    entityId?: string
+    entityId?: string,
+    customName?: string
   ): Promise<UploadResult> {
     try {
       const ext = path.extname(originalFilename).toLowerCase() || ".bin";
@@ -187,7 +193,12 @@ export class LocalObjectStorageService {
       let filename: string;
       let subdir: string;
 
-      if (entityId) {
+      if (customName) {
+        // Use custom name with extension and a short unique suffix
+        const safeName = customName.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+        filename = `${safeName}-${hash.slice(0, 4)}${ext}`;
+        subdir = entityId ? `images/${category}/${entityId}` : `images/${category}`;
+      } else if (entityId) {
         filename = `${timestamp}-${hash}${ext}`;
         subdir = `images/${category}/${entityId}`;
       } else {
@@ -226,7 +237,7 @@ export class LocalObjectStorageService {
    */
   static async saveBase64Image(
     base64Data: string,
-    category: "restaurants" | "menu" | "users" | "ai-uploads" | "ai-generated" = "ai-uploads",
+    category: "restaurants" | "menu" | "users" | "ai-uploads" | "ai-generated" | "delivery-proofs" = "ai-uploads",
     entityId?: string
   ): Promise<UploadResult> {
     try {
@@ -257,11 +268,16 @@ export class LocalObjectStorageService {
 
   /**
    * Save image from URL
+   * @param imageUrl - URL to download image from
+   * @param category - Storage category
+   * @param entityId - Entity ID for subfolder
+   * @param customName - Optional custom name for the file (without extension)
    */
   static async saveImageFromUrl(
     imageUrl: string,
-    category: "restaurants" | "menu" | "users" | "ai-uploads" | "ai-generated" = "ai-uploads",
-    entityId?: string
+    category: "restaurants" | "menu" | "users" | "ai-uploads" | "ai-generated" | "delivery-proofs" | "documents" = "ai-uploads",
+    entityId?: string,
+    customName?: string
   ): Promise<UploadResult> {
     try {
       const response = await fetch(imageUrl);
@@ -280,7 +296,7 @@ export class LocalObjectStorageService {
       };
       const ext = extMap[contentType] || ".jpg";
 
-      return await this.saveFile(buffer, `downloaded${ext}`, category, entityId);
+      return await this.saveFile(buffer, `downloaded${ext}`, category, entityId, customName);
     } catch (error: any) {
       console.error("[LocalObjectStorage] Error saving image from URL:", error);
       return {

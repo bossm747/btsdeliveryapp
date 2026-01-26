@@ -268,9 +268,9 @@ export default function FraudDashboard() {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      if (variables.status === "dismissed") {
+      if (variables.decision === "dismissed") {
         adminToast.fraudAlertDismissed();
-      } else if (variables.status === "confirmed") {
+      } else if (variables.decision === "confirmed") {
         adminToast.fraudAlertConfirmed();
       } else {
         adminToast.success("Alert reviewed successfully");

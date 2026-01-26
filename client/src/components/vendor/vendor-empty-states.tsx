@@ -309,21 +309,4 @@ export function VendorErrorState({
   );
 }
 
-// Loading skeleton for consistent loading states
-export function VendorContentSkeleton({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: rows }).map((_, i) => (
-        <Card key={i}>
-          <CardContent className="p-6">
-            <div className="space-y-3">
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse w-3/4" />
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse w-1/2" />
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse w-5/6" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
+// Note: VendorContentSkeleton is exported from vendor-skeletons.tsx

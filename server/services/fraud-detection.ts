@@ -386,7 +386,7 @@ export class FraudDetectionService {
               name: 'disallowed_country',
               score: rule.scoreImpact || 30,
               severity: rule.severity as 'low' | 'medium' | 'high' | 'critical',
-              description: `Order from disallowed country: ${ipInfo.countryName || ipInfo.country}`,
+              description: `Order from disallowed country: ${(ipInfo as any).countryName || ipInfo.country}`,
               ruleId: rule.id,
             });
           }
@@ -683,8 +683,8 @@ export class FraudDetectionService {
           isDatacenter: intelligence.isDatacenter,
           isTor: intelligence.isTor,
           country: intelligence.country,
-          riskScore: intelligence.riskScore,
-          lastSeen: new Date(),
+          threatScore: intelligence.riskScore,
+          lastUpdated: new Date(),
           expiresAt,
         }).onConflictDoUpdate({
           target: ipIntelligenceCache.ipAddress,
@@ -694,8 +694,8 @@ export class FraudDetectionService {
             isDatacenter: intelligence.isDatacenter,
             isTor: intelligence.isTor,
             country: intelligence.country,
-            riskScore: intelligence.riskScore,
-            lastSeen: new Date(),
+            threatScore: intelligence.riskScore,
+            lastUpdated: new Date(),
             expiresAt,
           }
         });

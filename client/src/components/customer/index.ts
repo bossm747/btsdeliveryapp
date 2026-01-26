@@ -28,11 +28,20 @@ export {
 // Header component
 export { default as CustomerHeader } from "./customer-header";
 
-// UI Components
-export { CategoryPills } from "./category-pills";
-export { PromoBannerCarousel } from "./promo-banner-carousel";
-export { FlashDealsSection } from "./flash-deals-section";
-export { TrendingSection } from "./trending-section";
-export { FeaturedCarousel } from "./featured-carousel";
-export { OrderStatusTimeline } from "./order-status-timeline";
-export { RiderTrackingNotification } from "./rider-tracking-notification";
+// UI Components (default exports re-exported as named)
+export { default as CategoryPills } from "./category-pills";
+export { default as PromoBannerCarousel } from "./promo-banner-carousel";
+export { default as FlashDealsSection } from "./flash-deals-section";
+export { default as TrendingSection } from "./trending-section";
+export { default as FeaturedCarousel } from "./featured-carousel";
+export { default as OrderStatusTimeline } from "./order-status-timeline";
+export { default as RiderTrackingNotification } from "./rider-tracking-notification";
+// Also export named functions from rider-tracking-notification
+export {
+  RiderTrackingBanner,
+  RiderTrackingCard,
+  RiderTrackingToast,
+  RiderLocationBadge,
+  RiderTrackingStatus,
+  useRiderTrackingNotifications,
+} from "./rider-tracking-notification";

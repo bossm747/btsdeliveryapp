@@ -878,8 +878,8 @@ async function seed() {
     
     const platformConfigData = [
       {
-        key: "pabili_stores",
-        value: JSON.stringify([
+        configKey: "pabili_stores",
+        configValue: [
           {
             name: "SM City Batangas",
             address: "Pallocan West, Batangas City",
@@ -910,13 +910,14 @@ async function seed() {
             categories: ["Convenience Store", "Snacks", "Beverages"],
             operatingHours: "24 hours"
           }
-        ]),
+        ],
+        category: "services",
+        dataType: "json",
         description: "Available stores for Pabili service",
-        isActive: true,
       },
       {
-        key: "pabayad_billers",
-        value: JSON.stringify([
+        configKey: "pabayad_billers",
+        configValue: [
           {
             name: "Meralco",
             category: "Electricity",
@@ -971,13 +972,14 @@ async function seed() {
             processingFee: "30",
             accountNumberFormat: "MID Number"
           }
-        ]),
+        ],
+        category: "services",
+        dataType: "json",
         description: "Available billers for Pabayad service",
-        isActive: true,
       },
       {
-        key: "service_fees",
-        value: JSON.stringify({
+        configKey: "service_fees",
+        configValue: {
           pabili: {
             baseFee: "50",
             percentageFee: "10",
@@ -994,9 +996,10 @@ async function seed() {
             sizeLimit: "50cm x 50cm x 50cm",
             additionalPerKg: "15"
           }
-        }),
+        },
+        category: "pricing",
+        dataType: "json",
         description: "Service fee configuration",
-        isActive: true,
       }
     ];
     

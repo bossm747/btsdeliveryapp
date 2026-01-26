@@ -1,4 +1,4 @@
-import { SendGridProvider } from '../integrations/email.js';
+import { NodemailerProvider } from '../integrations/email.js';
 import { TwilioProvider, SemaphoreProvider } from '../integrations/sms.js';
 import { WebSocket } from 'ws';
 import { storage } from '../storage.js';
@@ -38,12 +38,12 @@ export interface NotificationPreferences {
 }
 
 export class OrderNotificationService {
-  private emailProvider: SendGridProvider;
+  private emailProvider: NodemailerProvider;
   private smsProvider: TwilioProvider | SemaphoreProvider;
   private webSocketServer?: any;
   
   constructor(webSocketServer?: any) {
-    this.emailProvider = new SendGridProvider();
+    this.emailProvider = new NodemailerProvider();
     // Use TwilioProvider as primary, fallback to SemaphoreProvider
     try {
       this.smsProvider = new TwilioProvider();
